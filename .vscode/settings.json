@@ -1,5 +1,15 @@
 {
-    "files.associations": {
-        "*.css": "tailwindcss"
-    },
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.biome": "always",
+    "source.organizeImports.biome": "always"
+  },
+  "files.associations": {
+    "wrangler.json": "jsonc",
+    "*.css": "tailwindcss"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  }
 }
