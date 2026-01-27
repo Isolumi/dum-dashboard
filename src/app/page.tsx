@@ -1,15 +1,10 @@
-"use client";
-
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-
 export default function Home() {
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <main>
-        <SidebarTrigger />
-      </main>
-    </SidebarProvider>
+    <div>
+      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <p className="mt-2 text-muted-foreground">
+        Welcome to your dashboard. This is a Server Component.
+      </p>
+    </div>
   );
 }

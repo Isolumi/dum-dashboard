@@ -1,4 +1,11 @@
-import { HouseIcon } from "@phosphor-icons/react";
+"use client";
+
+import {
+  CoinsIcon,
+  HouseIcon,
+  ListHeartIcon,
+  PaletteIcon,
+} from "@phosphor-icons/react";
 import Link from "next/link";
 import {
   Sidebar,
@@ -13,9 +20,24 @@ import {
 
 const sidebarItems = [
   {
-    label: "Home",
+    label: "HOUS",
     href: "/",
     icon: HouseIcon,
+  },
+  {
+    label: "MONIES",
+    href: "/monies",
+    icon: CoinsIcon,
+  },
+  {
+    label: "DUMDO",
+    href: "/dumdo",
+    icon: ListHeartIcon,
+  },
+  {
+    label: "COLORS",
+    href: "/colors",
+    icon: PaletteIcon,
   },
 ];
 
