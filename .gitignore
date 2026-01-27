@@ -47,6 +47,7 @@ next-env.d.ts
 # wrangler files
 .wrangler
 .dev.vars*
+cloudflare-env.d.ts
 
 
 !.dev.vars.example
