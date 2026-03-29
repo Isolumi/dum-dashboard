@@ -1,8 +1,0 @@
-src/components/ui/
-**/src/components/ui/**
-./src/components/ui/
-node_modules/
-.next/
-.open-next/
-dist/
-cloudflare-env.d.ts
