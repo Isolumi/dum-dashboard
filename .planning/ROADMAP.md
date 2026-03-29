@@ -54,7 +54,7 @@ Decimal phases appear between their surrounding integers in numeric order.
    Plans:
 
 - [x] 02-01-PLAN.md — Install shadcn sidebar, create tool registry and PlaceholderBentoCard, build AppSidebar component
-- [ ] 02-02-PLAN.md — Create pathless layout route, wire overview page with bento grid, visual verification checkpoint
+- [x] 02-02-PLAN.md — Create pathless layout route, wire overview page with bento grid, visual verification checkpoint
       **UI hint**: yes
 
 ### Phase 3: Supabase Data Layer

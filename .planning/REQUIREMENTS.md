@@ -10,12 +10,12 @@
 - [x] **FOUN-01**: Colour palette is defined as CSS custom properties in a single theme file — no hardcoded colour values exist in any component
 - [x] **FOUN-02**: All Tailwind colour utilities reference the palette tokens (no raw `gray-500`-style classes)
 - [x] **FOUN-03**: A tool registry exists as the single source of truth for all registered tools (sidebar + overview read from it)
-- [ ] **FOUN-04**: Adding a new tool requires only: a registry entry, a route directory, and a bento card component — no changes to shared layout code
+- [x] **FOUN-04**: Adding a new tool requires only: a registry entry, a route directory, and a bento card component — no changes to shared layout code
 
 ### Navigation
 
 - [x] **NAV-01**: User sees a sidebar with links to the overview page and each registered tool's page
-- [ ] **NAV-02**: User can navigate between the overview page and tool pages via the sidebar
+- [x] **NAV-02**: User can navigate between the overview page and tool pages via the sidebar
 - [x] **NAV-03**: The current active page is visually indicated in the sidebar
 
 ### Overview
@@ -83,9 +83,9 @@
 | FOUN-01     | Phase 1 | Complete |
 | FOUN-02     | Phase 1 | Complete |
 | FOUN-03     | Phase 2 | Complete |
-| FOUN-04     | Phase 2 | Pending  |
+| FOUN-04     | Phase 2 | Complete |
 | NAV-01      | Phase 2 | Complete |
-| NAV-02      | Phase 2 | Pending  |
+| NAV-02      | Phase 2 | Complete |
 | NAV-03      | Phase 2 | Complete |
 | OVER-01     | Phase 5 | Pending  |
 | OVER-02     | Phase 5 | Pending  |
