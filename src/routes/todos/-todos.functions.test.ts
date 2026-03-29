@@ -1,0 +1,160 @@
+import { describe, expect, it } from "vitest";
+// RED phase: these imports will fail until todos.functions.ts is created
+import {
+  CreateTodoSchema,
+  DeleteTodoSchema,
+  GetTodoSchema,
+  UpdateTodoSchema,
+} from "./todos.functions";
+
+describe("CreateTodoSchema", () => {
+  it("rejects empty name", () => {
+    const result = CreateTodoSchema.safeParse({ name: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts valid todo with all fields", () => {
+    const result = CreateTodoSchema.safeParse({
+      name: "Buy groceries",
+      priority: "high",
+      status: "not_started",
+      due_date: "2026-04-01",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("uses default priority of medium when omitted", () => {
+    const result = CreateTodoSchema.safeParse({ name: "Test todo" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.priority).toBe("medium");
+    }
+  });
+
+  it("uses default status of not_started when omitted", () => {
+    const result = CreateTodoSchema.safeParse({ name: "Test todo" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.status).toBe("not_started");
+    }
+  });
+
+  it("accepts valid priority values", () => {
+    const priorities = ["high", "medium", "low"] as const;
+    for (const priority of priorities) {
+      const result = CreateTodoSchema.safeParse({ name: "Test", priority });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("rejects invalid priority value", () => {
+    const result = CreateTodoSchema.safeParse({ name: "Test", priority: "urgent" });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts valid status values", () => {
+    const statuses = ["not_started", "started", "complete"] as const;
+    for (const status of statuses) {
+      const result = CreateTodoSchema.safeParse({ name: "Test", status });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("rejects invalid status value", () => {
+    const result = CreateTodoSchema.safeParse({ name: "Test", status: "done" });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts null due_date", () => {
+    const result = CreateTodoSchema.safeParse({ name: "Test", due_date: null });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts omitted due_date", () => {
+    const result = CreateTodoSchema.safeParse({ name: "Test" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid date format for due_date", () => {
+    const result = CreateTodoSchema.safeParse({ name: "Test", due_date: "not-a-date" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("UpdateTodoSchema", () => {
+  it("requires valid UUID for id", () => {
+    const result = UpdateTodoSchema.safeParse({ id: "not-a-uuid" });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts valid UUID with no other fields", () => {
+    const result = UpdateTodoSchema.safeParse({ id: "550e8400-e29b-41d4-a716-446655440000" });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts partial update with only name", () => {
+    const result = UpdateTodoSchema.safeParse({
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      name: "Updated name",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects empty name if provided", () => {
+    const result = UpdateTodoSchema.safeParse({
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      name: "",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts valid priority update", () => {
+    const result = UpdateTodoSchema.safeParse({
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      priority: "low",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid priority in update", () => {
+    const result = UpdateTodoSchema.safeParse({
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      priority: "critical",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("DeleteTodoSchema", () => {
+  it("requires valid UUID", () => {
+    const result = DeleteTodoSchema.safeParse({ id: "not-a-uuid" });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts valid UUID", () => {
+    const result = DeleteTodoSchema.safeParse({ id: "550e8400-e29b-41d4-a716-446655440000" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing id", () => {
+    const result = DeleteTodoSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("GetTodoSchema", () => {
+  it("requires valid UUID", () => {
+    const result = GetTodoSchema.safeParse({ id: "not-a-uuid" });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts valid UUID", () => {
+    const result = GetTodoSchema.safeParse({ id: "550e8400-e29b-41d4-a716-446655440000" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing id", () => {
+    const result = GetTodoSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+});
