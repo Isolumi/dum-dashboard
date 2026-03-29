@@ -12,12 +12,12 @@
   /* Neutral scale — dark-only UI (D-01) */
   --color-neutral-950: oklch(0.09 0 0); /* page background (~#0f0f0f) */
   --color-neutral-900: oklch(0.13 0 0); /* card / surface (~#1a1a1a) */
-  --color-neutral-800: oklch(0.20 0 0); /* slightly elevated surface */
+  --color-neutral-800: oklch(0.2 0 0); /* slightly elevated surface */
   --color-neutral-700: oklch(0.28 0 0); /* borders, dividers */
-  --color-neutral-400: oklch(0.60 0 0); /* muted / secondary text */
+  --color-neutral-400: oklch(0.6 0 0); /* muted / secondary text */
   --color-neutral-100: oklch(0.93 0 0); /* primary text (off-white) */
 
   /* Violet accent scale (D-02) */
   --color-violet-500: oklch(0.65 0.2 270); /* primary accent */
-  --color-violet-400: oklch(0.70 0.2 270); /* hover / active state */
+  --color-violet-400: oklch(0.7 0.2 270); /* hover / active state */
 }
