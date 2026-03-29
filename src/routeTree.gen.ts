@@ -8,84 +8,103 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root";
-import { Route as LayoutRouteImport } from "./routes/_layout";
-import { Route as LayoutIndexRouteImport } from "./routes/_layout/index";
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as LayoutRouteImport } from './routes/_layout'
+import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
+import { Route as LayoutDevColoursRouteImport } from './routes/_layout/dev-colours'
 
 const LayoutRoute = LayoutRouteImport.update({
-  id: "/_layout",
+  id: '/_layout',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const LayoutIndexRoute = LayoutIndexRouteImport.update({
-  id: "/",
-  path: "/",
+  id: '/',
+  path: '/',
   getParentRoute: () => LayoutRoute,
-} as any);
+} as any)
+const LayoutDevColoursRoute = LayoutDevColoursRouteImport.update({
+  id: '/dev-colours',
+  path: '/dev-colours',
+  getParentRoute: () => LayoutRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof LayoutIndexRoute;
+  '/': typeof LayoutIndexRoute
+  '/dev-colours': typeof LayoutDevColoursRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof LayoutIndexRoute;
+  '/dev-colours': typeof LayoutDevColoursRoute
+  '/': typeof LayoutIndexRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  "/_layout": typeof LayoutRouteWithChildren;
-  "/_layout/": typeof LayoutIndexRoute;
+  __root__: typeof rootRouteImport
+  '/_layout': typeof LayoutRouteWithChildren
+  '/_layout/dev-colours': typeof LayoutDevColoursRoute
+  '/_layout/': typeof LayoutIndexRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/";
-  fileRoutesByTo: FileRoutesByTo;
-  to: "/";
-  id: "__root__" | "/_layout" | "/_layout/";
-  fileRoutesById: FileRoutesById;
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths: '/' | '/dev-colours'
+  fileRoutesByTo: FileRoutesByTo
+  to: '/dev-colours' | '/'
+  id: '__root__' | '/_layout' | '/_layout/dev-colours' | '/_layout/'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  LayoutRoute: typeof LayoutRouteWithChildren;
+  LayoutRoute: typeof LayoutRouteWithChildren
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/_layout": {
-      id: "/_layout";
-      path: "";
-      fullPath: "/";
-      preLoaderRoute: typeof LayoutRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/_layout/": {
-      id: "/_layout/";
-      path: "/";
-      fullPath: "/";
-      preLoaderRoute: typeof LayoutIndexRouteImport;
-      parentRoute: typeof LayoutRoute;
-    };
+    '/_layout': {
+      id: '/_layout'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof LayoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_layout/': {
+      id: '/_layout/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof LayoutIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/dev-colours': {
+      id: '/_layout/dev-colours'
+      path: '/dev-colours'
+      fullPath: '/dev-colours'
+      preLoaderRoute: typeof LayoutDevColoursRouteImport
+      parentRoute: typeof LayoutRoute
+    }
   }
 }
 
 interface LayoutRouteChildren {
-  LayoutIndexRoute: typeof LayoutIndexRoute;
+  LayoutDevColoursRoute: typeof LayoutDevColoursRoute
+  LayoutIndexRoute: typeof LayoutIndexRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
+  LayoutDevColoursRoute: LayoutDevColoursRoute,
   LayoutIndexRoute: LayoutIndexRoute,
-};
+}
 
-const LayoutRouteWithChildren = LayoutRoute._addFileChildren(LayoutRouteChildren);
+const LayoutRouteWithChildren =
+  LayoutRoute._addFileChildren(LayoutRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   LayoutRoute: LayoutRouteWithChildren,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()
 
-import type { getRouter } from "./router.tsx";
-import type { createStart } from "@tanstack/react-start";
-declare module "@tanstack/react-start" {
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
   interface Register {
-    ssr: true;
-    router: Awaited<ReturnType<typeof getRouter>>;
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
   }
 }
