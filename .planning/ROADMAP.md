@@ -53,7 +53,7 @@ Decimal phases appear between their surrounding integers in numeric order.
    **Plans**: 2 plans
    Plans:
 
-- [ ] 02-01-PLAN.md — Install shadcn sidebar, create tool registry and PlaceholderBentoCard, build AppSidebar component
+- [x] 02-01-PLAN.md — Install shadcn sidebar, create tool registry and PlaceholderBentoCard, build AppSidebar component
 - [ ] 02-02-PLAN.md — Create pathless layout route, wire overview page with bento grid, visual verification checkpoint
       **UI hint**: yes
 
@@ -118,7 +118,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | Phase                            | Plans Complete | Status      | Completed  |
 | -------------------------------- | -------------- | ----------- | ---------- |
 | 1. Foundation                    | 2/2            | Complete    | 2026-03-29 |
-| 2. Route Shell & Tool Registry   | 0/2            | Planned     | -          |
+| 2. Route Shell & Tool Registry   | 1/2 | In Progress|  |
 | 3. Supabase Data Layer           | 0/?            | Not started | -          |
 | 4. Todo Tool                     | 0/?            | Not started | -          |
 | 5. Bento Overview & Registration | 0/?            | Not started | -          |
