@@ -189,3 +189,23 @@ None — no external service configuration required for Phase 1 (scaffold only, 
 ---
 *Phase: 01-foundation*
 *Completed: 2026-03-29*
+
+## Self-Check: PASSED
+
+All key files verified present:
+- FOUND: src/styles.css
+- FOUND: src/theme.css
+- FOUND: src/routes/__root.tsx
+- FOUND: src/routes/index.tsx
+- FOUND: src/router.tsx
+- FOUND: src/routeTree.gen.ts
+- FOUND: src/lib/utils.ts
+- FOUND: components.json
+- FOUND: package.json
+- FOUND: pnpm-lock.yaml
+- FOUND: .planning/phases/01-foundation/01-01-SUMMARY.md
+
+All commits verified:
+- FOUND: 5c3ca00 (Task 1: scaffold + shadcn)
+- FOUND: fc5cbd8 (Task 2: OXC tooling)
+- FOUND: 28e8ca7 (docs: SUMMARY + state updates)
