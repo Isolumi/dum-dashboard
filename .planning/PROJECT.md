@@ -12,7 +12,7 @@ A single place to see and manage all your personal tools — starting with todos
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] Predefined colour palette with a single source of truth for all colours — Validated in Phase 01: Foundation (FOUN-01, FOUN-02)
 
 ### Active
 
@@ -21,7 +21,6 @@ A single place to see and manage all your personal tools — starting with todos
 - [ ] Todo tool: create, view, edit, and delete todo items with name, priority (high/medium/low), status (not started/started/complete), and due date
 - [ ] Todo data synced to Supabase in real time
 - [ ] Modular tool architecture so new tools can be added without restructuring
-- [ ] Predefined colour palette with a single source of truth for all colours
 
 ### Out of Scope
 
@@ -31,6 +30,7 @@ A single place to see and manage all your personal tools — starting with todos
 
 ## Context
 
+- Phase 01 complete — TanStack Start scaffold running with shadcn/ui base-nova, Tailwind v4 OKLCH token system, OXC tooling
 - Greenfield project starting from scratch
 - Personal use only (no auth, no multi-tenancy)
 - Stack is fully decided: TanStack Start, Tailwind CSS, shadcn/ui, Lucide icons, OXC (linting + formatting), Supabase (Postgres + realtime)
@@ -44,18 +44,19 @@ A single place to see and manage all your personal tools — starting with todos
 
 ## Key Decisions
 
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Supabase for database | Hosted Postgres with real-time, easy to set up, scales for personal tools | — Pending |
-| Sidebar + bento overview layout | Each tool gets full-page focus; overview gives a bird's-eye view | — Pending |
-| OXC for linting/formatting | Faster than ESLint/Prettier, modern replacement | — Pending |
-| TanStack Start for routing/SSR | File-based routing, full-stack React, matches the ecosystem | — Pending |
+| Decision                        | Rationale                                                                 | Outcome   |
+| ------------------------------- | ------------------------------------------------------------------------- | --------- |
+| Supabase for database           | Hosted Postgres with real-time, easy to set up, scales for personal tools | — Pending |
+| Sidebar + bento overview layout | Each tool gets full-page focus; overview gives a bird's-eye view          | — Pending |
+| OXC for linting/formatting      | Faster than ESLint/Prettier, modern replacement                           | ✓ Validated Phase 01 — oxlint 1.57.0 + oxfmt 0.42.0 pass with 0 violations |
+| TanStack Start for routing/SSR  | File-based routing, full-stack React, matches the ecosystem               | ✓ Validated Phase 01 — scaffold complete, dev server starts cleanly |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
 **After each phase transition** (via `/gsd:transition`):
+
 1. Requirements invalidated? → Move to Out of Scope with reason
 2. Requirements validated? → Move to Validated with phase reference
 3. New requirements emerged? → Add to Active
@@ -63,10 +64,12 @@ This document evolves at phase transitions and milestone boundaries.
 5. "What This Is" still accurate? → Update if drifted
 
 **After each milestone** (via `/gsd:complete-milestone`):
+
 1. Full review of all sections
 2. Core Value check — still the right priority?
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after initialization*
+
+_Last updated: 2026-03-29 after Phase 01 completion_
