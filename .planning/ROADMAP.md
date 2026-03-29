@@ -13,7 +13,7 @@ Starting from a blank project, build a personal dashboard with a modular tool ar
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation** - Project scaffolding, colour token system, and tooling configured — no hardcoded values anywhere
+- [x] **Phase 1: Foundation** - Project scaffolding, colour token system, and tooling configured — no hardcoded values anywhere (completed 2026-03-29)
 - [ ] **Phase 2: Route Shell & Tool Registry** - Navigable app skeleton with sidebar, pathless layout, and an empty tool registry
 - [ ] **Phase 3: Supabase Data Layer** - Todos table, typed server functions, and Zod-validated RPC wrappers — no UI yet
 - [ ] **Phase 4: Todo Tool** - Full CRUD on the dedicated todo page with keyboard shortcuts and status toggle
@@ -37,7 +37,7 @@ Decimal phases appear between their surrounding integers in numeric order.
    Plans:
 
 - [x] 01-01-PLAN.md — Scaffold TanStack Start, init shadcn/ui (base-nova), install OXC tooling
-- [ ] 01-02-PLAN.md — Create colour token system (theme.css), wire into app.css, verify all gates
+- [x] 01-02-PLAN.md — Create colour token system (theme.css), wire into app.css, verify all gates
       **UI hint**: yes
 
 ### Phase 2: Route Shell & Tool Registry
@@ -113,7 +113,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase                            | Plans Complete | Status            | Completed |
 | -------------------------------- | -------------- | ----------------- | --------- |
-| 1. Foundation                    | 0/2            | Planning complete | -         |
+| 1. Foundation                    | 2/2 | Complete   | 2026-03-29 |
 | 2. Route Shell & Tool Registry   | 0/?            | Not started       | -         |
 | 3. Supabase Data Layer           | 0/?            | Not started       | -         |
 | 4. Todo Tool                     | 0/?            | Not started       | -         |
