@@ -13,6 +13,7 @@ A single place to see and manage all your personal tools — starting with todos
 ### Validated
 
 - [x] Predefined colour palette with a single source of truth for all colours — Validated in Phase 01: Foundation (FOUN-01, FOUN-02)
+- [x] Todo data persisted to Supabase and survives page refresh — Validated in Phase 03: Supabase Data Layer (TODO-07)
 
 ### Active
 
@@ -30,6 +31,7 @@ A single place to see and manage all your personal tools — starting with todos
 
 ## Context
 
+- Phase 03 complete — Supabase data layer live: typed client singleton, todos table with enums, 5 CRUD server functions (Zod-validated), bundle isolation confirmed
 - Phase 01 complete — TanStack Start scaffold running with shadcn/ui base-nova, Tailwind v4 OKLCH token system, OXC tooling
 - Greenfield project starting from scratch
 - Personal use only (no auth, no multi-tenancy)
@@ -46,7 +48,7 @@ A single place to see and manage all your personal tools — starting with todos
 
 | Decision                        | Rationale                                                                 | Outcome   |
 | ------------------------------- | ------------------------------------------------------------------------- | --------- |
-| Supabase for database           | Hosted Postgres with real-time, easy to set up, scales for personal tools | — Pending |
+| Supabase for database           | Hosted Postgres with real-time, easy to set up, scales for personal tools | ✓ Validated Phase 03 — client singleton, todos table, CRUD functions all working |
 | Sidebar + bento overview layout | Each tool gets full-page focus; overview gives a bird's-eye view          | — Pending |
 | OXC for linting/formatting      | Faster than ESLint/Prettier, modern replacement                           | ✓ Validated Phase 01 — oxlint 1.57.0 + oxfmt 0.42.0 pass with 0 violations |
 | TanStack Start for routing/SSR  | File-based routing, full-stack React, matches the ecosystem               | ✓ Validated Phase 01 — scaffold complete, dev server starts cleanly |
@@ -72,4 +74,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-03-29 after Phase 01 completion_
+_Last updated: 2026-03-29 after Phase 03 completion_
