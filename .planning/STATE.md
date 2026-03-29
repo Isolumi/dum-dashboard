@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 Phase: 2
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-03-29
+Last activity: 2026-03-29 - Completed quick task 260329-3ht: Switch package manager from pnpm to bun
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -76,6 +76,12 @@ None yet.
 
 - oxfmt is beta-status: exact-pin version in package.json; keep Prettier as fallback. Validate in Phase 1 by running `oxfmt --check` on scaffolded project.
 - RLS policy approach unresolved: decide explicitly during Phase 3 schema work — do not leave tables with RLS enabled but no policies defined.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260329-3ht | Switch package manager from pnpm to bun | 2026-03-29 | 473b214 | [260329-3ht-switch-package-manager-from-pnpm-to-bun](./quick/260329-3ht-switch-package-manager-from-pnpm-to-bun/) |
 
 ## Session Continuity
 
