@@ -31,7 +31,7 @@
 - [ ] **TODO-04**: User can delete a todo item
 - [ ] **TODO-05**: User can toggle a todo item's status directly from the list without opening an edit view
 - [ ] **TODO-06**: User can create a todo item by typing and pressing Enter; Escape cancels entry; Tab moves between fields
-- [ ] **TODO-07**: Todo data is persisted to Supabase and survives page refresh
+- [x] **TODO-07**: Todo data is persisted to Supabase and survives page refresh
 
 ### Todo Bento Card
 
@@ -95,7 +95,7 @@
 | TODO-04     | Phase 4 | Pending  |
 | TODO-05     | Phase 4 | Pending  |
 | TODO-06     | Phase 4 | Pending  |
-| TODO-07     | Phase 3 | Pending  |
+| TODO-07     | Phase 3 | Complete |
 | BENT-01     | Phase 5 | Pending  |
 | BENT-02     | Phase 5 | Pending  |
 | BENT-03     | Phase 5 | Pending  |

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 02-route-shell-and-tool-registry-02-02-PLAN.md
-last_updated: "2026-03-29T19:48:39.620Z"
-last_activity: 2026-03-29
+status: executing
+stopped_at: "Checkpoint: 03-01 Task 2 — awaiting user Supabase setup (env vars, schema SQL, type generation)"
+last_updated: "2026-03-29T22:01:14.462Z"
+last_activity: 2026-03-29 -- Phase 03 execution started
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** A single place to see and manage all your personal tools — starting with todos, built to grow.
-**Current focus:** Phase 02 — route-shell-and-tool-registry
+**Current focus:** Phase 03 — supabase-data-layer
 
 ## Current Position
 
-Phase: 3
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-03-29
+Phase: 03 (supabase-data-layer) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 03
+Last activity: 2026-03-29 -- Phase 03 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -56,6 +56,7 @@ _Updated after each plan completion_
 | Phase 01-foundation P02 | 259s | 2 tasks | 6 files |
 | Phase 02-route-shell-and-tool-registry P01 | 175s | 2 tasks | 11 files |
 | Phase 02-route-shell-and-tool-registry P02 | 25min | 2 tasks | 5 files |
+| Phase 03-supabase-data-layer P01 | 98 | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,8 @@ Recent decisions affecting current work:
 - [Phase 02-route-shell-and-tool-registry]: tool.route cast as any for Link to prop — /todos route doesn't exist yet; typed safety deferred to Phase 4
 - [Phase 02-route-shell-and-tool-registry]: Active sidebar item uses sidebar-primary (violet) not sidebar-accent (grey) — sidebar-primary is the brand violet token
 - [Phase 02-route-shell-and-tool-registry]: Dev utility pages placed at _layout/dev-*.tsx — sidebar-wrapped but not in tool registry
+- [Phase 03-supabase-data-layer]: zod pinned to v3 (^3.24.2) — @tanstack/zod-adapter peer requires ^3.23.8; v4 incompatible
+- [Phase 03-supabase-data-layer]: supabase.ts import boundary: only *.functions.ts files may import it — enforced by createServerFn compiler transform
 
 ### Pending Todos
 
@@ -92,6 +95,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T19:31:43.962Z
-Stopped at: Completed 02-route-shell-and-tool-registry-02-02-PLAN.md
+Last session: 2026-03-29T22:01:14.458Z
+Stopped at: Checkpoint: 03-01 Task 2 — awaiting user Supabase setup (env vars, schema SQL, type generation)
 Resume file: None
