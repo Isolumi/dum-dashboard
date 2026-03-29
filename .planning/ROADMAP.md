@@ -30,7 +30,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. All colour values exist exclusively in `src/styles/theme.css` as CSS custom properties — no raw Tailwind palette classes (e.g., `gray-500`) appear anywhere in component files
   3. Tailwind utilities reference only the palette tokens defined in theme.css
   4. OXC linter and formatter run cleanly against the scaffolded project with zero violations
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 01-01-PLAN.md — Scaffold TanStack Start, init shadcn/ui (base-nova), install OXC tooling
+- [ ] 01-02-PLAN.md — Create colour token system (theme.css), wire into app.css, verify all gates
 **UI hint**: yes
 
 ### Phase 2: Route Shell & Tool Registry
@@ -96,7 +99,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/? | Not started | - |
+| 1. Foundation | 0/2 | Planning complete | - |
 | 2. Route Shell & Tool Registry | 0/? | Not started | - |
 | 3. Supabase Data Layer | 0/? | Not started | - |
 | 4. Todo Tool | 0/? | Not started | - |
