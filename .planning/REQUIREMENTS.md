@@ -80,32 +80,32 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUN-01 | — | Pending |
-| FOUN-02 | — | Pending |
-| FOUN-03 | — | Pending |
-| FOUN-04 | — | Pending |
-| NAV-01 | — | Pending |
-| NAV-02 | — | Pending |
-| NAV-03 | — | Pending |
-| OVER-01 | — | Pending |
-| OVER-02 | — | Pending |
-| TODO-01 | — | Pending |
-| TODO-02 | — | Pending |
-| TODO-03 | — | Pending |
-| TODO-04 | — | Pending |
-| TODO-05 | — | Pending |
-| TODO-06 | — | Pending |
-| TODO-07 | — | Pending |
-| BENT-01 | — | Pending |
-| BENT-02 | — | Pending |
-| BENT-03 | — | Pending |
-| REAL-01 | — | Pending |
+| FOUN-01 | Phase 1 | Pending |
+| FOUN-02 | Phase 1 | Pending |
+| FOUN-03 | Phase 2 | Pending |
+| FOUN-04 | Phase 2 | Pending |
+| NAV-01 | Phase 2 | Pending |
+| NAV-02 | Phase 2 | Pending |
+| NAV-03 | Phase 2 | Pending |
+| OVER-01 | Phase 5 | Pending |
+| OVER-02 | Phase 5 | Pending |
+| TODO-01 | Phase 4 | Pending |
+| TODO-02 | Phase 4 | Pending |
+| TODO-03 | Phase 4 | Pending |
+| TODO-04 | Phase 4 | Pending |
+| TODO-05 | Phase 4 | Pending |
+| TODO-06 | Phase 4 | Pending |
+| TODO-07 | Phase 3 | Pending |
+| BENT-01 | Phase 5 | Pending |
+| BENT-02 | Phase 5 | Pending |
+| BENT-03 | Phase 5 | Pending |
+| REAL-01 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 20 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 20 ⚠️ (will be resolved during roadmap creation)
+- Mapped to phases: 20
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-29*
-*Last updated: 2026-03-29 after initial definition*
+*Last updated: 2026-03-28 after roadmap creation*
