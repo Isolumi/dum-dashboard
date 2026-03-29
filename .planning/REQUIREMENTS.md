@@ -7,8 +7,8 @@
 
 ### Foundation
 
-- [ ] **FOUN-01**: Colour palette is defined as CSS custom properties in a single theme file — no hardcoded colour values exist in any component
-- [ ] **FOUN-02**: All Tailwind colour utilities reference the palette tokens (no raw `gray-500`-style classes)
+- [x] **FOUN-01**: Colour palette is defined as CSS custom properties in a single theme file — no hardcoded colour values exist in any component
+- [x] **FOUN-02**: All Tailwind colour utilities reference the palette tokens (no raw `gray-500`-style classes)
 - [ ] **FOUN-03**: A tool registry exists as the single source of truth for all registered tools (sidebar + overview read from it)
 - [ ] **FOUN-04**: Adding a new tool requires only: a registry entry, a route directory, and a bento card component — no changes to shared layout code
 
@@ -63,49 +63,51 @@
 
 ## Out of Scope
 
-| Feature | Reason |
-|---------|--------|
-| Authentication / login | Personal tool only — single user, no auth needed for v1 |
-| Multi-user / collaboration | Requires auth, multi-tenancy, permissions — explicitly out of scope |
-| Subtasks / nested todos | Schema complexity (parent_id FK, recursive queries) disproportionate to v1 value |
-| Tags / labels / projects | Adds a second entity; priority + status provide enough organisation axes for v1 |
-| Drag-and-drop reordering | Requires `sort_order` column, position-update logic, conflict handling — defer |
-| Recurring tasks | Requires recurrence rule engine (RFC 5545/cron) — non-trivial, not needed in v1 |
+| Feature                      | Reason                                                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------- |
+| Authentication / login       | Personal tool only — single user, no auth needed for v1                                     |
+| Multi-user / collaboration   | Requires auth, multi-tenancy, permissions — explicitly out of scope                         |
+| Subtasks / nested todos      | Schema complexity (parent_id FK, recursive queries) disproportionate to v1 value            |
+| Tags / labels / projects     | Adds a second entity; priority + status provide enough organisation axes for v1             |
+| Drag-and-drop reordering     | Requires `sort_order` column, position-update logic, conflict handling — defer              |
+| Recurring tasks              | Requires recurrence rule engine (RFC 5545/cron) — non-trivial, not needed in v1             |
 | Push / browser notifications | Requires notification permissions + background scheduling infra — overkill for personal use |
-| Offline support | Service workers + IndexedDB + sync-on-reconnect — significant infra, defer to v2+ |
-| Natural language task entry | NLP/regex date parsing introduces unreliability; explicit date picker is more predictable |
-| Mobile-optimised layout | Responsive Tailwind defaults will make it tolerable; full mobile optimisation is v2+ |
+| Offline support              | Service workers + IndexedDB + sync-on-reconnect — significant infra, defer to v2+           |
+| Natural language task entry  | NLP/regex date parsing introduces unreliability; explicit date picker is more predictable   |
+| Mobile-optimised layout      | Responsive Tailwind defaults will make it tolerable; full mobile optimisation is v2+        |
 
 ## Traceability
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| FOUN-01 | Phase 1 | Pending |
-| FOUN-02 | Phase 1 | Pending |
-| FOUN-03 | Phase 2 | Pending |
-| FOUN-04 | Phase 2 | Pending |
-| NAV-01 | Phase 2 | Pending |
-| NAV-02 | Phase 2 | Pending |
-| NAV-03 | Phase 2 | Pending |
-| OVER-01 | Phase 5 | Pending |
-| OVER-02 | Phase 5 | Pending |
-| TODO-01 | Phase 4 | Pending |
-| TODO-02 | Phase 4 | Pending |
-| TODO-03 | Phase 4 | Pending |
-| TODO-04 | Phase 4 | Pending |
-| TODO-05 | Phase 4 | Pending |
-| TODO-06 | Phase 4 | Pending |
-| TODO-07 | Phase 3 | Pending |
-| BENT-01 | Phase 5 | Pending |
-| BENT-02 | Phase 5 | Pending |
-| BENT-03 | Phase 5 | Pending |
-| REAL-01 | Phase 6 | Pending |
+| Requirement | Phase   | Status  |
+| ----------- | ------- | ------- |
+| FOUN-01     | Phase 1 | Complete |
+| FOUN-02     | Phase 1 | Complete |
+| FOUN-03     | Phase 2 | Pending |
+| FOUN-04     | Phase 2 | Pending |
+| NAV-01      | Phase 2 | Pending |
+| NAV-02      | Phase 2 | Pending |
+| NAV-03      | Phase 2 | Pending |
+| OVER-01     | Phase 5 | Pending |
+| OVER-02     | Phase 5 | Pending |
+| TODO-01     | Phase 4 | Pending |
+| TODO-02     | Phase 4 | Pending |
+| TODO-03     | Phase 4 | Pending |
+| TODO-04     | Phase 4 | Pending |
+| TODO-05     | Phase 4 | Pending |
+| TODO-06     | Phase 4 | Pending |
+| TODO-07     | Phase 3 | Pending |
+| BENT-01     | Phase 5 | Pending |
+| BENT-02     | Phase 5 | Pending |
+| BENT-03     | Phase 5 | Pending |
+| REAL-01     | Phase 6 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 20 total
 - Mapped to phases: 20
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-03-29*
-*Last updated: 2026-03-28 after roadmap creation*
+
+_Requirements defined: 2026-03-29_
+_Last updated: 2026-03-28 after roadmap creation_
