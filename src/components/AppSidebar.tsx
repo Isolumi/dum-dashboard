@@ -45,7 +45,9 @@ export function AppSidebar() {
       <SidebarHeader>
         <div className="flex items-center gap-2 px-4 py-3">
           <LayoutDashboard className="size-6 text-neutral-100" />
-          <span className="text-sm font-semibold text-neutral-100">Dashboard</span>
+          <span className="text-sm font-semibold text-neutral-100 group-data-[collapsible=icon]:hidden">
+            Dashboard
+          </span>
         </div>
       </SidebarHeader>
       <SidebarContent>
