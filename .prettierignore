@@ -1,0 +1,6 @@
+# Ignore git worktrees (not project source)
+.claude/
+
+# Ignore planning artifacts
+.planning/
+.agents/
