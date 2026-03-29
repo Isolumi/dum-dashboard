@@ -50,8 +50,12 @@ Decimal phases appear between their surrounding integers in numeric order.
 1. User sees a sidebar with links; the active page link is visually distinguished from inactive links
 2. User can click sidebar links to navigate between the overview page and any registered tool page without a full page reload
 3. Adding a new entry to the tool registry (a name, route, and placeholder components) causes it to appear in both the sidebar and the bento overview grid automatically — no changes to shared layout files required
-   **Plans**: TBD
-   **UI hint**: yes
+   **Plans**: 2 plans
+   Plans:
+
+- [ ] 02-01-PLAN.md — Install shadcn sidebar, create tool registry and PlaceholderBentoCard, build AppSidebar component
+- [ ] 02-02-PLAN.md — Create pathless layout route, wire overview page with bento grid, visual verification checkpoint
+      **UI hint**: yes
 
 ### Phase 3: Supabase Data Layer
 
@@ -109,12 +113,12 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase                            | Plans Complete | Status      | Completed  |
 | -------------------------------- | -------------- | ----------- | ---------- |
 | 1. Foundation                    | 2/2            | Complete    | 2026-03-29 |
-| 2. Route Shell & Tool Registry   | 0/?            | Not started | -          |
+| 2. Route Shell & Tool Registry   | 0/2            | Planned     | -          |
 | 3. Supabase Data Layer           | 0/?            | Not started | -          |
 | 4. Todo Tool                     | 0/?            | Not started | -          |
 | 5. Bento Overview & Registration | 0/?            | Not started | -          |
