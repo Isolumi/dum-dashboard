@@ -71,7 +71,7 @@ Decimal phases appear between their surrounding integers in numeric order.
    Plans:
 
 - [x] 03-01-PLAN.md — Install Supabase/Zod packages, create typed client singleton, user configures env vars and database schema, generate TypeScript types
-- [ ] 03-02-PLAN.md — Create CRUD server functions with Zod validation, verify bundle isolation
+- [x] 03-02-PLAN.md — Create CRUD server functions with Zod validation, verify bundle isolation
 
 ### Phase 4: Todo Tool
 
