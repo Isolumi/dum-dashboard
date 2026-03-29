@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Checkpoint: 03-01 Task 2 — awaiting user Supabase setup (env vars, schema SQL, type generation)"
-last_updated: "2026-03-29T22:01:14.462Z"
-last_activity: 2026-03-29 -- Phase 03 execution started
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-03-29T22:40:09.285Z"
+last_activity: 2026-03-29
 progress:
   total_phases: 6
   completed_phases: 2
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 03 (supabase-data-layer) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 03
-Last activity: 2026-03-29 -- Phase 03 execution started
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-03-29
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -57,6 +57,7 @@ _Updated after each plan completion_
 | Phase 02-route-shell-and-tool-registry P01 | 175s | 2 tasks | 11 files |
 | Phase 02-route-shell-and-tool-registry P02 | 25min | 2 tasks | 5 files |
 | Phase 03-supabase-data-layer P01 | 98 | 1 tasks | 4 files |
+| Phase 03-supabase-data-layer P01 | 900 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,8 @@ Recent decisions affecting current work:
 - [Phase 02-route-shell-and-tool-registry]: Dev utility pages placed at _layout/dev-*.tsx — sidebar-wrapped but not in tool registry
 - [Phase 03-supabase-data-layer]: zod pinned to v3 (^3.24.2) — @tanstack/zod-adapter peer requires ^3.23.8; v4 incompatible
 - [Phase 03-supabase-data-layer]: supabase.ts import boundary: only *.functions.ts files may import it — enforced by createServerFn compiler transform
+- [Phase 03-supabase-data-layer]: zod pinned to v3 (^3.24.2) — @tanstack/zod-adapter@1.166.9 peer requires zod@^3.23.8; v4 breaks compatibility
+- [Phase 03-supabase-data-layer]: supabase.ts import boundary: only *.functions.ts files may import it — enforced by createServerFn compiler transform
 
 ### Pending Todos
 
@@ -95,6 +98,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T22:01:14.458Z
-Stopped at: Checkpoint: 03-01 Task 2 — awaiting user Supabase setup (env vars, schema SQL, type generation)
+Last session: 2026-03-29T22:40:09.282Z
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None
