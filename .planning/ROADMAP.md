@@ -67,7 +67,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 1. A `todos` row can be created, read, updated, and deleted via `createServerFn` wrappers — confirmed by manual testing against the live Supabase project
 2. Todo data persists across page refreshes (a created todo reappears after reload)
 3. No Supabase query helpers appear in the Vite client bundle (confirmed via `vite build` bundle inspection)
-   **Plans**: TBD
+   **Plans**: 2 plans
+   Plans:
+
+- [ ] 03-01-PLAN.md — Install Supabase/Zod packages, create typed client singleton, user configures env vars and database schema, generate TypeScript types
+- [ ] 03-02-PLAN.md — Create CRUD server functions with Zod validation, verify bundle isolation
 
 ### Phase 4: Todo Tool
 
@@ -119,7 +123,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | -------------------------------- | -------------- | ----------- | ---------- |
 | 1. Foundation                    | 2/2            | Complete    | 2026-03-29 |
 | 2. Route Shell & Tool Registry   | 1/2 | In Progress|  |
-| 3. Supabase Data Layer           | 0/?            | Not started | -          |
+| 3. Supabase Data Layer           | 0/2            | Not started | -          |
 | 4. Todo Tool                     | 0/?            | Not started | -          |
 | 5. Bento Overview & Registration | 0/?            | Not started | -          |
 | 6. Realtime                      | 0/?            | Not started | -          |
