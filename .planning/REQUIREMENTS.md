@@ -27,9 +27,9 @@
 
 - [x] **TODO-01**: User can create a todo item with a name, priority (high/medium/low), status (not started/started/complete), and optional due date
 - [x] **TODO-02**: User can view a list of all todo items
-- [ ] **TODO-03**: User can edit a todo item's name, priority, status, and due date
-- [ ] **TODO-04**: User can delete a todo item
-- [ ] **TODO-05**: User can toggle a todo item's status directly from the list without opening an edit view
+- [x] **TODO-03**: User can edit a todo item's name, priority, status, and due date
+- [x] **TODO-04**: User can delete a todo item
+- [x] **TODO-05**: User can toggle a todo item's status directly from the list without opening an edit view
 - [x] **TODO-06**: User can create a todo item by typing and pressing Enter; Escape cancels entry; Tab moves between fields
 - [x] **TODO-07**: Todo data is persisted to Supabase and survives page refresh
 
@@ -91,9 +91,9 @@
 | OVER-02     | Phase 5 | Pending  |
 | TODO-01     | Phase 4 | Complete |
 | TODO-02     | Phase 4 | Complete |
-| TODO-03     | Phase 4 | Pending  |
-| TODO-04     | Phase 4 | Pending  |
-| TODO-05     | Phase 4 | Pending  |
+| TODO-03     | Phase 4 | Complete |
+| TODO-04     | Phase 4 | Complete |
+| TODO-05     | Phase 4 | Complete |
 | TODO-06     | Phase 4 | Complete |
 | TODO-07     | Phase 3 | Complete |
 | BENT-01     | Phase 5 | Pending  |
