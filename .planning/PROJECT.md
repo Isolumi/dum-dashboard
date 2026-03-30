@@ -19,7 +19,7 @@ A single place to see and manage all your personal tools — starting with todos
 
 - [ ] Bento box overview page showing a summary card for each active tool
 - [ ] Sidebar navigation to switch between the overview and individual tool pages
-- [ ] Todo tool: create, view, edit, and delete todo items with name, priority (high/medium/low), status (not started/started/complete), and due date
+- [x] Todo tool: create, view, edit, and delete todo items with name, priority (high/medium/low), status (not started/started/complete), and due date — Validated in Phase 04: Todo Tool (TODO-01 through TODO-06)
 - [ ] Todo data synced to Supabase in real time
 - [ ] Modular tool architecture so new tools can be added without restructuring
 
@@ -31,6 +31,7 @@ A single place to see and manage all your personal tools — starting with todos
 
 ## Context
 
+- Phase 04 complete — Todo tool live: full CRUD UI with inline editing, status cycling, priority popover, due date with overdue detection, optimistic mutations, error dismissal
 - Phase 03 complete — Supabase data layer live: typed client singleton, todos table with enums, 5 CRUD server functions (Zod-validated), bundle isolation confirmed
 - Phase 01 complete — TanStack Start scaffold running with shadcn/ui base-nova, Tailwind v4 OKLCH token system, OXC tooling
 - Greenfield project starting from scratch
@@ -74,4 +75,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-03-29 after Phase 03 completion_
+_Last updated: 2026-03-30 after Phase 04 completion_
