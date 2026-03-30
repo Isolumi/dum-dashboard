@@ -34,7 +34,7 @@ export const getTodos = createServerFn({ method: "GET" }).handler(async (): Prom
     .select("*")
     .order("created_at", { ascending: false });
   if (error) throw new Error(`Failed to fetch todos: ${error.message}`);
-  return data;
+  return data ?? [];
 });
 
 export const getTodo = createServerFn({ method: "GET" })
