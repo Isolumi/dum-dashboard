@@ -90,3 +90,11 @@ None - no external service configuration required.
 ---
 *Phase: 04-todo-tool*
 *Completed: 2026-03-30*
+
+## Self-Check: PASSED
+
+- FOUND: `.planning/phases/04-todo-tool/04-05-SUMMARY.md`
+- FOUND: `src/routes/todos/todos.functions.ts`
+- FOUND: commit `0b08536` (RED test)
+- FOUND: commit `3bb0305` (fix implementation)
+- FOUND: commit `dd37e32` (docs/SUMMARY)
