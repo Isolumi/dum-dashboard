@@ -20,4 +20,7 @@
   /* Violet accent scale (D-02) */
   --color-violet-500: oklch(0.65 0.2 270); /* primary accent */
   --color-violet-400: oklch(0.7 0.2 270); /* hover / active state */
+
+  /* Amber accent -- medium priority badge only (04-UI-SPEC) */
+  --color-amber-400: oklch(0.82 0.17 85);
 }
