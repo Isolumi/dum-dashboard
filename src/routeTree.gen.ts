@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutDevColoursRouteImport } from './routes/_layout/dev-colours'
+import { Route as LayoutTodosIndexRouteImport } from './routes/_layout/todos/index'
 
 const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
@@ -27,27 +28,40 @@ const LayoutDevColoursRoute = LayoutDevColoursRouteImport.update({
   path: '/dev-colours',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutTodosIndexRoute = LayoutTodosIndexRouteImport.update({
+  id: '/todos/',
+  path: '/todos/',
+  getParentRoute: () => LayoutRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
   '/dev-colours': typeof LayoutDevColoursRoute
+  '/todos/': typeof LayoutTodosIndexRoute
 }
 export interface FileRoutesByTo {
   '/dev-colours': typeof LayoutDevColoursRoute
   '/': typeof LayoutIndexRoute
+  '/todos': typeof LayoutTodosIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_layout': typeof LayoutRouteWithChildren
   '/_layout/dev-colours': typeof LayoutDevColoursRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/todos/': typeof LayoutTodosIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dev-colours'
+  fullPaths: '/' | '/dev-colours' | '/todos/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/dev-colours' | '/'
-  id: '__root__' | '/_layout' | '/_layout/dev-colours' | '/_layout/'
+  to: '/dev-colours' | '/' | '/todos'
+  id:
+    | '__root__'
+    | '/_layout'
+    | '/_layout/dev-colours'
+    | '/_layout/'
+    | '/_layout/todos/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,17 +91,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutDevColoursRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/todos/': {
+      id: '/_layout/todos/'
+      path: '/todos'
+      fullPath: '/todos/'
+      preLoaderRoute: typeof LayoutTodosIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
   }
 }
 
 interface LayoutRouteChildren {
   LayoutDevColoursRoute: typeof LayoutDevColoursRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
+  LayoutTodosIndexRoute: typeof LayoutTodosIndexRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutDevColoursRoute: LayoutDevColoursRoute,
   LayoutIndexRoute: LayoutIndexRoute,
+  LayoutTodosIndexRoute: LayoutTodosIndexRoute,
 }
 
 const LayoutRouteWithChildren =
