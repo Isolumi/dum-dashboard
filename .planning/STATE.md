@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 04-06-PLAN.md
-last_updated: "2026-03-30T16:26:30.687Z"
+status: verifying
+stopped_at: Completed 03-GAP-PLAN.md
+last_updated: "2026-03-30T18:32:34.282Z"
 last_activity: 2026-03-30
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 12
-  completed_plans: 11
+  total_plans: 13
+  completed_plans: 12
   percent: 0
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** A single place to see and manage all your personal tools — starting with todos, built to grow.
-**Current focus:** Phase 04 — todo-tool
+**Current focus:** Phase 03 — supabase-data-layer
 
 ## Current Position
 
-Phase: 04 (todo-tool) — EXECUTING
-Plan: 2 of 6
-Status: Ready to execute
+Phase: 03 (supabase-data-layer) — EXECUTING
+Plan: 1 of 1
+Status: Phase complete — ready for verification
 Last activity: 2026-03-30
 
 Progress: [░░░░░░░░░░] 0%
@@ -63,6 +63,7 @@ _Updated after each plan completion_
 | Phase 04-todo-tool P03 | 300 | 1 tasks | 1 files |
 | Phase 04-todo-tool P02 | 129 | 1 tasks | 2 files |
 | Phase 04-todo-tool P06 | 593 | 1 tasks | 3 files |
+| Phase 03-supabase-data-layer PGAP | 252 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,9 @@ Recent decisions affecting current work:
 - [Phase 04-todo-tool]: Vitest dual-project config: unit tests (tanstackStart plugin, node env) + component tests (jsdom, no TanStack Start) to support both pure-function and React render tests
 - [Phase 04-todo-tool]: AddTodoRow outer wrapper pattern: bg-accent/50 rounded-md outer div wraps both flex row and keyboard hint
 - [Phase 04-todo-tool]: Supabase select() null guard: always apply data ?? [] when returning array results from server functions
+- [Phase 03-GAP]: routeFileIgnorePattern belongs inside router: {} sub-object in tanstackStart(), not at top level — TypeScript declared it at TanStackStartInputConfig.router.routeFileIgnorePattern
+- [Phase 03-GAP]: bun run test (vitest run) is the correct test command; bun test runs bun's native runner which does not support vitest test files
+- [Phase 03-GAP]: Component files in routes/ should use - prefix to prevent TanStack Router from scanning them as route candidates; test file dynamic imports must be updated after component renames
 
 ### Pending Todos
 
@@ -115,6 +119,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T16:26:30.684Z
-Stopped at: Completed 04-06-PLAN.md
+Last session: 2026-03-30T18:32:34.279Z
+Stopped at: Completed 03-GAP-PLAN.md
 Resume file: None
