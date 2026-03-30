@@ -31,7 +31,7 @@ vi.mock("#/components/ui/popover", () => ({
   ),
 }));
 
-const { AddTodoRow } = await import("./AddTodoRow");
+const { AddTodoRow } = await import("./-AddTodoRow");
 
 const noopCreate = vi.fn();
 

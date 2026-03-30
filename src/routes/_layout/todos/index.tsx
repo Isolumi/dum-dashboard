@@ -6,8 +6,8 @@ import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Skeleton } from "#/components/ui/skeleton";
 import type { Todo } from "#/lib/database.types";
 import { createTodo, deleteTodo, getTodos, updateTodo } from "#/routes/todos/todos.functions";
-import { AddTodoRow } from "./AddTodoRow";
-import { TodoRow } from "./TodoRow";
+import { AddTodoRow } from "./-AddTodoRow";
+import { TodoRow } from "./-TodoRow";
 
 export const Route = createFileRoute("/_layout/todos/")({
   loader: async () => {
