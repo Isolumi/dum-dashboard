@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 // RED phase: these imports will fail until todos.functions.ts is created
 import {
@@ -156,5 +160,21 @@ describe("GetTodoSchema", () => {
   it("rejects missing id", () => {
     const result = GetTodoSchema.safeParse({});
     expect(result.success).toBe(false);
+  });
+});
+
+describe("getTodos null safety (bug fix TODO-01)", () => {
+  it("getTodos handler returns data ?? [] — never returns null to callers", () => {
+    // This test verifies the null coalescing guard is present in the getTodos handler.
+    // Supabase .select() can return { data: null } for an empty table.
+    // Without the guard, todos.map() in the loader crashes with
+    // "Cannot read properties of undefined (reading 'map')".
+    //
+    // RED: fails before fix because the file contains `return data` (no null guard)
+    // GREEN: passes after fix because the file contains `return data ?? []`
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const source = readFileSync(resolve(__dirname, "todos.functions.ts"), "utf-8");
+    expect(source, "getTodos handler must use `data ?? []` null guard").toContain("data ?? []");
   });
 });

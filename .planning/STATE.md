@@ -96,6 +96,7 @@ Recent decisions affecting current work:
 - [Phase 04-todo-tool]: base-ui render prop on PopoverTrigger (not asChild) confirmed working for priority dropdown
 - [Phase 04-todo-tool]: Vitest dual-project config: unit tests (tanstackStart plugin, node env) + component tests (jsdom, no TanStack Start) to support both pure-function and React render tests
 - [Phase 04-todo-tool]: AddTodoRow outer wrapper pattern: bg-accent/50 rounded-md outer div wraps both flex row and keyboard hint
+- [Phase 04-todo-tool]: Supabase select() null guard: always apply data ?? [] when returning array results from server functions
 
 ### Pending Todos
 
