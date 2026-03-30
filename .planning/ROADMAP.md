@@ -88,7 +88,7 @@ Decimal phases appear between their surrounding integers in numeric order.
    **Plans**: 3 plans
    Plans:
 
-- [ ] 04-01-PLAN.md — Install popover, add amber-400 theme token, create todo route with state management and loading/empty/error UI
+- [x] 04-01-PLAN.md — Install popover, add amber-400 theme token, create todo route with state management and loading/empty/error UI
 - [ ] 04-02-PLAN.md — Implement full TodoRow with inline editing, status cycling, priority popover, delete
 - [ ] 04-03-PLAN.md — Implement full AddTodoRow with collapsed/expanded states and keyboard shortcuts
       **UI hint**: yes
@@ -129,6 +129,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Foundation                    | 2/2            | Complete    | 2026-03-29 |
 | 2. Route Shell & Tool Registry   | 1/2 | In Progress|  |
 | 3. Supabase Data Layer           | 1/2 | In Progress|  |
-| 4. Todo Tool                     | 0/3            | Not started | -          |
+| 4. Todo Tool                     | 1/3 | In Progress|  |
 | 5. Bento Overview & Registration | 0/?            | Not started | -          |
 | 6. Realtime                      | 0/?            | Not started | -          |

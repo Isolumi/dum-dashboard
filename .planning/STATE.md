@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-03-29T22:49:05.840Z"
-last_activity: 2026-03-29
+status: executing
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-03-30T05:16:28.612Z"
+last_activity: 2026-03-30
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 9
+  completed_plans: 7
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** A single place to see and manage all your personal tools — starting with todos, built to grow.
-**Current focus:** Phase 03 — supabase-data-layer
+**Current focus:** Phase 04 — todo-tool
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-03-29
+Phase: 04 (todo-tool) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-03-30
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -59,6 +59,7 @@ _Updated after each plan completion_
 | Phase 03-supabase-data-layer P01 | 98 | 1 tasks | 4 files |
 | Phase 03-supabase-data-layer P01 | 900 | 3 tasks | 5 files |
 | Phase 03-supabase-data-layer P02 | 142 | 2 tasks | 2 files |
+| Phase 04-todo-tool P01 | 396 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,9 @@ Recent decisions affecting current work:
 - [Phase 03-supabase-data-layer]: supabase.ts import boundary: only *.functions.ts files may import it — enforced by createServerFn compiler transform
 - [Phase 03-supabase-data-layer]: Zod schemas exported from todos.functions.ts — enables direct unit testing without mocking createServerFn
 - [Phase 03-supabase-data-layer]: Test file prefixed with - (-todos.functions.test.ts) — TanStack Router ignores files with - prefix, preventing spurious route warnings
+- [Phase 04-todo-tool]: Todo route files in _layout/todos/ (not todos/) for correct TanStack Router layout nesting
+- [Phase 04-todo-tool]: todos.functions.ts stays in routes/todos/; component files import via #/routes/todos/todos.functions alias
+- [Phase 04-todo-tool]: Alert variant=destructive for all error states per composition.md callout rule
 
 ### Pending Todos
 
@@ -101,6 +105,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T22:45:26.819Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-03-30T05:16:28.609Z
+Stopped at: Completed 04-01-PLAN.md
 Resume file: None
