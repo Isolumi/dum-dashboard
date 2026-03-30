@@ -92,8 +92,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 04-02-PLAN.md — Implement full TodoRow with inline editing, status cycling, priority popover, delete
 - [x] 04-03-PLAN.md — Implement full AddTodoRow with collapsed/expanded states and keyboard shortcuts
 - [ ] 04-04-PLAN.md — (gap closure) Fix Supabase credentials in .env.local
-- [ ] 04-05-PLAN.md — (gap closure) Add null guard to getTodos return value
-- [ ] 04-06-PLAN.md — (gap closure) Fix AddTodoRow styling and UX alignment
+- [x] 04-05-PLAN.md — (gap closure) Add null guard to getTodos return value
+- [x] 04-06-PLAN.md — (gap closure) Fix AddTodoRow styling and UX alignment
       **UI hint**: yes
 
 ### Phase 5: Bento Overview & Registration
@@ -132,6 +132,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Foundation                    | 2/2            | Complete    | 2026-03-29 |
 | 2. Route Shell & Tool Registry   | 1/2 | In Progress|  |
 | 3. Supabase Data Layer           | 1/2 | In Progress|  |
-| 4. Todo Tool                     | 3/6 | Gap Closure | - |
+| 4. Todo Tool                     | 5/6 | In Progress|  |
 | 5. Bento Overview & Registration | 0/?            | Not started | -          |
 | 6. Realtime                      | 0/?            | Not started | -          |
