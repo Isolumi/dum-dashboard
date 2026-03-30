@@ -1,3 +1,4 @@
+import viteReact from "@vitejs/plugin-react";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import { defineProject, mergeConfig } from "vitest/config";
@@ -29,13 +30,17 @@ export default mergeConfig(
               name: "unit",
               include: ["src/**/-*.test.ts"],
               environment: "node",
+              env: {
+                VITE_SUPABASE_URL: "http://localhost",
+                VITE_SUPABASE_PUBLISHABLE_KEY: "test",
+              },
             },
           }),
           {},
         ),
         // Component tests (.tsx): use jsdom environment, no TanStack Start plugin
         defineProject({
-          plugins: [tsconfigPaths({ projects: ["./tsconfig.json"] })],
+          plugins: [tsconfigPaths({ projects: ["./tsconfig.json"] }), viteReact()],
           test: {
             name: "components",
             include: ["src/**/-*.test.tsx"],
