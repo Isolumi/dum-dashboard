@@ -7,9 +7,7 @@ depends_on: []
 files_modified:
   - vitest.config.ts
   - tsconfig.json
-  - src/routes/todos/todos.functions.ts
-  - src/routes/todos/-todos.functions.ts
-  - src/routes/todos/-todos.functions.test.ts
+  - vite.config.ts
   - src/routes/_layout/todos/TodoRow.tsx
   - src/routes/_layout/todos/-TodoRow.tsx
   - src/routes/_layout/todos/AddTodoRow.tsx
@@ -31,32 +29,32 @@ must_haves:
     - path: "tsconfig.json"
       provides: "TypeScript config without deprecated baseUrl"
       contains: "moduleResolution"
-    - path: "src/routes/todos/-todos.functions.ts"
-      provides: "Renamed server functions file with - prefix"
-      exports: ["getTodos", "createTodo", "updateTodo", "deleteTodo"]
+    - path: "vite.config.ts"
+      provides: "Vite config with routeFileIgnorePattern excluding *.functions.ts from route scanning"
+      contains: "routeFileIgnorePattern"
     - path: "src/routes/_layout/todos/-TodoRow.tsx"
       provides: "Renamed TodoRow component with - prefix"
     - path: "src/routes/_layout/todos/-AddTodoRow.tsx"
       provides: "Renamed AddTodoRow component with - prefix"
   key_links:
     - from: "src/routes/_layout/todos/index.tsx"
-      to: "src/routes/todos/-todos.functions.ts"
+      to: "src/routes/todos/todos.functions.ts"
       via: "named import"
-      pattern: "#/routes/todos/-todos.functions"
+      pattern: "#/routes/todos/todos.functions"
     - from: "src/routes/todos/-todos.functions.test.ts"
-      to: "src/routes/todos/-todos.functions.ts"
+      to: "src/routes/todos/todos.functions.ts"
       via: "relative import"
-      pattern: "./-todos.functions"
+      pattern: "./todos.functions"
 ---
 
 <objective>
 Close the three UAT gaps identified in 03-UAT.md:
 1. (major) Unit tests fail — vitest.config.ts missing env stubs and viteReact() plugin
 2. (minor) tsc --noEmit exits 1 — deprecated `baseUrl` in tsconfig.json
-3. (minor) Build warnings — three route files lack the `-` prefix convention
+3. (minor) Build warnings — TodoRow.tsx and AddTodoRow.tsx lack the `-` prefix; todos.functions.ts is excluded via routeFileIgnorePattern (preserving D-07)
 
 Purpose: Restore `bun test`, `tsc --noEmit`, and `bun run build` to clean exits so the phase is fully verified.
-Output: Updated config files and renamed source files with all import paths corrected.
+Output: Updated config files and renamed component files with all import paths corrected.
 </objective>
 
 <execution_context>
@@ -117,7 +115,9 @@ import { defineConfig } from "vitest/config";
   <verify>
     <automated>cd /Users/isolumi/Documents/CS/dum-dashboard && bun test 2>&1 | tail -20</automated>
   </verify>
-  <done>All 23 tests in -todos.functions.test.ts pass. `bun test` exits 0.</done>
+  <done>
+The vitest unit project collects without "supabaseUrl is required" error; the viteReact() plugin enables JSX transform in the components project. `bun test` exits 0 or makes meaningful progress past the previous collection errors. (Full 23-test pass is confirmed in Task 3's done, after component file renames are complete.)
+  </done>
 </task>
 
 <task type="auto">
@@ -152,35 +152,64 @@ Result:
 </task>
 
 <task type="auto">
-  <name>Task 3: Rename non-route files to add - prefix and update all import paths</name>
+  <name>Task 3: Silence build warnings — configure routeFileIgnorePattern and rename component files</name>
   <files>
-    src/routes/todos/-todos.functions.ts,
+    vite.config.ts,
     src/routes/_layout/todos/-TodoRow.tsx,
     src/routes/_layout/todos/-AddTodoRow.tsx,
-    src/routes/_layout/todos/index.tsx,
-    src/routes/todos/-todos.functions.test.ts
+    src/routes/_layout/todos/index.tsx
   </files>
   <action>
-TanStack Router Vite plugin picks up any file without a `-` prefix as a route candidate and emits a warning for each. Three files need renaming.
+TanStack Router Vite plugin picks up any file without a `-` prefix as a route candidate and emits a warning for each. The solution is two-pronged:
 
-**Step 1 — Rename the files** (git mv to preserve history):
+**Part A — Configure routeFileIgnorePattern in vite.config.ts** (for todos.functions.ts):
+
+D-07 locks `todos.functions.ts` at `src/routes/todos/todos.functions.ts` per the `<tool>.functions.ts` convention. Do NOT rename this file. Instead, tell the router plugin to ignore all `*.functions.ts` files by adding `routeFileIgnorePattern` to the `tanstackStart()` plugin options:
+
+```ts
+tanstackStart({
+  routeFileIgnorePattern: "\\.functions\\.ts$",
+}),
+```
+
+This regex matches any file ending in `.functions.ts`, excluding `todos.functions.ts` from route scanning without renaming it.
+
+The complete vite.config.ts after edit:
+```ts
+import { defineConfig } from "vite";
+import { devtools } from "@tanstack/devtools-vite";
+import tsconfigPaths from "vite-tsconfig-paths";
+
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+
+import viteReact from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+
+const config = defineConfig({
+  plugins: [
+    devtools(),
+    tsconfigPaths({ projects: ["./tsconfig.json"] }),
+    tailwindcss(),
+    tanstackStart({
+      routeFileIgnorePattern: "\\.functions\\.ts$",
+    }),
+    viteReact(),
+  ],
+});
+
+export default config;
+```
+
+**Part B — Rename TodoRow.tsx and AddTodoRow.tsx** (component files, no convention locks these):
+
 ```bash
-git mv src/routes/todos/todos.functions.ts src/routes/todos/-todos.functions.ts
 git mv src/routes/_layout/todos/TodoRow.tsx src/routes/_layout/todos/-TodoRow.tsx
 git mv src/routes/_layout/todos/AddTodoRow.tsx src/routes/_layout/todos/-AddTodoRow.tsx
 ```
 
-**Step 2 — Update index.tsx** (`src/routes/_layout/todos/index.tsx`):
+**Part C — Update index.tsx** (`src/routes/_layout/todos/index.tsx`):
 
-Change line 8 import:
-```ts
-// Before:
-import { createTodo, deleteTodo, getTodos, updateTodo } from "#/routes/todos/todos.functions";
-// After:
-import { createTodo, deleteTodo, getTodos, updateTodo } from "#/routes/todos/-todos.functions";
-```
-
-Change local component imports (lines 9–10):
+Change local component imports:
 ```ts
 // Before:
 import { AddTodoRow } from "./AddTodoRow";
@@ -190,33 +219,17 @@ import { AddTodoRow } from "./-AddTodoRow";
 import { TodoRow } from "./-TodoRow";
 ```
 
-**Step 3 — Update -todos.functions.test.ts** (`src/routes/todos/-todos.functions.test.ts`):
+The `todos.functions.ts` import in index.tsx does NOT change — it stays as `#/routes/todos/todos.functions` (per D-07, file is not renamed).
 
-Change the relative import (line 12):
-```ts
-// Before:
-} from "./todos.functions";
-// After:
-} from "./-todos.functions";
-```
-
-Change the `readFileSync` path string (line 177):
-```ts
-// Before:
-const source = readFileSync(resolve(__dirname, "todos.functions.ts"), "utf-8");
-// After:
-const source = readFileSync(resolve(__dirname, "-todos.functions.ts"), "utf-8");
-```
-
-Note: `-todos.functions.test.ts` and `-AddTodoRow.test.tsx` already have the correct `-` prefix — do not rename them.
+Note: `-todos.functions.test.ts` already has the correct `-` prefix and imports from `./todos.functions` — do not modify the test file.
   </action>
   <verify>
-    <automated>cd /Users/isolumi/Documents/CS/dum-dashboard && bun run build 2>&1 | grep -i "does not export a Route" | wc -l</automated>
+    <automated>cd /Users/isolumi/Documents/CS/dum-dashboard && ! bun run build 2>&1 | grep -q "does not export a Route" && echo "PASS: no route warnings" || echo "FAIL: route warnings present"</automated>
   </verify>
   <done>
-`bun run build` completes with zero "does not export a Route" warnings. All three renamed files exist at their new paths. `bun test` still passes (imports resolve to renamed file). `tsc --noEmit` still exits 0.
+`bun run build` completes with zero "does not export a Route" warnings. `-TodoRow.tsx` and `-AddTodoRow.tsx` exist at their new paths. `todos.functions.ts` remains at `src/routes/todos/todos.functions.ts` (D-07 preserved). `bun test` passes all 23 tests (imports still resolve). `tsc --noEmit` still exits 0.
 
-Final smoke check: `bun test && tsc --noEmit && bun run build 2>&1 | grep -c "does not export a Route"` — first two exit 0, last prints 0.
+Final smoke check: `bun test && tsc --noEmit && ! bun run build 2>&1 | grep -q "does not export a Route"` — all three exit 0.
   </done>
 </task>
 
@@ -229,17 +242,19 @@ Run all three checks in sequence after task 3 completes:
 cd /Users/isolumi/Documents/CS/dum-dashboard
 bun test
 tsc --noEmit
-bun run build 2>&1 | grep "does not export a Route"
+! bun run build 2>&1 | grep -q "does not export a Route" && echo "PASS" || echo "FAIL"
 ```
 
-All three must succeed: `bun test` exits 0 with 23 passing tests, `tsc --noEmit` exits 0 with no output, `bun run build` emits no route-candidate warnings.
+All three must succeed: `bun test` exits 0 with 23 passing tests, `tsc --noEmit` exits 0 with no output, the build grep check prints "PASS".
 </verification>
 
 <success_criteria>
 - `bun test` exits 0, all 23 tests pass, no errors
 - `tsc --noEmit` exits 0, no TS5101 or any other error
 - `bun run build` produces no "does not export a Route" warnings
-- `src/routes/todos/todos.functions.ts` does not exist (replaced by `-todos.functions.ts`)
+- `src/routes/todos/todos.functions.ts` still exists at original path (D-07 preserved)
+- `src/routes/_layout/todos/-TodoRow.tsx` exists (renamed from TodoRow.tsx)
+- `src/routes/_layout/todos/-AddTodoRow.tsx` exists (renamed from AddTodoRow.tsx)
 - `src/routes/_layout/todos/TodoRow.tsx` does not exist (replaced by `-TodoRow.tsx`)
 - `src/routes/_layout/todos/AddTodoRow.tsx` does not exist (replaced by `-AddTodoRow.tsx`)
 </success_criteria>
