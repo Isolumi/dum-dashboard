@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-03-30T06:00:42.795Z"
+stopped_at: Completed 04-05-PLAN.md
+last_updated: "2026-03-30T08:38:31.377Z"
 last_activity: 2026-03-30
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 9
+  completed_phases: 3
+  total_plans: 12
   completed_plans: 9
   percent: 0
 ---
@@ -62,6 +62,7 @@ _Updated after each plan completion_
 | Phase 04-todo-tool P01 | 396 | 2 tasks | 8 files |
 | Phase 04-todo-tool P03 | 300 | 1 tasks | 1 files |
 | Phase 04-todo-tool P02 | 129 | 1 tasks | 2 files |
+| Phase 04-todo-tool P05 | 300 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,7 @@ Recent decisions affecting current work:
 - [Phase 04-todo-tool]: AddTodoRow PopoverTrigger uses render prop (base-ui) not asChild (Radix) — confirmed from base-vs-radix.md skill
 - [Phase 04-todo-tool]: TodoRow files in _layout/todos/ (not todos/) for correct TanStack Router layout nesting — confirmed by actual file structure
 - [Phase 04-todo-tool]: base-ui render prop on PopoverTrigger (not asChild) confirmed working for priority dropdown
+- [Phase 04-todo-tool]: Supabase select() null guard: always apply data ?? [] when returning array results from server functions
 
 ### Pending Todos
 
@@ -111,6 +113,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T05:53:12.673Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-03-30T08:38:31.374Z
+Stopped at: Completed 04-05-PLAN.md
 Resume file: None
