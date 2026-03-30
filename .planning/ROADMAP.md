@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation** - Project scaffolding, colour token system, and tooling configured — no hardcoded values anywhere (completed 2026-03-29)
 - [ ] **Phase 2: Route Shell & Tool Registry** - Navigable app skeleton with sidebar, pathless layout, and an empty tool registry
 - [ ] **Phase 3: Supabase Data Layer** - Todos table, typed server functions, and Zod-validated RPC wrappers — no UI yet
-- [x] **Phase 4: Todo Tool** - Full CRUD on the dedicated todo page with keyboard shortcuts and status toggle (completed 2026-03-30)
+- [ ] **Phase 4: Todo Tool** - Full CRUD on the dedicated todo page with keyboard shortcuts and status toggle (gap closure in progress)
 - [ ] **Phase 5: Bento Overview & Registration** - Todo registered in the registry; bento grid overview showing the todo summary card
 - [ ] **Phase 6: Realtime** - Live cross-tab sync without page refresh, subscription cleanup verified
 
@@ -85,12 +85,15 @@ Decimal phases appear between their surrounding integers in numeric order.
 3. User can edit any field of a todo item inline and save the change
 4. User can delete a todo item and it disappears from the list
 5. User can toggle a todo's status (not started / started / complete) directly from the list without opening an edit form
-   **Plans**: 3 plans
+   **Plans**: 6 plans
    Plans:
 
 - [x] 04-01-PLAN.md — Install popover, add amber-400 theme token, create todo route with state management and loading/empty/error UI
 - [x] 04-02-PLAN.md — Implement full TodoRow with inline editing, status cycling, priority popover, delete
 - [x] 04-03-PLAN.md — Implement full AddTodoRow with collapsed/expanded states and keyboard shortcuts
+- [ ] 04-04-PLAN.md — (gap closure) Fix Supabase credentials in .env.local
+- [ ] 04-05-PLAN.md — (gap closure) Add null guard to getTodos return value
+- [ ] 04-06-PLAN.md — (gap closure) Fix AddTodoRow styling and UX alignment
       **UI hint**: yes
 
 ### Phase 5: Bento Overview & Registration
@@ -129,6 +132,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Foundation                    | 2/2            | Complete    | 2026-03-29 |
 | 2. Route Shell & Tool Registry   | 1/2 | In Progress|  |
 | 3. Supabase Data Layer           | 1/2 | In Progress|  |
-| 4. Todo Tool                     | 3/3 | Complete   | 2026-03-30 |
+| 4. Todo Tool                     | 3/6 | Gap Closure | - |
 | 5. Bento Overview & Registration | 0/?            | Not started | -          |
 | 6. Realtime                      | 0/?            | Not started | -          |
