@@ -20,7 +20,7 @@
 
 ### Overview
 
-- [ ] **OVER-01**: User sees a bento box grid on the overview page with one summary card per registered tool
+- [x] **OVER-01**: User sees a bento box grid on the overview page with one summary card per registered tool
 - [x] **OVER-02**: Each bento card is provided by its tool (not hardcoded in the overview page)
 
 ### Todo Tool
@@ -87,7 +87,7 @@
 | NAV-01      | Phase 2 | Complete |
 | NAV-02      | Phase 2 | Complete |
 | NAV-03      | Phase 2 | Complete |
-| OVER-01     | Phase 5 | Pending  |
+| OVER-01     | Phase 5 | Complete |
 | OVER-02     | Phase 5 | Complete |
 | TODO-01     | Phase 4 | Complete |
 | TODO-02     | Phase 4 | Complete |
