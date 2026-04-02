@@ -7,11 +7,14 @@ export function useTodosRealtime(onEvent: () => void): ChannelStatus {
   const [status, setStatus] = useState<ChannelStatus>("live");
   // Stable ref prevents channel teardown/recreation on every render (per D-01 anti-pattern avoidance)
   const onEventRef = useRef(onEvent);
+  // Only show 'reconnecting' after SUBSCRIBED has fired at least once — prevents flash during setup
+  const hasSubscribed = useRef(false);
   useEffect(() => {
     onEventRef.current = onEvent;
   });
 
   useEffect(() => {
+    hasSubscribed.current = false;
     const channel = supabase
       .channel("todos-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "todos" }, () =>
@@ -19,10 +22,11 @@ export function useTodosRealtime(onEvent: () => void): ChannelStatus {
       )
       .subscribe((s) => {
         if (s === "SUBSCRIBED") {
+          hasSubscribed.current = true;
           setStatus("live");
         } else if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") {
-          // Only show reconnecting if we were already live — prevents flash on initial mount
-          setStatus((prev) => (prev === "live" ? "reconnecting" : prev));
+          // Only show reconnecting after a real established connection drops
+          if (hasSubscribed.current) setStatus("reconnecting");
         }
       });
 
