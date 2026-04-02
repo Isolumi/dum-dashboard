@@ -107,7 +107,7 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
           }}
           placeholder="Todo name..."
           autoFocus
-          className="h-auto flex-1 border-0 border-b border-input/60 px-2 pb-0.5 text-base shadow-none focus-visible:border-ring focus-visible:outline-none focus-visible:ring-0"
+          className="h-9 flex-1 rounded-lg border border-input/40 bg-input/20 px-3 text-base shadow-none transition-colors placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:bg-input/30 focus-visible:ring-2 focus-visible:ring-ring/30"
           aria-label="New todo name"
         />
 
