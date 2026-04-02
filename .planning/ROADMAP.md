@@ -126,7 +126,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 1. Creating, editing, or deleting a todo in one browser tab is reflected in a second open tab within a few seconds without any manual refresh
 2. Navigating away from the todo page and back does not accumulate duplicate Supabase subscriptions (verified via Supabase dashboard connection count)
-   **Plans**: TBD
+   **Plans**: 1 plan
+   Plans:
+
+- [ ] 06-01-PLAN.md — Add useTodosRealtime hook, LiveIndicator component, wire into TodosPage, verify cross-tab sync
 
 ## Progress
 
@@ -140,4 +143,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 3. Supabase Data Layer           | 1/2 | In Progress|  |
 | 4. Todo Tool                     | 8/8 | Complete   | 2026-04-02 |
 | 5. Bento Overview & Registration | 2/2 | Complete   | 2026-04-02 |
-| 6. Realtime                      | 0/?            | Not started | -          |
+| 6. Realtime                      | 0/1            | Not started | -          |
