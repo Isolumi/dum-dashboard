@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Skeleton } from "#/components/ui/skeleton";
 import type { Todo } from "#/lib/database.types";
+import { useTodosRealtime } from "#/hooks/useTodosRealtime";
 import { createTodo, deleteTodo, getTodos, updateTodo } from "#/routes/todos/todos.functions";
 import { AddTodoRow } from "./-AddTodoRow";
+import { LiveIndicator } from "./-LiveIndicator";
 import { TodoRow } from "./-TodoRow";
 
 export const Route = createFileRoute("/_layout/todos/")({
@@ -53,6 +55,11 @@ function TodosPage() {
     const timer = setTimeout(() => setMutationError(null), 4000);
     return () => clearTimeout(timer);
   }, [mutationError]);
+
+  const channelStatus = useTodosRealtime(async () => {
+    const fresh = await getTodos();
+    setTodos(fresh);
+  });
 
   async function handleCreate(fields: {
     name: string;
@@ -105,7 +112,10 @@ function TodosPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-6">
-      <h1 className="text-xl font-semibold">Todos</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Todos</h1>
+        <LiveIndicator status={channelStatus} />
+      </div>
       {error && (
         <Alert variant="destructive">
           <AlertCircle />
