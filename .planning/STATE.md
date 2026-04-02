@@ -119,9 +119,10 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 260329-3ht | Switch package manager from pnpm to bun | 2026-03-29 | 473b214 | [260329-3ht-switch-package-manager-from-pnpm-to-bun](./quick/260329-3ht-switch-package-manager-from-pnpm-to-bun/) |
 | 260401-vj3 | Add server-only Supabase admin client using SUPABASE_SECRET_KEY to bypass RLS | 2026-03-30 | 731fbf2 | [260401-vj3-add-server-only-supabase-admin-client-us](./quick/260401-vj3-add-server-only-supabase-admin-client-us/) |
+| 260401-vuw | Change AddTodoRow default priority from medium to low | 2026-03-30 | dc54891 | [260401-vuw-addtodorow-default-priority-to-low-repla](./quick/260401-vuw-addtodorow-default-priority-to-low-repla/) |
 
 ## Session Continuity
 
-Last session: 2026-03-30T22:45:00Z
-Stopped at: Completed quick task 260401-vj3 (add server-only supabase admin client)
+Last session: 2026-03-30T23:00:00Z
+Stopped at: Completed quick task 260401-vuw (change AddTodoRow default priority to low)
 Resume file: None
