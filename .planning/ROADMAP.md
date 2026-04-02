@@ -85,7 +85,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 3. User can edit any field of a todo item inline and save the change
 4. User can delete a todo item and it disappears from the list
 5. User can toggle a todo's status (not started / started / complete) directly from the list without opening an edit form
-   **Plans**: 7 plans
+   **Plans**: 8 plans
    Plans:
 
 - [x] 04-01-PLAN.md — Install popover, add amber-400 theme token, create todo route with state management and loading/empty/error UI
@@ -95,6 +95,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 04-05-PLAN.md — (gap closure) Add null guard to getTodos return value
 - [x] 04-06-PLAN.md — (gap closure) Fix AddTodoRow styling and UX alignment
 - [x] 04-07-PLAN.md — (gap closure) Fix AddTodoRow focus management for type-to-expand and Tab cycle
+- [ ] 04-08-PLAN.md — (gap closure) Fix stale AddTodoRow tests for Calendar popover date field
       **UI hint**: yes
 
 ### Phase 5: Bento Overview & Registration
@@ -133,6 +134,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Foundation                    | 2/2            | Complete    | 2026-03-29 |
 | 2. Route Shell & Tool Registry   | 1/2 | In Progress|  |
 | 3. Supabase Data Layer           | 1/2 | In Progress|  |
-| 4. Todo Tool                     | 7/7 | Complete   | 2026-04-02 |
+| 4. Todo Tool                     | 7/8 | In Progress|  |
 | 5. Bento Overview & Registration | 0/?            | Not started | -          |
 | 6. Realtime                      | 0/?            | Not started | -          |
