@@ -1,7 +1,8 @@
 import type { ComponentType } from "react";
 import type { LucideIcon } from "lucide-react";
 import { CheckSquare } from "lucide-react";
-import { PlaceholderBentoCard } from "./PlaceholderBentoCard";
+import { TodoBentoCard } from "#/routes/_layout/todos/-TodoBentoCard";
+import { getTodos } from "#/routes/todos/todos.functions";
 
 export interface ToolEntry {
   id: string;
@@ -18,6 +19,7 @@ export const tools: ToolEntry[] = [
     label: "Todos",
     route: "/todos",
     icon: CheckSquare,
-    BentoCard: PlaceholderBentoCard,
+    BentoCard: TodoBentoCard,
+    loadData: getTodos,
   },
 ];

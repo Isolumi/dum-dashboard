@@ -11,7 +11,7 @@ function LayoutComponent() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-12 shrink-0 items-center border-b border-neutral-700 px-4">
+        <header className="flex h-12 shrink-0 items-center border-b border-border px-4">
           <SidebarTrigger />
         </header>
         <Outlet />
