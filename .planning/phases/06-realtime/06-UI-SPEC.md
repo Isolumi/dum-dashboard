@@ -1,10 +1,11 @@
 ---
 phase: 6
 slug: realtime
-status: draft
+status: approved
 shadcn_initialized: true
 preset: base-nova
 created: 2026-04-02
+reviewed_at: 2026-04-02
 ---
 
 # Phase 6 — UI Design Contract
