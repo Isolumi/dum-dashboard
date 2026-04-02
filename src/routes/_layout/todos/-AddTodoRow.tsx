@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 
@@ -39,6 +39,14 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
 
   const nameInputRef = useRef<HTMLInputElement>(null);
   const priorityButtonRef = useRef<HTMLButtonElement>(null);
+  const collapsedRowRef = useRef<HTMLDivElement>(null);
+  const dateTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isExpanded) {
+      collapsedRowRef.current?.focus();
+    }
+  }, [isExpanded]);
 
   const resetForm = useCallback(() => {
     setName("");
@@ -62,6 +70,7 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
   if (!isExpanded) {
     return (
       <div
+        ref={collapsedRowRef}
         className="flex cursor-pointer items-center gap-2 px-4 min-h-[44px] transition-colors hover:bg-accent"
         onClick={() => {
           setIsExpanded(true);
@@ -124,7 +133,7 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
                 onKeyDown={(e) => {
                   if (e.key === "Tab" && !e.shiftKey) {
                     e.preventDefault();
-                    // Date popover trigger is a standard focusable button — let Tab flow naturally
+                    dateTriggerRef.current?.focus();
                   } else if (e.key === "Tab" && e.shiftKey) {
                     e.preventDefault();
                     nameInputRef.current?.focus();
@@ -172,10 +181,17 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
           <PopoverTrigger
             render={
               <Button
+                ref={dateTriggerRef}
                 variant="ghost"
                 className="shrink-0 gap-1.5 px-2"
                 onKeyDown={(e) => {
-                  if (e.key === "Escape" && !isDateOpen) {
+                  if (e.key === "Tab" && !e.shiftKey) {
+                    e.preventDefault();
+                    nameInputRef.current?.focus();
+                  } else if (e.key === "Tab" && e.shiftKey) {
+                    e.preventDefault();
+                    priorityButtonRef.current?.focus();
+                  } else if (e.key === "Escape" && !isDateOpen) {
                     e.preventDefault();
                     resetForm();
                   } else if (e.key === "Enter" && !isDateOpen) {
