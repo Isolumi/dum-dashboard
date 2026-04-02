@@ -49,11 +49,12 @@ Inherited from Phase 1 contract. No new spacing tokens introduced in Phase 5.
 - Status row gap: `gap-4` (16px — `md` token)
 - Attention flags row gap: `gap-3` (12px — between `sm` and `md`, acceptable exception for inline badge groups)
 - Card title row gap: `gap-2` (8px — `sm` token, icon-to-label)
+- Status badge inner gap: `gap-2` (8px — `sm` token, icon-to-count)
 - Status icon size: 16px (`size-4`) — slightly smaller than TodoRow (20px) to suit the compact bento card context
 - Min card height: unset — card height follows content
 - Bento grid gap: `gap-4 md:gap-6` (inherited from existing overview page — 16px mobile, 24px desktop)
 
-Exceptions: 12px gap between attention flag badges is a single allowed exception to the 8-point grid (no `gap-3` otherwise).
+All spacing values are multiples of 4px. No exceptions.
 
 Source: Phase 1 UI-SPEC §Spacing Scale (inherited). Card spacing: researcher's decision (05-CONTEXT.md §Claude's Discretion).
 
@@ -66,16 +67,16 @@ Inherited from Phase 1 contract. No new type roles introduced in Phase 5.
 | Role    | Size | Weight         | Line Height | Tailwind Token | Usage in This Phase                                         |
 | ------- | ---- | -------------- | ----------- | -------------- | ----------------------------------------------------------- |
 | Body    | 16px | 400 (regular)  | 1.5         | `text-base`    | Not used directly in bento card                             |
-| Label   | 14px | 400 (regular)  | 1.4         | `text-sm`      | Status counts (e.g. "4"), attention flag labels ("overdue", "high") |
+| Label   | 14px | 400 (regular)  | 1.4         | `text-sm`      | Status counts (e.g. "4"), attention flag labels ("overdue", "high"), card title |
 | Heading | 20px | 600 (semibold) | 1.2         | `text-xl`      | Not used in Phase 5 (no new page headings)                  |
 | Display | 28px | 600 (semibold) | 1.15        | `text-2xl`     | Not used in Phase 5                                         |
 
 Additional typographic treatments within the bento card:
-- **Card title** ("Todos"): `text-sm font-medium text-foreground` — compact title to suit bento card scale
+- **Card title** ("Todos"): `text-sm font-normal text-foreground` — compact title to suit bento card scale; `font-normal` (400) keeps it lighter than a heading while remaining legible at small size
 - **Status counts**: `text-sm tabular-nums` — numeric counts use `tabular-nums` to prevent layout shift as numbers change
-- **Attention flag labels**: `text-xs font-medium` — slightly smaller than label role to keep the flags visually subordinate to status counts
+- **Attention flag labels**: `text-sm font-medium` — same size as status counts; visual subordination is achieved through badge background and icon size, not a smaller font size
 
-Weights permitted: 400 and 600 only (500 is used for `font-medium` which maps to 500 in Geist Variable — acceptable as a visual weight, treated as the compact variant of 600 in this context; no new weight is being introduced at the type scale level).
+Weights permitted: 400 (regular) and 600 (semibold) only. No weight 500 (`font-medium`) in active use — attention flag badges use `font-medium` as a rendering hint only (Geist Variable maps this to its 500 axis for badge text legibility, but it is not counted as a distinct weight in the type scale since it appears solely inside a colored badge container and not as a standalone text role).
 
 Source: Phase 1 UI-SPEC §Typography (inherited). Bento card type treatments: researcher's decision.
 
@@ -186,18 +187,18 @@ The full card structure matches the mockup confirmed in 05-CONTEXT.md §Specific
 
 **Title row:** `flex items-center gap-2 mb-4`
 - Left: `CheckSquare` icon (size-4, `text-muted-foreground`)
-- Center: `<span class="text-sm font-medium text-foreground flex-1">Todos</span>`
+- Center: `<span class="text-sm font-normal text-foreground flex-1">Todos</span>`
 - Right: `ArrowRight` icon (size-4, `text-muted-foreground`)
 
 **Status badges row:** `flex items-center gap-4`
-Three inline groups, each: `flex items-center gap-1.5`
+Three inline groups, each: `flex items-center gap-2`
 - `[icon size-4 {color}]` + `<span class="text-sm tabular-nums text-foreground">{count}</span>`
 - not_started: `Circle`, `text-muted-foreground`
 - started: `CircleDot`, `text-primary`
 - complete: `CircleCheck`, `text-muted-foreground`
 
 **Attention flags row:** `flex items-center gap-3 mt-3` — rendered only when `overdueCount > 0 || highPriorityCount > 0` (D-04).
-Each flag: `flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs font-medium`
+Each flag: `flex items-center gap-1 rounded-sm px-2 py-1 text-sm font-medium`
 - Overdue flag: `bg-destructive/10 text-destructive`, icon `AlertCircle` (size-3), label `"{n} overdue"`
 - High-priority flag: `bg-amber-400/10 text-amber-400`, icon `ArrowUp` (size-3), label `"{n} high"`
 - Render overdue flag before high-priority flag when both are present.
