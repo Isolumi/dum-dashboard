@@ -122,9 +122,10 @@ None yet.
 | 260401-vuw | Change AddTodoRow default priority from medium to low | 2026-03-30 | dc54891 | [260401-vuw-addtodorow-default-priority-to-low-repla](./quick/260401-vuw-addtodorow-default-priority-to-low-repla/) |
 | 260402-13d | AddTodoRow UI polish — name/date inputs get visible underline affordance | 2026-03-30 | 88b17dd | [260402-13d-addtodorow-ui-polish-name-input-visible-](./quick/260402-13d-addtodorow-ui-polish-name-input-visible-/) |
 | 260402-1a5 | Todo page calendar popup for date input | 2026-04-02 | d173f48 | [260402-1a5-todo-page-calendar-popup-for-date-input-](./quick/260402-1a5-todo-page-calendar-popup-for-date-input-/) |
+| 260402-1gu | AddTodoRow name input modern Apple-style restyle | 2026-04-02 | 12c0935 | [260402-1gu-todo-page-addtodorow-text-input-modern-a](./quick/260402-1gu-todo-page-addtodorow-text-input-modern-a/) |
 
 ## Session Continuity
 
-Last session: 2026-04-02T04:59:58Z
-Stopped at: Completed quick task 260402-1a5 (Todo page calendar popup for date input)
+Last session: 2026-04-02T05:10:00Z
+Stopped at: Completed quick task 260402-1gu (AddTodoRow name input modern Apple-style restyle)
 Resume file: None
