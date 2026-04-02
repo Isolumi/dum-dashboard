@@ -1,5 +1,13 @@
 import { Link } from "@tanstack/react-router";
-import { AlertCircle, ArrowRight, ArrowUp, CheckSquare, Circle, CircleCheck, CircleDot } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  ArrowUp,
+  CheckSquare,
+  Circle,
+  CircleCheck,
+  CircleDot,
+} from "lucide-react";
 
 import type { Todo } from "#/lib/database.types";
 import type { ToolEntry } from "#/tools/registry";

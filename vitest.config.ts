@@ -7,10 +7,7 @@ import { defineConfig } from "vitest/config";
 const base = defineConfig({
   plugins: [tsconfigPaths({ projects: ["./tsconfig.json"] })],
   test: {
-    exclude: [
-      "**/node_modules/**",
-      ".claude/worktrees/**",
-    ],
+    exclude: ["**/node_modules/**", ".claude/worktrees/**"],
   },
 });
 
@@ -22,10 +19,7 @@ export default mergeConfig(
         // Unit tests (.ts): use TanStack Start plugin for createServerFn transform
         mergeConfig(
           defineProject({
-            plugins: [
-              tsconfigPaths({ projects: ["./tsconfig.json"] }),
-              tanstackStart(),
-            ],
+            plugins: [tsconfigPaths({ projects: ["./tsconfig.json"] }), tanstackStart()],
             test: {
               name: "unit",
               include: ["src/**/-*.test.ts"],

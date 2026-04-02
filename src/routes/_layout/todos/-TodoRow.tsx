@@ -187,10 +187,7 @@ export function TodoRow({ todo, onUpdate, onDelete }: TodoRowProps) {
           >
             {todo.due_date ? (
               <span
-                className={cn(
-                  "text-sm",
-                  isOverdue ? "text-destructive" : "text-muted-foreground",
-                )}
+                className={cn("text-sm", isOverdue ? "text-destructive" : "text-muted-foreground")}
               >
                 {format(parseISO(todo.due_date), "MMM d")}
               </span>

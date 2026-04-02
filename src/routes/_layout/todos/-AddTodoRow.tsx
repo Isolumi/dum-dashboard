@@ -226,9 +226,7 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
 
       {/* Keyboard hint */}
       <div className="flex justify-end px-4 pb-1.5">
-        <span className="text-xs text-muted-foreground">
-          Enter to save &middot; Esc to cancel
-        </span>
+        <span className="text-xs text-muted-foreground">Enter to save &middot; Esc to cancel</span>
       </div>
     </div>
   );

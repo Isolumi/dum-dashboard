@@ -4,3 +4,6 @@
 # Ignore planning artifacts
 .planning/
 .agents/
+
+# Generated files
+src/routeTree.gen.ts
