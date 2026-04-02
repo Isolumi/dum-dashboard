@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
-import { Circle, CircleCheck, CircleDot, Trash2 } from "lucide-react";
+import { Circle, CircleCheck, CircleDot, CalendarIcon, Trash2 } from "lucide-react";
+import { format, parseISO } from "date-fns";
 
 import { Button } from "#/components/ui/button";
+import { Calendar } from "#/components/ui/calendar";
 import { Input } from "#/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
 import type { Todo, TodoPriority, TodoStatus } from "#/lib/database.types";
@@ -53,7 +55,7 @@ export function TodoRow({ todo, onUpdate, onDelete }: TodoRowProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(todo.name);
   const [isPriorityOpen, setIsPriorityOpen] = useState(false);
-  const [isEditingDate, setIsEditingDate] = useState(false);
+  const [isDateOpen, setIsDateOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const isOverdue =
@@ -91,26 +93,6 @@ export function TodoRow({ todo, onUpdate, onDelete }: TodoRowProps) {
       return;
     }
     saveName();
-  }
-
-  function saveDate(value: string) {
-    const newDate = value || null;
-    if (newDate !== todo.due_date) {
-      onUpdate({ id: todo.id, due_date: newDate });
-    }
-    setIsEditingDate(false);
-  }
-
-  function handleDateKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
-      saveDate(e.currentTarget.value);
-    } else if (e.key === "Escape") {
-      setIsEditingDate(false);
-    }
-  }
-
-  function handleDateBlur(e: React.FocusEvent<HTMLInputElement>) {
-    saveDate(e.currentTarget.value);
   }
 
   return (
@@ -192,33 +174,44 @@ export function TodoRow({ todo, onUpdate, onDelete }: TodoRowProps) {
         </PopoverContent>
       </Popover>
 
-      {/* Due date field */}
+      {/* Due date — calendar popover */}
       <div className="w-24 shrink-0 text-right">
-        {isEditingDate ? (
-          <Input
-            type="date"
-            autoFocus
-            defaultValue={todo.due_date ?? ""}
-            onKeyDown={handleDateKeyDown}
-            onBlur={handleDateBlur}
-            className="h-auto w-28 border-0 p-0 text-sm shadow-none focus-visible:ring-1 focus-visible:ring-ring/50"
-          />
-        ) : (
-          <button
-            className={cn(
-              "text-sm",
-              todo.due_date
-                ? isOverdue
-                  ? "text-destructive"
-                  : "text-muted-foreground"
-                : "text-muted-foreground",
-            )}
-            onClick={() => setIsEditingDate(true)}
-            aria-label={`Edit due date for "${todo.name}"`}
+        <Popover open={isDateOpen} onOpenChange={setIsDateOpen}>
+          <PopoverTrigger
+            render={
+              <button
+                aria-label={`Edit due date for "${todo.name}"`}
+                className="w-full text-right"
+              />
+            }
           >
-            {todo.due_date ? `\u00b7 ${todo.due_date}` : ""}
-          </button>
-        )}
+            {todo.due_date ? (
+              <span
+                className={cn(
+                  "text-sm",
+                  isOverdue ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {format(parseISO(todo.due_date), "MMM d")}
+              </span>
+            ) : (
+              <CalendarIcon className="ml-auto size-4 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground" />
+            )}
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <Calendar
+              mode="single"
+              selected={todo.due_date ? parseISO(todo.due_date) : undefined}
+              onSelect={(date) => {
+                onUpdate({
+                  id: todo.id,
+                  due_date: date ? format(date, "yyyy-MM-dd") : null,
+                });
+                setIsDateOpen(false);
+              }}
+            />
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Delete button */}

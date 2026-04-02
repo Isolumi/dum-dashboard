@@ -27,7 +27,7 @@ export const Route = createFileRoute("/_layout/todos/")({
 
 function TodosLoading() {
   return (
-    <main className="flex flex-col gap-8 p-6">
+    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-6">
       <h1 className="text-xl font-semibold">Todos</h1>
       <div className="flex flex-col">
         {Array.from({ length: 5 }).map((_, i) => (
@@ -104,7 +104,7 @@ function TodosPage() {
   }
 
   return (
-    <main className="flex flex-col gap-8 p-6">
+    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-6">
       <h1 className="text-xl font-semibold">Todos</h1>
       {error && (
         <Alert variant="destructive">

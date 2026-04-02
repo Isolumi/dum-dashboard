@@ -1,6 +1,9 @@
 import { useCallback, useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
 
+import { Button } from "#/components/ui/button";
+import { Calendar } from "#/components/ui/calendar";
 import { Input } from "#/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
 import { cn } from "#/lib/utils";
@@ -30,19 +33,20 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [name, setName] = useState("");
   const [priority, setPriority] = useState<TodoPriority>("low");
-  const [dueDate, setDueDate] = useState("");
+  const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [isPriorityOpen, setIsPriorityOpen] = useState(false);
+  const [isDateOpen, setIsDateOpen] = useState(false);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const dateInputRef = useRef<HTMLInputElement>(null);
   const priorityButtonRef = useRef<HTMLButtonElement>(null);
 
   const resetForm = useCallback(() => {
     setName("");
     setPriority("low");
-    setDueDate("");
+    setDueDate(undefined);
     setIsExpanded(false);
     setIsPriorityOpen(false);
+    setIsDateOpen(false);
   }, []);
 
   const handleSubmit = useCallback(() => {
@@ -50,7 +54,7 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
     onCreate({
       name: name.trim(),
       priority,
-      due_date: dueDate || null,
+      due_date: dueDate ? format(dueDate, "yyyy-MM-dd") : null,
     });
     resetForm();
   }, [name, priority, dueDate, onCreate, resetForm]);
@@ -103,7 +107,7 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
           }}
           placeholder="Todo name..."
           autoFocus
-          className="h-auto flex-1 border-0 border-b border-input/60 px-1 pb-0.5 text-base shadow-none focus-visible:border-ring focus-visible:outline-none focus-visible:ring-0"
+          className="h-auto flex-1 border-0 border-b border-input/60 px-2 pb-0.5 text-base shadow-none focus-visible:border-ring focus-visible:outline-none focus-visible:ring-0"
           aria-label="New todo name"
         />
 
@@ -120,7 +124,7 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
                 onKeyDown={(e) => {
                   if (e.key === "Tab" && !e.shiftKey) {
                     e.preventDefault();
-                    dateInputRef.current?.focus();
+                    // Date popover trigger is a standard focusable button — let Tab flow naturally
                   } else if (e.key === "Tab" && e.shiftKey) {
                     e.preventDefault();
                     nameInputRef.current?.focus();
@@ -163,32 +167,42 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
           </PopoverContent>
         </Popover>
 
-        {/* Date input — uses shadcn Input inside w-24 shrink-0 wrapper matching TodoRow */}
-        <div className="w-24 shrink-0">
-          <Input
-            ref={dateInputRef}
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleSubmit();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                resetForm();
-              } else if (e.key === "Tab" && !e.shiftKey) {
-                e.preventDefault();
-                nameInputRef.current?.focus();
-              } else if (e.key === "Tab" && e.shiftKey) {
-                e.preventDefault();
-                priorityButtonRef.current?.focus();
-              }
-            }}
-            className="h-auto w-full border-0 border-b border-input/60 px-1 py-0.5 text-sm shadow-none focus-visible:border-ring focus-visible:outline-none focus-visible:ring-0"
-            aria-label="Due date"
-          />
-        </div>
+        {/* Date picker — calendar popover */}
+        <Popover open={isDateOpen} onOpenChange={setIsDateOpen}>
+          <PopoverTrigger
+            render={
+              <Button
+                variant="ghost"
+                className="shrink-0 gap-1.5 px-2"
+                onKeyDown={(e) => {
+                  if (e.key === "Escape" && !isDateOpen) {
+                    e.preventDefault();
+                    resetForm();
+                  } else if (e.key === "Enter" && !isDateOpen) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
+                aria-label="Select due date"
+              />
+            }
+          >
+            <CalendarIcon data-icon="inline-start" />
+            <span className={cn("text-sm", dueDate ? "" : "text-muted-foreground")}>
+              {dueDate ? format(dueDate, "MMM d") : "Date"}
+            </span>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <Calendar
+              mode="single"
+              selected={dueDate}
+              onSelect={(date) => {
+                setDueDate(date);
+                setIsDateOpen(false);
+              }}
+            />
+          </PopoverContent>
+        </Popover>
 
         {/* Delete column spacer to match TodoRow layout */}
         <div className="size-8 shrink-0" />
