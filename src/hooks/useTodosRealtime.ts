@@ -4,7 +4,7 @@ import { supabase } from "#/lib/supabase";
 export type ChannelStatus = "connecting" | "live" | "reconnecting";
 
 export function useTodosRealtime(onEvent: () => void): ChannelStatus {
-  const [status, setStatus] = useState<ChannelStatus>("connecting");
+  const [status, setStatus] = useState<ChannelStatus>("live");
   // Stable ref prevents channel teardown/recreation on every render (per D-01 anti-pattern avoidance)
   const onEventRef = useRef(onEvent);
   useEffect(() => {

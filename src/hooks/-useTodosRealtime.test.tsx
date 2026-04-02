@@ -44,10 +44,10 @@ describe("useTodosRealtime", () => {
     expect(onEvent).toHaveBeenCalledOnce();
   });
 
-  it("Test 2: returns 'live' when subscribe callback fires with SUBSCRIBED", () => {
+  it("Test 2: returns 'live' initially and after SUBSCRIBED fires", () => {
     const onEvent = vi.fn();
     const { result } = renderHook(() => useTodosRealtime(onEvent));
-    expect(result.current).toBe("connecting");
+    expect(result.current).toBe("live");
     act(() => {
       subscribeCb!("SUBSCRIBED");
     });
