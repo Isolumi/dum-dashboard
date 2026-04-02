@@ -8,7 +8,8 @@ export interface ToolEntry {
   label: string;
   route: string;
   icon: LucideIcon;
-  BentoCard: ComponentType<{ tool: ToolEntry }>;
+  BentoCard: ComponentType<{ tool: ToolEntry; data: unknown }>;
+  loadData?: () => Promise<unknown>;
 }
 
 export const tools: ToolEntry[] = [
