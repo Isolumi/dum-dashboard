@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: verifying
 stopped_at: Completed 03-GAP-PLAN.md
-last_updated: "2026-03-30T18:32:34.282Z"
-last_activity: 2026-03-30
+last_updated: "2026-04-02T04:59:58Z"
+last_activity: 2026-04-02
 progress:
   total_phases: 6
   completed_phases: 3
@@ -121,9 +121,10 @@ None yet.
 | 260401-vj3 | Add server-only Supabase admin client using SUPABASE_SECRET_KEY to bypass RLS | 2026-03-30 | 731fbf2 | [260401-vj3-add-server-only-supabase-admin-client-us](./quick/260401-vj3-add-server-only-supabase-admin-client-us/) |
 | 260401-vuw | Change AddTodoRow default priority from medium to low | 2026-03-30 | dc54891 | [260401-vuw-addtodorow-default-priority-to-low-repla](./quick/260401-vuw-addtodorow-default-priority-to-low-repla/) |
 | 260402-13d | AddTodoRow UI polish — name/date inputs get visible underline affordance | 2026-03-30 | 88b17dd | [260402-13d-addtodorow-ui-polish-name-input-visible-](./quick/260402-13d-addtodorow-ui-polish-name-input-visible-/) |
+| 260402-1a5 | Todo page calendar popup for date input | 2026-04-02 | d173f48 | [260402-1a5-todo-page-calendar-popup-for-date-input-](./quick/260402-1a5-todo-page-calendar-popup-for-date-input-/) |
 
 ## Session Continuity
 
-Last session: 2026-03-30T23:00:30Z
-Stopped at: Completed quick task 260402-13d (AddTodoRow UI polish — name/date input visible affordance)
+Last session: 2026-04-02T04:59:58Z
+Stopped at: Completed quick task 260402-1a5 (Todo page calendar popup for date input)
 Resume file: None
