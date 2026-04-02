@@ -63,22 +63,17 @@ describe("AddTodoRow (expanded state)", () => {
     expect(wrapper?.className).toContain("bg-accent/50");
   });
 
-  it("renders the date field using shadcn Input (not raw browser date picker)", () => {
-    const container = renderExpanded();
-    const dateInput = container.querySelector('input[type="date"]');
-    expect(dateInput).toBeTruthy();
-    // shadcn Input uses focus-visible:ring-ring/50 class
-    expect(dateInput?.className).toContain("focus-visible:ring-ring/50");
-    // Raw date input had w-36 - must NOT be present after fix
-    expect(dateInput?.className).not.toContain("w-36");
+  it("renders the date field as a Calendar popover trigger button", () => {
+    renderExpanded();
+    const dateTrigger = screen.getByRole("button", { name: /select due date/i });
+    expect(dateTrigger).toBeTruthy();
+    expect(screen.getByText("Date")).toBeTruthy();
   });
 
-  it("wraps date input in a w-24 shrink-0 div matching TodoRow date column", () => {
-    const container = renderExpanded();
-    const dateInput = container.querySelector('input[type="date"]');
-    const dateWrapper = dateInput?.parentElement;
-    expect(dateWrapper?.className).toContain("w-24");
-    expect(dateWrapper?.className).toContain("shrink-0");
+  it("date trigger button has shrink-0 class for fixed width", () => {
+    renderExpanded();
+    const dateTrigger = screen.getByRole("button", { name: /select due date/i });
+    expect(dateTrigger.className).toContain("shrink-0");
   });
 
   it("shows keyboard hint containing 'Enter to save' when expanded", () => {
