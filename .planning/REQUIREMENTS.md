@@ -41,7 +41,7 @@
 
 ### Realtime
 
-- [ ] **REAL-01**: Todo changes (create/edit/delete) made in one browser tab are reflected in other open tabs without a manual refresh
+- [x] **REAL-01**: Todo changes (create/edit/delete) made in one browser tab are reflected in other open tabs without a manual refresh
 
 ## v2 Requirements
 
@@ -99,7 +99,7 @@
 | BENT-01     | Phase 5 | Complete |
 | BENT-02     | Phase 5 | Complete |
 | BENT-03     | Phase 5 | Complete |
-| REAL-01     | Phase 6 | Pending  |
+| REAL-01     | Phase 6 | Complete |
 
 **Coverage:**
 

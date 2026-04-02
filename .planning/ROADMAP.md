@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3: Supabase Data Layer** - Todos table, typed server functions, and Zod-validated RPC wrappers — no UI yet
 - [x] **Phase 4: Todo Tool** - Full CRUD on the dedicated todo page with keyboard shortcuts and status toggle (gap closure in progress) (completed 2026-04-02)
 - [x] **Phase 5: Bento Overview & Registration** - Todo registered in the registry; bento grid overview showing the todo summary card (completed 2026-04-02)
-- [ ] **Phase 6: Realtime** - Live cross-tab sync without page refresh, subscription cleanup verified
+- [x] **Phase 6: Realtime** - Live cross-tab sync without page refresh, subscription cleanup verified (completed 2026-04-02)
 
 ## Phase Details
 
@@ -129,7 +129,7 @@ Decimal phases appear between their surrounding integers in numeric order.
    **Plans**: 1 plan
    Plans:
 
-- [ ] 06-01-PLAN.md — Add useTodosRealtime hook, LiveIndicator component, wire into TodosPage, verify cross-tab sync
+- [x] 06-01-PLAN.md — Add useTodosRealtime hook, LiveIndicator component, wire into TodosPage, verify cross-tab sync
 
 ## Progress
 
@@ -143,4 +143,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 3. Supabase Data Layer           | 1/2 | In Progress|  |
 | 4. Todo Tool                     | 8/8 | Complete   | 2026-04-02 |
 | 5. Bento Overview & Registration | 2/2 | Complete   | 2026-04-02 |
-| 6. Realtime                      | 0/1            | Not started | -          |
+| 6. Realtime                      | 1/1 | Complete   | 2026-04-02 |
