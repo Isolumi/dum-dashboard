@@ -33,6 +33,7 @@ export default mergeConfig(
               env: {
                 VITE_SUPABASE_URL: "http://localhost",
                 VITE_SUPABASE_PUBLISHABLE_KEY: "test",
+                SUPABASE_SECRET_KEY: "test-secret",
               },
             },
           }),

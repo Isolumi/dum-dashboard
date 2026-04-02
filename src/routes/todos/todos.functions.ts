@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
-import { supabase } from "#/lib/supabase";
+import { supabaseAdmin } from "#/lib/supabase-admin";
 import type { Todo } from "#/lib/database.types";
 
 export const CreateTodoSchema = z.object({
@@ -29,7 +29,7 @@ export const GetTodoSchema = z.object({
 });
 
 export const getTodos = createServerFn({ method: "GET" }).handler(async (): Promise<Todo[]> => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("todos")
     .select("*")
     .order("created_at", { ascending: false });
@@ -40,7 +40,7 @@ export const getTodos = createServerFn({ method: "GET" }).handler(async (): Prom
 export const getTodo = createServerFn({ method: "GET" })
   .inputValidator(zodValidator(GetTodoSchema))
   .handler(async ({ data }): Promise<Todo> => {
-    const { data: todo, error } = await supabase
+    const { data: todo, error } = await supabaseAdmin
       .from("todos")
       .select("*")
       .eq("id", data.id)
@@ -52,7 +52,7 @@ export const getTodo = createServerFn({ method: "GET" })
 export const createTodo = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(CreateTodoSchema))
   .handler(async ({ data }): Promise<Todo> => {
-    const { data: todo, error } = await supabase.from("todos").insert(data).select().single();
+    const { data: todo, error } = await supabaseAdmin.from("todos").insert(data).select().single();
     if (error) throw new Error(`Failed to create todo: ${error.message}`);
     return todo;
   });
@@ -61,7 +61,7 @@ export const updateTodo = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(UpdateTodoSchema))
   .handler(async ({ data }): Promise<Todo> => {
     const { id, ...fields } = data;
-    const { data: todo, error } = await supabase
+    const { data: todo, error } = await supabaseAdmin
       .from("todos")
       .update(fields)
       .eq("id", id)
@@ -74,6 +74,6 @@ export const updateTodo = createServerFn({ method: "POST" })
 export const deleteTodo = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(DeleteTodoSchema))
   .handler(async ({ data }): Promise<void> => {
-    const { error } = await supabase.from("todos").delete().eq("id", data.id);
+    const { error } = await supabaseAdmin.from("todos").delete().eq("id", data.id);
     if (error) throw new Error(`Failed to delete todo: ${error.message}`);
   });
