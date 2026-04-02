@@ -111,7 +111,7 @@ None yet.
 ### Blockers/Concerns
 
 - oxfmt is beta-status: exact-pin version in package.json; keep Prettier as fallback. Validate in Phase 1 by running `oxfmt --check` on scaffolded project.
-- RLS policy approach unresolved: decide explicitly during Phase 3 schema work — do not leave tables with RLS enabled but no policies defined.
+- RLS policy approach resolved: RLS enabled on todos table; server functions use supabaseAdmin (secret key) to bypass RLS — no per-user policies needed for this personal tool.
 
 ### Quick Tasks Completed
 
