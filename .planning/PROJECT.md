@@ -20,7 +20,7 @@ A single place to see and manage all your personal tools — starting with todos
 
 - [ ] Sidebar navigation to switch between the overview and individual tool pages
 - [x] Todo tool: create, view, edit, and delete todo items with name, priority (high/medium/low), status (not started/started/complete), and due date — Validated in Phase 04: Todo Tool (TODO-01 through TODO-06)
-- [ ] Todo data synced to Supabase in real time
+- [x] Todo data synced to Supabase in real time — Validated in Phase 06: Realtime (REAL-01)
 - [ ] Modular tool architecture so new tools can be added without restructuring
 
 ### Out of Scope
@@ -31,6 +31,7 @@ A single place to see and manage all your personal tools — starting with todos
 
 ## Context
 
+- Phase 06 complete — Realtime sync live: useTodosRealtime hook subscribes to Supabase postgres_changes; todo mutations in one tab reflect in all other tabs within ~3s; optimistic LiveIndicator shows connection status
 - Phase 05 complete — Bento overview live: TodoBentoCard shows live status counts and attention flags; tool registry supports loadData contract; FOUN-02 violations eliminated
 - Phase 04 complete — Todo tool live: full CRUD UI with inline editing, status cycling, priority popover, due date with overdue detection, optimistic mutations, error dismissal
 - Phase 03 complete — Supabase data layer live: typed client singleton, todos table with enums, 5 CRUD server functions (Zod-validated), bundle isolation confirmed
@@ -76,4 +77,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-04-02 after Phase 05 completion (38 tests passing, bento overview live)_
+_Last updated: 2026-04-02 after Phase 06 completion (45 tests passing, realtime sync live — v1 milestone complete)_
