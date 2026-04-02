@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-07-PLAN.md (AddTodoRow focus management)
-last_updated: "2026-04-02T06:09:53.934Z"
+stopped_at: Completed 04-08-PLAN.md (stale date-field test fix)
+last_updated: "2026-04-02T06:33:03.516Z"
 last_activity: 2026-04-02
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 14
-  completed_plans: 14
+  total_plans: 15
+  completed_plans: 15
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 04 (todo-tool) — EXECUTING
-Plan: 2 of 7
+Plan: 2 of 8
 Status: Ready to execute
 Last activity: 2026-04-02
 
@@ -65,6 +65,7 @@ _Updated after each plan completion_
 | Phase 04-todo-tool P06 | 593 | 1 tasks | 3 files |
 | Phase 03-supabase-data-layer PGAP | 252 | 3 tasks | 7 files |
 | Phase 04-todo-tool P07 | 62 | 1 tasks | 1 files |
+| Phase 04-todo-tool P08 | 94 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -106,6 +107,7 @@ Recent decisions affecting current work:
 - [Quick 260401-vj3]: supabase-admin.ts import boundary: only *.functions.ts files may import it (mirrors existing supabase.ts constraint)
 - [Phase 04-todo-tool]: useEffect([isExpanded]) with \!isExpanded guard handles both initial mount focus and post-resetForm focus in AddTodoRow
 - [Phase 04-todo-tool]: Explicit dateTriggerRef on PopoverTrigger Button child required because base-ui render-prop doesn't participate in natural Tab order
+- [Phase 04-todo-tool]: Use getByRole('button', { name: /select due date/i }) to query Calendar trigger — matches aria-label set on PopoverTrigger render-prop Button
 
 ### Pending Todos
 
@@ -129,6 +131,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-02T06:09:53.930Z
-Stopped at: Completed 04-07-PLAN.md (AddTodoRow focus management)
+Last session: 2026-04-02T06:33:03.512Z
+Stopped at: Completed 04-08-PLAN.md (stale date-field test fix)
 Resume file: None
