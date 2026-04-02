@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved
 phase: 03-supabase-data-layer
 source: [03-01-SUMMARY.md, 03-02-SUMMARY.md]
 started: 2026-03-30T00:00:00Z
@@ -50,7 +50,7 @@ skipped: 0
 ## Gaps
 
 - truth: "Run `bun test` passes — all 23 tests in -todos.functions.test.ts pass with no failures"
-  status: failed
+  status: resolved
   reason: "User reported: there are 7 errors. the tests do not pass"
   severity: major
   test: 1
@@ -68,7 +68,7 @@ skipped: 0
     - "Add viteReact() to plugins in the components defineProject block in vitest.config.ts"
   debug_session: .planning/debug/bun-test-failures-supabase-and-jsdom.md
 - truth: "`tsc --noEmit` exits 0 with no errors"
-  status: failed
+  status: resolved
   reason: "User reported: tsconfig.json error TS5101 — baseUrl is deprecated in TS 7.0, exits with 1 error"
   severity: minor
   test: 2
@@ -81,7 +81,7 @@ skipped: 0
     - "Delete \"baseUrl\": \".\" from tsconfig.json compilerOptions (paths block stays intact)"
   debug_session: .planning/debug/tsconfig-baseurl-deprecated.md
 - truth: "`bun run build` succeeds with no warnings; no Supabase strings in dist/client/"
-  status: failed
+  status: resolved
   reason: "User reported: it builds but a lot of warnings appear"
   severity: minor
   test: 3

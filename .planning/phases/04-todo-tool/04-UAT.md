@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: partial
 phase: 04-todo-tool
 source: [04-01-SUMMARY.md, 04-02-SUMMARY.md, 04-03-SUMMARY.md]
 started: 2026-03-30T00:00:00Z
@@ -107,7 +107,7 @@ skipped: 11
 ## Gaps
 
 - truth: "Visit /todos and the page loads with sidebar and todos content area"
-  status: diagnosed
+  status: resolved
   reason: "User reported: Error could not load todos. Refresh to try again"
   severity: major
   test: 1
@@ -119,7 +119,7 @@ skipped: 11
     - "Valid VITE_SUPABASE_URL with https:// prefix"
     - "Valid Supabase anon JWT for VITE_SUPABASE_PUBLISHABLE_KEY"
 - truth: "Navigating to /todos on fresh load shows 5 skeleton rows while data is fetched"
-  status: diagnosed
+  status: resolved
   reason: "User reported: Cannot read properties of undefined (reading 'map')"
   severity: blocker
   test: 2
@@ -132,7 +132,7 @@ skipped: 11
   missing:
     - "Null coalescing guard: return data ?? [] in getTodos"
 - truth: "When no todos exist, empty state shows CheckSquare icon and descriptive text"
-  status: diagnosed
+  status: resolved
   reason: "User reported: same red errors as before (error alert, cannot load todos)"
   severity: major
   test: 3
@@ -143,7 +143,7 @@ skipped: 11
   missing:
     - "Valid Supabase credentials (same fix as test 1)"
 - truth: "AddTodoRow expands into a clean form with focused name Input; submitting adds todo and collapses"
-  status: diagnosed
+  status: resolved
   reason: "User reported: its a form with very poorly made css and very unintuitive"
   severity: major
   test: 4
@@ -166,7 +166,7 @@ skipped: 11
     - "Add bg-destructive/20 or similar to low priority badge"
     - "Add visible Save/Cancel controls or keyboard hint"
 - truth: "Page crashes on load preventing all interaction (type-to-expand, keyboard nav, todo CRUD)"
-  status: diagnosed
+  status: resolved
   reason: "User reported: page keeps erroring — all remaining tests 5-16 skipped"
   severity: blocker
   test: 5
