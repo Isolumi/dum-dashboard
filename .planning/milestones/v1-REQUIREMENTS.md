@@ -1,3 +1,12 @@
+# Requirements Archive: v1 Personal Dashboard MVP
+
+**Archived:** 2026-04-02
+**Status:** SHIPPED
+
+For current requirements, see `.planning/REQUIREMENTS.md`.
+
+---
+
 # Requirements: Personal Dashboard
 
 **Defined:** 2026-03-29
