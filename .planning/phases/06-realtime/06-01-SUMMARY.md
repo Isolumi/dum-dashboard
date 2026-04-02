@@ -42,6 +42,8 @@ key-decisions:
   - "Empty deps array [] for channel useEffect -- channel created once per mount, per D-03"
   - "LiveIndicator uses text-muted-foreground for both dot and text -- low-prominence informational indicator per UI-SPEC"
   - "Heading row wrapped in flex justify-between div -- LiveIndicator right-aligned per UI-SPEC placement spec"
+  - "Optimistic initial status ('live') -- avoids nothing→Live flash; reasonable for personal app with reliable Supabase"
+  - "hasSubscribed ref guard -- errors before first SUBSCRIBED don't flash 'Reconnecting...'; only degrade after real established failure"
 
 requirements-completed: [REAL-01]
 
@@ -105,7 +107,14 @@ All 45 tests pass (38 pre-existing + 7 new). lint: 0 errors (1 pre-existing warn
 
 ### Auto-fixed Issues
 
-**1. [Rule 1 - Bug] oxfmt reformatted .on() call in useTodosRealtime.ts**
+**1. [Rule 1 - UX] Reconnecting flash on initial mount (two-stage fix)**
+- **Found during:** Task 3 human checkpoint
+- **Issue:** Supabase emits CHANNEL_ERROR/CLOSED during channel setup handshake before SUBSCRIBED, causing 'Reconnecting...' flash. A second issue was the nothing→Live flash from the original 'connecting' initial state.
+- **Fix:** (a) Changed initial state to 'live' (optimistic); (b) Added `hasSubscribed` ref — only transition to 'reconnecting' after first successful SUBSCRIBED event. Errors during initial handshake are silently ignored.
+- **Files modified:** `src/hooks/useTodosRealtime.ts`, `src/hooks/-useTodosRealtime.test.tsx`
+- **Committed in:** `f3295a4`, `c530af0`, `db0b38e`
+
+**2. [Rule 1 - Bug] oxfmt reformatted .on() call in useTodosRealtime.ts**
 - **Found during:** Task 2 verification (bun run fmt:check)
 - **Issue:** The multi-line `.on("postgres_changes", { ... }, callback)` format didn't match oxfmt's style
 - **Fix:** Ran `bunx oxfmt` to auto-format the file; `.on(...)` args collapsed to single-line with trailing-comma lambda
@@ -130,7 +139,7 @@ This is a one-time DB-level prerequisite — without it, the channel subscribes 
 
 ---
 *Phase: 06-realtime*
-*Completed: 2026-04-02 (Tasks 1-2 only; Task 3 is human checkpoint)*
+*Completed: 2026-04-02 (all tasks including human checkpoint — approved)*
 
 ## Self-Check: PASSED
 
