@@ -101,6 +101,8 @@ Recent decisions affecting current work:
 - [Phase 03-GAP]: routeFileIgnorePattern belongs inside router: {} sub-object in tanstackStart(), not at top level — TypeScript declared it at TanStackStartInputConfig.router.routeFileIgnorePattern
 - [Phase 03-GAP]: bun run test (vitest run) is the correct test command; bun test runs bun's native runner which does not support vitest test files
 - [Phase 03-GAP]: Component files in routes/ should use - prefix to prevent TanStack Router from scanning them as route candidates; test file dynamic imports must be updated after component renames
+- [Quick 260401-vj3]: supabase-admin.ts uses process.env (no VITE_ prefix) for SUPABASE_SECRET_KEY — Vite never inlines it into the client bundle; crash-on-startup via ! assertion preferred over silent RLS bypass failure
+- [Quick 260401-vj3]: supabase-admin.ts import boundary: only *.functions.ts files may import it (mirrors existing supabase.ts constraint)
 
 ### Pending Todos
 
@@ -116,9 +118,10 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260329-3ht | Switch package manager from pnpm to bun | 2026-03-29 | 473b214 | [260329-3ht-switch-package-manager-from-pnpm-to-bun](./quick/260329-3ht-switch-package-manager-from-pnpm-to-bun/) |
+| 260401-vj3 | Add server-only Supabase admin client using SUPABASE_SECRET_KEY to bypass RLS | 2026-03-30 | 731fbf2 | [260401-vj3-add-server-only-supabase-admin-client-us](./quick/260401-vj3-add-server-only-supabase-admin-client-us/) |
 
 ## Session Continuity
 
-Last session: 2026-03-30T18:32:34.279Z
-Stopped at: Completed 03-GAP-PLAN.md
+Last session: 2026-03-30T22:45:00Z
+Stopped at: Completed quick task 260401-vj3 (add server-only supabase admin client)
 Resume file: None
