@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 03-GAP-PLAN.md
-last_updated: "2026-04-02T04:59:58Z"
+status: executing
+stopped_at: Completed 04-07-PLAN.md (AddTodoRow focus management)
+last_updated: "2026-04-02T06:09:53.934Z"
 last_activity: 2026-04-02
 progress:
   total_phases: 6
-  completed_phases: 3
-  total_plans: 13
-  completed_plans: 12
+  completed_phases: 4
+  total_plans: 14
+  completed_plans: 14
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** A single place to see and manage all your personal tools — starting with todos, built to grow.
-**Current focus:** Phase 03 — supabase-data-layer
+**Current focus:** Phase 04 — todo-tool
 
 ## Current Position
 
-Phase: 03 (supabase-data-layer) — EXECUTING
-Plan: 1 of 1
-Status: Phase complete — ready for verification
-Last activity: 2026-03-30
+Phase: 04 (todo-tool) — EXECUTING
+Plan: 2 of 7
+Status: Ready to execute
+Last activity: 2026-04-02
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -64,6 +64,7 @@ _Updated after each plan completion_
 | Phase 04-todo-tool P02 | 129 | 1 tasks | 2 files |
 | Phase 04-todo-tool P06 | 593 | 1 tasks | 3 files |
 | Phase 03-supabase-data-layer PGAP | 252 | 3 tasks | 7 files |
+| Phase 04-todo-tool P07 | 62 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,8 @@ Recent decisions affecting current work:
 - [Phase 03-GAP]: Component files in routes/ should use - prefix to prevent TanStack Router from scanning them as route candidates; test file dynamic imports must be updated after component renames
 - [Quick 260401-vj3]: supabase-admin.ts uses process.env (no VITE_ prefix) for SUPABASE_SECRET_KEY — Vite never inlines it into the client bundle; crash-on-startup via ! assertion preferred over silent RLS bypass failure
 - [Quick 260401-vj3]: supabase-admin.ts import boundary: only *.functions.ts files may import it (mirrors existing supabase.ts constraint)
+- [Phase 04-todo-tool]: useEffect([isExpanded]) with \!isExpanded guard handles both initial mount focus and post-resetForm focus in AddTodoRow
+- [Phase 04-todo-tool]: Explicit dateTriggerRef on PopoverTrigger Button child required because base-ui render-prop doesn't participate in natural Tab order
 
 ### Pending Todos
 
@@ -126,6 +129,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-02T05:10:00Z
-Stopped at: Completed quick task 260402-1gu (AddTodoRow name input modern Apple-style restyle)
+Last session: 2026-04-02T06:09:53.930Z
+Stopped at: Completed 04-07-PLAN.md (AddTodoRow focus management)
 Resume file: None
