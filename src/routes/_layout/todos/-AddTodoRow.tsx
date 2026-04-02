@@ -103,7 +103,7 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
           }}
           placeholder="Todo name..."
           autoFocus
-          className="h-auto flex-1 border-0 p-0 text-base shadow-none focus-visible:ring-1 focus-visible:ring-ring/50"
+          className="h-auto flex-1 border-0 border-b border-input/60 px-1 pb-0.5 text-base shadow-none focus-visible:border-ring focus-visible:outline-none focus-visible:ring-0"
           aria-label="New todo name"
         />
 
@@ -185,7 +185,7 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
                 priorityButtonRef.current?.focus();
               }
             }}
-            className="h-auto border-0 p-0 text-sm shadow-none focus-visible:ring-1 focus-visible:ring-ring/50"
+            className="h-auto w-full border-0 border-b border-input/60 px-1 py-0.5 text-sm shadow-none focus-visible:border-ring focus-visible:outline-none focus-visible:ring-0"
             aria-label="Due date"
           />
         </div>
