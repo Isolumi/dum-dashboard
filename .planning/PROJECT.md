@@ -14,10 +14,10 @@ A single place to see and manage all your personal tools — starting with todos
 
 - [x] Predefined colour palette with a single source of truth for all colours — Validated in Phase 01: Foundation (FOUN-01, FOUN-02)
 - [x] Todo data persisted to Supabase and survives page refresh — Validated in Phase 03: Supabase Data Layer (TODO-07)
+- [x] Bento box overview page showing a summary card for each active tool — Validated in Phase 05: Bento Overview Registration (OVER-01, OVER-02, BENT-01, BENT-02, BENT-03)
 
 ### Active
 
-- [ ] Bento box overview page showing a summary card for each active tool
 - [ ] Sidebar navigation to switch between the overview and individual tool pages
 - [x] Todo tool: create, view, edit, and delete todo items with name, priority (high/medium/low), status (not started/started/complete), and due date — Validated in Phase 04: Todo Tool (TODO-01 through TODO-06)
 - [ ] Todo data synced to Supabase in real time
@@ -31,6 +31,7 @@ A single place to see and manage all your personal tools — starting with todos
 
 ## Context
 
+- Phase 05 complete — Bento overview live: TodoBentoCard shows live status counts and attention flags; tool registry supports loadData contract; FOUN-02 violations eliminated
 - Phase 04 complete — Todo tool live: full CRUD UI with inline editing, status cycling, priority popover, due date with overdue detection, optimistic mutations, error dismissal
 - Phase 03 complete — Supabase data layer live: typed client singleton, todos table with enums, 5 CRUD server functions (Zod-validated), bundle isolation confirmed
 - Phase 01 complete — TanStack Start scaffold running with shadcn/ui base-nova, Tailwind v4 OKLCH token system, OXC tooling
@@ -50,7 +51,7 @@ A single place to see and manage all your personal tools — starting with todos
 | Decision                        | Rationale                                                                 | Outcome   |
 | ------------------------------- | ------------------------------------------------------------------------- | --------- |
 | Supabase for database           | Hosted Postgres with real-time, easy to set up, scales for personal tools | ✓ Validated Phase 03 — client singleton, todos table, CRUD functions all working |
-| Sidebar + bento overview layout | Each tool gets full-page focus; overview gives a bird's-eye view          | — Pending |
+| Sidebar + bento overview layout | Each tool gets full-page focus; overview gives a bird's-eye view          | ✓ Validated Phase 05 — bento overview page live with TodoBentoCard and tool registry |
 | OXC for linting/formatting      | Faster than ESLint/Prettier, modern replacement                           | ✓ Validated Phase 01 — oxlint 1.57.0 + oxfmt 0.42.0 pass with 0 violations |
 | TanStack Start for routing/SSR  | File-based routing, full-stack React, matches the ecosystem               | ✓ Validated Phase 01 — scaffold complete, dev server starts cleanly |
 
@@ -75,4 +76,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-04-02 after Phase 04 completion (all 30 tests passing, gap plans closed)_
+_Last updated: 2026-04-02 after Phase 05 completion (38 tests passing, bento overview live)_
