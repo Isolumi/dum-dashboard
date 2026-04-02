@@ -21,7 +21,8 @@ export function useTodosRealtime(onEvent: () => void): ChannelStatus {
         if (s === "SUBSCRIBED") {
           setStatus("live");
         } else if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") {
-          setStatus("reconnecting");
+          // Only show reconnecting if we were already live — prevents flash on initial mount
+          setStatus((prev) => (prev === "live" ? "reconnecting" : prev));
         }
       });
 

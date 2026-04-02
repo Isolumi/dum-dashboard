@@ -54,9 +54,13 @@ describe("useTodosRealtime", () => {
     expect(result.current).toBe("live");
   });
 
-  it("Test 3: returns 'reconnecting' when subscribe callback fires with CHANNEL_ERROR", () => {
+  it("Test 3: returns 'reconnecting' when CHANNEL_ERROR fires after being live", () => {
     const onEvent = vi.fn();
     const { result } = renderHook(() => useTodosRealtime(onEvent));
+    act(() => {
+      subscribeCb!("SUBSCRIBED");
+    });
+    expect(result.current).toBe("live");
     act(() => {
       subscribeCb!("CHANNEL_ERROR");
     });
