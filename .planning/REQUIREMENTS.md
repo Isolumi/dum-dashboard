@@ -21,7 +21,7 @@
 ### Overview
 
 - [ ] **OVER-01**: User sees a bento box grid on the overview page with one summary card per registered tool
-- [ ] **OVER-02**: Each bento card is provided by its tool (not hardcoded in the overview page)
+- [x] **OVER-02**: Each bento card is provided by its tool (not hardcoded in the overview page)
 
 ### Todo Tool
 
@@ -35,9 +35,9 @@
 
 ### Todo Bento Card
 
-- [ ] **BENT-01**: The todo bento card shows a count of todos grouped by status (not started / started / complete)
-- [ ] **BENT-02**: The todo bento card visually flags overdue items (past due date and not complete) and high-priority items
-- [ ] **BENT-03**: User can click the todo bento card to navigate to the full todo page
+- [x] **BENT-01**: The todo bento card shows a count of todos grouped by status (not started / started / complete)
+- [x] **BENT-02**: The todo bento card visually flags overdue items (past due date and not complete) and high-priority items
+- [x] **BENT-03**: User can click the todo bento card to navigate to the full todo page
 
 ### Realtime
 
@@ -88,7 +88,7 @@
 | NAV-02      | Phase 2 | Complete |
 | NAV-03      | Phase 2 | Complete |
 | OVER-01     | Phase 5 | Pending  |
-| OVER-02     | Phase 5 | Pending  |
+| OVER-02     | Phase 5 | Complete |
 | TODO-01     | Phase 4 | Complete |
 | TODO-02     | Phase 4 | Complete |
 | TODO-03     | Phase 4 | Complete |
@@ -96,9 +96,9 @@
 | TODO-05     | Phase 4 | Complete |
 | TODO-06     | Phase 4 | Complete |
 | TODO-07     | Phase 3 | Complete |
-| BENT-01     | Phase 5 | Pending  |
-| BENT-02     | Phase 5 | Pending  |
-| BENT-03     | Phase 5 | Pending  |
+| BENT-01     | Phase 5 | Complete |
+| BENT-02     | Phase 5 | Complete |
+| BENT-03     | Phase 5 | Complete |
 | REAL-01     | Phase 6 | Pending  |
 
 **Coverage:**

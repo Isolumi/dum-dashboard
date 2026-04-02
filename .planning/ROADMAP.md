@@ -113,7 +113,7 @@ Decimal phases appear between their surrounding integers in numeric order.
    **Plans**: 2 plans
    Plans:
 
-- [ ] 05-01-PLAN.md — Update ToolEntry contract (loadData + data prop), fix PlaceholderBentoCard FOUN-02 violations, create TodoBentoCard component with tests
+- [x] 05-01-PLAN.md — Update ToolEntry contract (loadData + data prop), fix PlaceholderBentoCard FOUN-02 violations, create TodoBentoCard component with tests
 - [ ] 05-02-PLAN.md — Register TodoBentoCard in registry, wire overview page loader with data fetching, fix _layout.tsx FOUN-02 violation, visual verification
       **UI hint**: yes
 
@@ -139,5 +139,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 2. Route Shell & Tool Registry   | 1/2 | In Progress|  |
 | 3. Supabase Data Layer           | 1/2 | In Progress|  |
 | 4. Todo Tool                     | 8/8 | Complete   | 2026-04-02 |
-| 5. Bento Overview & Registration | 0/2            | Not started | -          |
+| 5. Bento Overview & Registration | 1/2 | In Progress|  |
 | 6. Realtime                      | 0/?            | Not started | -          |
