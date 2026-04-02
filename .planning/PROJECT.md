@@ -75,4 +75,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-03-30 after Phase 04 completion_
+_Last updated: 2026-04-02 after Phase 04 completion (all 30 tests passing, gap plans closed)_
