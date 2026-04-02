@@ -29,7 +29,7 @@ const PRIORITY_LABELS: Record<TodoPriority, string> = {
 export function AddTodoRow({ onCreate }: AddTodoRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [name, setName] = useState("");
-  const [priority, setPriority] = useState<TodoPriority>("medium");
+  const [priority, setPriority] = useState<TodoPriority>("low");
   const [dueDate, setDueDate] = useState("");
   const [isPriorityOpen, setIsPriorityOpen] = useState(false);
 
@@ -39,7 +39,7 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
 
   const resetForm = useCallback(() => {
     setName("");
-    setPriority("medium");
+    setPriority("low");
     setDueDate("");
     setIsExpanded(false);
     setIsPriorityOpen(false);
