@@ -15,6 +15,7 @@ export interface AddTodoRowProps {
     priority: "high" | "medium" | "low";
     due_date: string | null;
   }) => void;
+  defaultPriority?: TodoPriority;
 }
 
 const PRIORITY_STYLES: Record<TodoPriority, string> = {
@@ -29,10 +30,10 @@ const PRIORITY_LABELS: Record<TodoPriority, string> = {
   low: "Low",
 };
 
-export function AddTodoRow({ onCreate }: AddTodoRowProps) {
+export function AddTodoRow({ onCreate, defaultPriority = "low" }: AddTodoRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [name, setName] = useState("");
-  const [priority, setPriority] = useState<TodoPriority>("low");
+  const [priority, setPriority] = useState<TodoPriority>(defaultPriority);
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [isPriorityOpen, setIsPriorityOpen] = useState(false);
   const [isDateOpen, setIsDateOpen] = useState(false);
@@ -50,12 +51,12 @@ export function AddTodoRow({ onCreate }: AddTodoRowProps) {
 
   const resetForm = useCallback(() => {
     setName("");
-    setPriority("low");
+    setPriority(defaultPriority);
     setDueDate(undefined);
     setIsExpanded(false);
     setIsPriorityOpen(false);
     setIsDateOpen(false);
-  }, []);
+  }, [defaultPriority]);
 
   const handleSubmit = useCallback(() => {
     if (name.trim().length === 0) return;
