@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { Circle, CircleCheck, CircleDot, CalendarIcon, GripVertical, Trash2 } from "lucide-react";
-// SyntheticListenerMap is the type for dnd-kit drag event listeners
 type SyntheticListenerMap = Record<string, (event: Event) => void>;
 import { format, parseISO } from "date-fns";
 
@@ -8,7 +7,7 @@ import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
 import { Input } from "#/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
-import type { Todo, TodoPriority, TodoStatus } from "#/lib/database.types";
+import type { Todo, TodoStatus } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
 
 export interface TodoRowProps {
@@ -42,22 +41,9 @@ const STATUS_NEXT_LABEL: Record<TodoStatus, string> = {
   complete: "not started",
 };
 
-const PRIORITY_STYLES: Record<TodoPriority, string> = {
-  high: "bg-destructive/20 text-destructive",
-  medium: "bg-amber-400/20 text-amber-400",
-  low: "text-muted-foreground",
-};
-
-const PRIORITY_LABELS: Record<TodoPriority, string> = {
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-};
-
 export function TodoRow({ todo, onUpdate, onDelete, dragListeners }: TodoRowProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(todo.name);
-  const [isPriorityOpen, setIsPriorityOpen] = useState(false);
   const [isDateOpen, setIsDateOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -150,42 +136,6 @@ export function TodoRow({ todo, onUpdate, onDelete, dragListeners }: TodoRowProp
           {todo.name}
         </span>
       )}
-
-      {/* Priority badge popover */}
-      <Popover open={isPriorityOpen} onOpenChange={setIsPriorityOpen}>
-        <PopoverTrigger
-          render={
-            <button
-              className={cn(
-                "cursor-pointer rounded-sm px-2 py-1 text-sm font-medium shrink-0",
-                PRIORITY_STYLES[todo.priority],
-              )}
-              aria-expanded={isPriorityOpen}
-              aria-haspopup="listbox"
-              aria-label={`Change priority for "${todo.name}"`}
-            />
-          }
-        >
-          {PRIORITY_LABELS[todo.priority]}
-        </PopoverTrigger>
-        <PopoverContent className="w-32 p-1" align="end">
-          {(["high", "medium", "low"] as const).map((p) => (
-            <button
-              key={p}
-              className={cn(
-                "w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent",
-                PRIORITY_STYLES[p],
-              )}
-              onClick={() => {
-                onUpdate({ id: todo.id, priority: p });
-                setIsPriorityOpen(false);
-              }}
-            >
-              {PRIORITY_LABELS[p]}
-            </button>
-          ))}
-        </PopoverContent>
-      </Popover>
 
       {/* Due date — calendar popover */}
       <div className="w-24 shrink-0 text-right">

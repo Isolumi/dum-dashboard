@@ -41,7 +41,8 @@ Drag-and-drop reorderable todo list grouped into three priority sections (High, 
 |---|------|--------|--------|
 | 1 | Add sort_order column + reorderTodos server function + install dnd-kit | adc5f2f | Done |
 | 2 | Create PrioritySection component and refactor TodosPage for grouped drag-and-drop | 88ae608 | Done |
-| 3 (checkpoint) | Human verification of drag-and-drop UX | — | Awaiting |
+| 3 (checkpoint) | Human verification of drag-and-drop UX | — | Approved |
+| 4 | Fix SSR hydration mismatch (useId on DndContext) + remove priority badge | HEAD | Done |
 
 ## What Was Built
 

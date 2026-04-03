@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 
 Phase: All complete (6/6)
 Status: v1 milestone shipped 2026-04-02
-Last activity: 2026-04-03 - Completed quick task 260402-vav: Change tab name to Dumq and use public favicon
+Last activity: 2026-04-03 - Completed quick task 260402-vwa: Draggable priority-grouped todos with sort_order persistence
 
 Progress: [██████████] 100%
 
@@ -143,5 +143,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-02T00:00:00Z
-Stopped at: Completed quick task 260402-vwa — Draggable priority-grouped todos (2/2 auto tasks done, at checkpoint:human-verify)
+Stopped at: Completed quick task 260402-vwa — Draggable priority-grouped todos (approved)
 Resume file: None

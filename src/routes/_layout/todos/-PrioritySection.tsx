@@ -1,3 +1,4 @@
+import { useId } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -69,6 +70,7 @@ export function PrioritySection({
   onCreate,
   onReorder,
 }: PrioritySectionProps) {
+  const dndId = useId();
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -112,7 +114,7 @@ export function PrioritySection({
       </div>
 
       {/* Todo rows */}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={todos.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           <div role="list">
             {todos.map((todo) => (
