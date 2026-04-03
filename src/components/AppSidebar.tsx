@@ -1,5 +1,5 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
-import { LayoutDashboard, LayoutGrid } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -44,9 +44,9 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center gap-2 px-4 py-3">
-          <LayoutDashboard className="size-6 text-neutral-100" />
+          <img src="/favicon.ico" alt="Dumq" className="size-6" />
           <span className="text-sm font-semibold text-neutral-100 group-data-[collapsible=icon]:hidden">
-            Dashboard
+            Dumq
           </span>
         </div>
       </SidebarHeader>
