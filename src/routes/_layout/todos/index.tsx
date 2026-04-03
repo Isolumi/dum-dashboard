@@ -15,7 +15,7 @@ export const Route = createFileRoute("/_layout/todos/")({
   loader: async () => {
     try {
       const todos = await getTodos();
-      return { todos, error: null };
+      return { todos: Array.isArray(todos) ? todos : [], error: null };
     } catch {
       return {
         todos: [] as Todo[],
