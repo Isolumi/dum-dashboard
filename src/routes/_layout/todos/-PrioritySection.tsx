@@ -108,22 +108,20 @@ export function PrioritySection({
         >
           {label}
         </span>
-        <span className="text-xs text-muted-foreground">
-          ({todos.length})
-        </span>
+        <span className="text-xs text-muted-foreground">({todos.length})</span>
       </div>
 
       {/* Todo rows */}
-      <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext
+        id={dndId}
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
         <SortableContext items={todos.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           <div role="list">
             {todos.map((todo) => (
-              <SortableTodoRow
-                key={todo.id}
-                todo={todo}
-                onUpdate={onUpdate}
-                onDelete={onDelete}
-              />
+              <SortableTodoRow key={todo.id} todo={todo} onUpdate={onUpdate} onDelete={onDelete} />
             ))}
           </div>
         </SortableContext>
