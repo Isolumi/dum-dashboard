@@ -94,3 +94,10 @@ None - no external service configuration required.
 ---
 *Phase: 04-todo-tool*
 *Completed: 2026-04-02*
+
+## Self-Check: PASSED
+
+- FOUND: `src/routes/_layout/todos/-AddTodoRow.test.tsx`
+- FOUND: `.planning/phases/04-todo-tool/04-08-SUMMARY.md`
+- FOUND: commit `c9185af` (task fix)
+- FOUND: commit `e961e8a` (docs metadata)

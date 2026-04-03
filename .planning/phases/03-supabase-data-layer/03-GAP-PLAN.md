@@ -224,7 +224,7 @@ The `todos.functions.ts` import in index.tsx does NOT change — it stays as `#/
 Note: `-todos.functions.test.ts` already has the correct `-` prefix and imports from `./todos.functions` — do not modify the test file.
   </action>
   <verify>
-    <automated>cd /Users/isolumi/Documents/CS/dum-dashboard && ! bun run build 2>&1 | grep -q "does not export a Route" && echo "PASS: no route warnings" || echo "FAIL: route warnings present"</automated>
+    <automated>cd /Users/isolumi/Documents/CS/dum-dashboard && bun test 2>&1 | tail -5 && tsc --noEmit && ! bun run build 2>&1 | grep -q "does not export a Route" && echo "ALL PASS"</automated>
   </verify>
   <done>
 `bun run build` completes with zero "does not export a Route" warnings. `-TodoRow.tsx` and `-AddTodoRow.tsx` exist at their new paths. `todos.functions.ts` remains at `src/routes/todos/todos.functions.ts` (D-07 preserved). `bun test` passes all 23 tests (imports still resolve). `tsc --noEmit` still exits 0.

@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 04-todo-tool
 source: [04-01-SUMMARY.md, 04-02-SUMMARY.md, 04-03-SUMMARY.md, 04-04-SUMMARY.md, 04-05-SUMMARY.md, 04-06-SUMMARY.md, quick/260402-1a5-PLAN.md, quick/260402-1gu-PLAN.md]
 started: 2026-04-02T00:00:00Z
@@ -113,14 +113,26 @@ blocked: 0
   reason: "User reported: nope"
   severity: major
   test: 7
-  root_cause: ""
-  artifacts: []
-  missing: []
+  root_cause: "The collapsed row has tabIndex=0 and a valid onKeyDown handler, but the element is never programmatically focused after page load or after resetForm() — so keystrokes go to document.body and never reach the handler. After submit/cancel, focus also returns to body instead of back to the collapsed row."
+  artifacts:
+    - path: "src/routes/_layout/todos/-AddTodoRow.tsx (collapsed div)"
+      issue: "No ref on collapsed div; .focus() never called on mount or after resetForm()"
+    - path: "src/routes/_layout/todos/-AddTodoRow.tsx resetForm()"
+      issue: "Collapses form but does not return focus to collapsed row"
+  missing:
+    - "Add collapsedRowRef = useRef<HTMLDivElement>(null) and attach to collapsed div"
+    - "After resetForm() collapses the row, call collapsedRowRef.current?.focus() so typing immediately works again"
 - truth: "Tab from priority badge moves focus to date picker trigger; Tab again wraps back to name input"
   status: failed
   reason: "User reported: one tab goes to priority badge, but it wont go onto date picker"
   severity: major
   test: 11
-  root_cause: ""
-  artifacts: []
-  missing: []
+  root_cause: "The priority PopoverTrigger's Tab onKeyDown calls e.preventDefault() (consuming the native Tab) but then does nothing — there is no ref on the date trigger button and no programmatic focus call, so focus goes nowhere."
+  artifacts:
+    - path: "src/routes/_layout/todos/-AddTodoRow.tsx line ~125-127"
+      issue: "Tab handler on priority button calls e.preventDefault() then has only a dead comment — no dateTriggerRef.current?.focus() call"
+    - path: "src/routes/_layout/todos/-AddTodoRow.tsx date PopoverTrigger Button"
+      issue: "No ref attached to the inner <Button> of the date PopoverTrigger render prop"
+  missing:
+    - "Add dateTriggerRef = useRef<HTMLButtonElement>(null) and attach to the date trigger <Button>"
+    - "In priority button's Tab handler, call dateTriggerRef.current?.focus() instead of the dead comment (or remove e.preventDefault() to let natural Tab flow)"
