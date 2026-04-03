@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 
 Phase: All complete (6/6)
 Status: v1 milestone shipped 2026-04-02
-Last activity: 2026-04-02
+Last activity: 2026-04-03 - Completed quick task 260402-tcs: Add Cloudflare Workers deployment support
 
 Progress: [██████████] 100%
 
@@ -136,7 +136,7 @@ None yet.
 | 260402-13d | AddTodoRow UI polish — name/date inputs get visible underline affordance | 2026-03-30 | 88b17dd | [260402-13d-addtodorow-ui-polish-name-input-visible-](./quick/260402-13d-addtodorow-ui-polish-name-input-visible-/) |
 | 260402-1a5 | Todo page calendar popup for date input | 2026-04-02 | d173f48 | [260402-1a5-todo-page-calendar-popup-for-date-input-](./quick/260402-1a5-todo-page-calendar-popup-for-date-input-/) |
 | 260402-1gu | AddTodoRow name input modern Apple-style restyle | 2026-04-02 | 12c0935 | [260402-1gu-todo-page-addtodorow-text-input-modern-a](./quick/260402-1gu-todo-page-addtodorow-text-input-modern-a/) |
-| 260402-tcs | Add Cloudflare Workers deployment support | 2026-04-03 | 05b01c1 | [260402-tcs-add-cloudflare-workers-deployment-suppor](./quick/260402-tcs-add-cloudflare-workers-deployment-suppor/) |
+| 260402-tcs | Add Cloudflare Workers deployment support | 2026-04-03 | cef3115 | [260402-tcs-add-cloudflare-workers-deployment-suppor](./quick/260402-tcs-add-cloudflare-workers-deployment-suppor/) |
 
 ## Session Continuity
 
