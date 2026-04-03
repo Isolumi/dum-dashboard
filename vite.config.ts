@@ -10,6 +10,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 const config = defineConfig({
   plugins: [
+    cloudflare({ viteEnvironment: { name: "ssr" } }),
     devtools(),
     tsconfigPaths({ projects: ["./tsconfig.json"] }),
     tailwindcss(),
@@ -19,7 +20,6 @@ const config = defineConfig({
       },
     }),
     viteReact(),
-    cloudflare(),
   ],
 });
 
