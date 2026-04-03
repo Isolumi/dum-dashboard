@@ -107,6 +107,7 @@ export type Database = {
           id: string;
           name: string;
           priority: Database["public"]["Enums"]["todo_priority"];
+          sort_order: number;
           status: Database["public"]["Enums"]["todo_status"];
         };
         Insert: {
@@ -115,6 +116,7 @@ export type Database = {
           id?: string;
           name: string;
           priority?: Database["public"]["Enums"]["todo_priority"];
+          sort_order?: number;
           status?: Database["public"]["Enums"]["todo_status"];
         };
         Update: {
@@ -123,6 +125,7 @@ export type Database = {
           id?: string;
           name?: string;
           priority?: Database["public"]["Enums"]["todo_priority"];
+          sort_order?: number;
           status?: Database["public"]["Enums"]["todo_status"];
         };
         Relationships: [];

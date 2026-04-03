@@ -18,6 +18,16 @@ export const UpdateTodoSchema = z.object({
   priority: z.enum(["high", "medium", "low"] as const).optional(),
   status: z.enum(["not_started", "started", "complete"] as const).optional(),
   due_date: z.string().date().nullable().optional(),
+  sort_order: z.number().int().optional(),
+});
+
+export const ReorderTodosSchema = z.object({
+  updates: z.array(
+    z.object({
+      id: z.string().uuid(),
+      sort_order: z.number().int().nonnegative(),
+    }),
+  ),
 });
 
 export const DeleteTodoSchema = z.object({
@@ -32,7 +42,7 @@ export const getTodos = createServerFn({ method: "GET" }).handler(async (): Prom
   const { data, error } = await supabaseAdmin
     .from("todos")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("sort_order", { ascending: true });
   if (error) throw new Error(`Failed to fetch todos: ${error.message}`);
   return data ?? [];
 });
@@ -52,7 +62,20 @@ export const getTodo = createServerFn({ method: "GET" })
 export const createTodo = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(CreateTodoSchema))
   .handler(async ({ data }): Promise<Todo> => {
-    const { data: todo, error } = await supabaseAdmin.from("todos").insert(data).select().single();
+    // Assign sort_order as max + 1 within the same priority group
+    const { data: maxRow } = await supabaseAdmin
+      .from("todos")
+      .select("sort_order")
+      .eq("priority", data.priority)
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .single();
+    const sort_order = maxRow ? maxRow.sort_order + 1 : 0;
+    const { data: todo, error } = await supabaseAdmin
+      .from("todos")
+      .insert({ ...data, sort_order })
+      .select()
+      .single();
     if (error) throw new Error(`Failed to create todo: ${error.message}`);
     return todo;
   });
@@ -76,4 +99,14 @@ export const deleteTodo = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<void> => {
     const { error } = await supabaseAdmin.from("todos").delete().eq("id", data.id);
     if (error) throw new Error(`Failed to delete todo: ${error.message}`);
+  });
+
+export const reorderTodos = createServerFn({ method: "POST" })
+  .inputValidator(zodValidator(ReorderTodosSchema))
+  .handler(async ({ data }): Promise<void> => {
+    await Promise.all(
+      data.updates.map(({ id, sort_order }) =>
+        supabaseAdmin.from("todos").update({ sort_order }).eq("id", id),
+      ),
+    );
   });
