@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
-import { supabaseAdmin } from "#/lib/supabase-admin";
+import { getSupabaseAdmin } from "#/lib/supabase-admin";
 import type { Todo } from "#/lib/database.types";
 
 export const CreateTodoSchema = z.object({
@@ -39,7 +39,7 @@ export const GetTodoSchema = z.object({
 });
 
 export const getTodos = createServerFn({ method: "GET" }).handler(async (): Promise<Todo[]> => {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from("todos")
     .select("*")
     .order("sort_order", { ascending: true });
@@ -50,7 +50,7 @@ export const getTodos = createServerFn({ method: "GET" }).handler(async (): Prom
 export const getTodo = createServerFn({ method: "GET" })
   .inputValidator(zodValidator(GetTodoSchema))
   .handler(async ({ data }): Promise<Todo> => {
-    const { data: todo, error } = await supabaseAdmin
+    const { data: todo, error } = await getSupabaseAdmin()
       .from("todos")
       .select("*")
       .eq("id", data.id)
@@ -63,7 +63,7 @@ export const createTodo = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(CreateTodoSchema))
   .handler(async ({ data }): Promise<Todo> => {
     // Assign sort_order as max + 1 within the same priority group
-    const { data: maxRow } = await supabaseAdmin
+    const { data: maxRow } = await getSupabaseAdmin()
       .from("todos")
       .select("sort_order")
       .eq("priority", data.priority)
@@ -71,7 +71,7 @@ export const createTodo = createServerFn({ method: "POST" })
       .limit(1)
       .single();
     const sort_order = maxRow ? maxRow.sort_order + 1 : 0;
-    const { data: todo, error } = await supabaseAdmin
+    const { data: todo, error } = await getSupabaseAdmin()
       .from("todos")
       .insert({ ...data, sort_order })
       .select()
@@ -84,7 +84,7 @@ export const updateTodo = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(UpdateTodoSchema))
   .handler(async ({ data }): Promise<Todo> => {
     const { id, ...fields } = data;
-    const { data: todo, error } = await supabaseAdmin
+    const { data: todo, error } = await getSupabaseAdmin()
       .from("todos")
       .update(fields)
       .eq("id", id)
@@ -97,7 +97,7 @@ export const updateTodo = createServerFn({ method: "POST" })
 export const deleteTodo = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(DeleteTodoSchema))
   .handler(async ({ data }): Promise<void> => {
-    const { error } = await supabaseAdmin.from("todos").delete().eq("id", data.id);
+    const { error } = await getSupabaseAdmin().from("todos").delete().eq("id", data.id);
     if (error) throw new Error(`Failed to delete todo: ${error.message}`);
   });
 
@@ -106,7 +106,7 @@ export const reorderTodos = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<void> => {
     await Promise.all(
       data.updates.map(({ id, sort_order }) =>
-        supabaseAdmin.from("todos").update({ sort_order }).eq("id", id),
+        getSupabaseAdmin().from("todos").update({ sort_order }).eq("id", id),
       ),
     );
   });
