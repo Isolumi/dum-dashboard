@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { cloudflare } from "@cloudflare/vite-plugin";
 import { devtools } from "@tanstack/devtools-vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
@@ -18,6 +19,7 @@ const config = defineConfig({
       },
     }),
     viteReact(),
+    cloudflare(),
   ],
 });
 
