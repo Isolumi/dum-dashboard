@@ -138,9 +138,10 @@ None yet.
 | 260402-1gu | AddTodoRow name input modern Apple-style restyle | 2026-04-02 | 12c0935 | [260402-1gu-todo-page-addtodorow-text-input-modern-a](./quick/260402-1gu-todo-page-addtodorow-text-input-modern-a/) |
 | 260402-tcs | Add Cloudflare Workers deployment support | 2026-04-03 | cef3115 | [260402-tcs-add-cloudflare-workers-deployment-suppor](./quick/260402-tcs-add-cloudflare-workers-deployment-suppor/) |
 | 260402-vav | Change tab name to Dumq and use public favicon | 2026-04-03 | de46269 | [260402-vav-change-the-tab-name-to-dumq-and-use-publ](./quick/260402-vav-change-the-tab-name-to-dumq-and-use-publ/) |
+| 260402-vwa | Draggable priority-grouped todos with sort_order persistence | 2026-04-02 | 88ae608 | [260402-vwa-the-todos-should-be-draggable-and-reorde](./quick/260402-vwa-the-todos-should-be-draggable-and-reorde/) |
 
 ## Session Continuity
 
-Last session: 2026-04-03T02:37:13Z
-Stopped at: Completed quick task 260402-vav — Change tab name to Dumq and use public favicon
+Last session: 2026-04-02T00:00:00Z
+Stopped at: Completed quick task 260402-vwa — Draggable priority-grouped todos (2/2 auto tasks done, at checkpoint:human-verify)
 Resume file: None
