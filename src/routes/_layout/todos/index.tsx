@@ -1,15 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertCircle, CheckSquare } from "lucide-react";
-import { useEffect, useState } from "react";
+import { AlertCircle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Skeleton } from "#/components/ui/skeleton";
-import type { Todo } from "#/lib/database.types";
+import type { Todo, TodoPriority } from "#/lib/database.types";
 import { useTodosRealtime } from "#/hooks/useTodosRealtime";
-import { createTodo, deleteTodo, getTodos, updateTodo } from "#/routes/todos/todos.functions";
-import { AddTodoRow } from "./-AddTodoRow";
+import {
+  createTodo,
+  deleteTodo,
+  getTodos,
+  reorderTodos,
+  updateTodo,
+} from "#/routes/todos/todos.functions";
 import { LiveIndicator } from "./-LiveIndicator";
-import { TodoRow } from "./-TodoRow";
+import { PrioritySection } from "./-PrioritySection";
 
 export const Route = createFileRoute("/_layout/todos/")({
   loader: async () => {
@@ -26,6 +31,13 @@ export const Route = createFileRoute("/_layout/todos/")({
   pendingComponent: TodosLoading,
   component: TodosPage,
 });
+
+const PRIORITY_ORDER: TodoPriority[] = ["high", "medium", "low"];
+const PRIORITY_LABELS: Record<TodoPriority, string> = {
+  high: "High",
+  medium: "Medium",
+  low: "Low",
+};
 
 function TodosLoading() {
   return (
@@ -61,6 +73,14 @@ function TodosPage() {
     setTodos(fresh);
   });
 
+  const grouped = useMemo(() => {
+    const groups: Record<TodoPriority, Todo[]> = { high: [], medium: [], low: [] };
+    for (const todo of todos) {
+      groups[todo.priority].push(todo);
+    }
+    return groups;
+  }, [todos]);
+
   async function handleCreate(fields: {
     name: string;
     priority: "high" | "medium" | "low";
@@ -76,7 +96,7 @@ function TodosPage() {
           due_date: fields.due_date,
         },
       });
-      setTodos((prev) => [created, ...prev]);
+      setTodos((prev) => [...prev, created]);
     } catch {
       setMutationError("Save failed — check your connection and try again.");
     }
@@ -110,6 +130,32 @@ function TodosPage() {
     }
   }
 
+  async function handleReorder(priority: TodoPriority, orderedIds: string[]) {
+    // Optimistic update
+    setTodos((prev) => {
+      const otherTodos = prev.filter((t) => t.priority !== priority);
+      const reordered = orderedIds
+        .map((id, i) => {
+          const todo = prev.find((t) => t.id === id);
+          return todo ? { ...todo, sort_order: i } : null;
+        })
+        .filter(Boolean) as Todo[];
+      return [...otherTodos, ...reordered];
+    });
+
+    // Persist
+    try {
+      await reorderTodos({
+        data: { updates: orderedIds.map((id, i) => ({ id, sort_order: i })) },
+      });
+    } catch {
+      // Revert on failure
+      const fresh = await getTodos();
+      setTodos(fresh);
+      setMutationError("Reorder failed — check your connection and try again.");
+    }
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-6">
       <div className="flex items-center justify-between">
@@ -123,18 +169,19 @@ function TodosPage() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      <div className="flex flex-col" role="list">
-        <AddTodoRow onCreate={handleCreate} />
-        {todos.map((todo) => (
-          <TodoRow key={todo.id} todo={todo} onUpdate={handleUpdate} onDelete={handleDelete} />
+      <div className="flex flex-col gap-2">
+        {PRIORITY_ORDER.map((p) => (
+          <PrioritySection
+            key={p}
+            priority={p}
+            label={PRIORITY_LABELS[p]}
+            todos={grouped[p]}
+            onUpdate={handleUpdate}
+            onDelete={handleDelete}
+            onCreate={handleCreate}
+            onReorder={handleReorder}
+          />
         ))}
-        {todos.length === 0 && !error && (
-          <div className="flex flex-col items-center gap-2 py-12">
-            <CheckSquare className="text-muted-foreground" />
-            <p className="text-base text-muted-foreground">Nothing here yet</p>
-            <p className="text-sm text-muted-foreground">Add your first todo above.</p>
-          </div>
-        )}
       </div>
       {mutationError && (
         <Alert variant="destructive">

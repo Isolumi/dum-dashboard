@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
-import { Circle, CircleCheck, CircleDot, CalendarIcon, Trash2 } from "lucide-react";
+import { Circle, CircleCheck, CircleDot, CalendarIcon, GripVertical, Trash2 } from "lucide-react";
+// SyntheticListenerMap is the type for dnd-kit drag event listeners
+type SyntheticListenerMap = Record<string, (event: Event) => void>;
 import { format, parseISO } from "date-fns";
 
 import { Button } from "#/components/ui/button";
@@ -19,6 +21,7 @@ export interface TodoRowProps {
     due_date?: string | null;
   }) => void;
   onDelete: (id: string) => void;
+  dragListeners?: SyntheticListenerMap;
 }
 
 const STATUS_CYCLE: Record<TodoStatus, TodoStatus> = {
@@ -51,7 +54,7 @@ const PRIORITY_LABELS: Record<TodoPriority, string> = {
   low: "Low",
 };
 
-export function TodoRow({ todo, onUpdate, onDelete }: TodoRowProps) {
+export function TodoRow({ todo, onUpdate, onDelete, dragListeners }: TodoRowProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(todo.name);
   const [isPriorityOpen, setIsPriorityOpen] = useState(false);
@@ -103,6 +106,16 @@ export function TodoRow({ todo, onUpdate, onDelete }: TodoRowProps) {
         todo.status === "complete" && "opacity-60",
       )}
     >
+      {/* Drag handle */}
+      <button
+        {...dragListeners}
+        className="shrink-0 cursor-grab opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground active:cursor-grabbing"
+        aria-label={`Drag to reorder "${todo.name}"`}
+        tabIndex={-1}
+      >
+        <GripVertical className="size-4" />
+      </button>
+
       {/* Status icon button */}
       <Button
         variant="ghost"
