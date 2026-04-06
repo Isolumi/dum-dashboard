@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, CheckSquare, Circle, CircleCheck, CircleDot } from "lucide-react";
+import { ArrowRight, CheckSquare, Circle, CircleCheck } from "lucide-react";
 
 import type { Todo, TodoPriority } from "#/lib/database.types";
 import type { ToolEntry } from "#/tools/registry";
@@ -30,7 +30,22 @@ function TodoRow({ todo, today }: { todo: Todo; today: Date }) {
         <Circle className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       )}
       {todo.status === "started" && (
-        <CircleDot className="size-4 shrink-0 text-primary" aria-hidden="true" />
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="shrink-0 text-primary"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="5" fill="currentColor" stroke="none" />
+        </svg>
       )}
       {todo.status === "complete" && (
         <CircleCheck className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />

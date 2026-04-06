@@ -46,7 +46,7 @@ export function AppSidebar() {
         <div className="flex items-center gap-2 px-4 py-3">
           <img src="/favicon.ico" alt="Dumq" className="size-6" />
           <span className="text-sm font-semibold text-neutral-100 group-data-[collapsible=icon]:hidden">
-            Dumq
+            DumQ
           </span>
         </div>
       </SidebarHeader>
