@@ -133,6 +133,7 @@ Each task was committed atomically:
 ### Auto-fixed Issues
 
 **1. [Rule 1 - Bug] Fixed invalid shadcn preset syntax `--preset base-nova`**
+
 - **Found during:** Task 1 (shadcn init step)
 - **Issue:** `pnpm dlx shadcn@latest init --preset base-nova` exits with error "Invalid preset: base-nova. Available presets: nova, vega, maia, lyra, mira"
 - **Fix:** Used `-b base -p nova` flags which produce `"style": "base-nova"` in components.json — the correct behavior
@@ -141,6 +142,7 @@ Each task was committed atomically:
 - **Committed in:** 5c3ca00 (Task 1 commit)
 
 **2. [Rule 1 - Bug] Removed scaffold demo CSS with hardcoded hex/rgba colors**
+
 - **Found during:** Task 1 (CSS setup)
 - **Issue:** TanStack Start starter ships `src/styles.css` with 200+ lines of hardcoded hex/rgba color variables (--sea-ink: #173a40, etc.) violating FOUN-01/FOUN-02
 - **Fix:** Replaced entire file with clean structure: `@import "tailwindcss"` + `tw-animate-css` + `shadcn/tailwind.css` + `./theme.css` + shadcn semantic tokens mapped to dark OKLCH palette
@@ -149,14 +151,16 @@ Each task was committed atomically:
 - **Committed in:** 5c3ca00 (Task 1 commit)
 
 **3. [Rule 1 - Bug] Removed theme toggle script and demo components violating D-01**
-- **Found during:** Task 1 (__root.tsx cleanup)
+
+- **Found during:** Task 1 (\_\_root.tsx cleanup)
 - **Issue:** Scaffold `__root.tsx` includes a THEME_INIT_SCRIPT that toggles light/dark modes from localStorage, violating D-01 (dark-only). Demo Header/Footer/ThemeToggle components contain hardcoded colors.
 - **Fix:** Rewrote `__root.tsx` as a minimal root route; deleted Header.tsx, Footer.tsx, ThemeToggle.tsx, about.tsx
-- **Files modified:** src/routes/__root.tsx (rewritten), demo files deleted
+- **Files modified:** src/routes/\_\_root.tsx (rewritten), demo files deleted
 - **Verification:** `grep -r "data-theme\|THEME_INIT" src/routes/` → no matches; FOUN-01 check passes
 - **Committed in:** 5c3ca00 (Task 1 commit)
 
 **4. [Rule 1 - Bug] Cleaned index.tsx of scaffold demo content with hardcoded colors**
+
 - **Found during:** Task 1 (index.tsx review)
 - **Issue:** Scaffold `src/routes/index.tsx` uses `text-[var(--sea-ink)]`, `bg-[rgba(79,184,178,0.32)]` and other arbitrary color values violating FOUN-01/FOUN-02
 - **Fix:** Replaced with minimal placeholder using only project token utility classes (`bg-neutral-950 text-neutral-100`)
@@ -187,15 +191,17 @@ None — no external service configuration required for Phase 1 (scaffold only, 
 - Plan 02 can proceed: `tailwindCssFile` is `src/styles.css`; `theme.css` is at `src/theme.css`
 
 ---
-*Phase: 01-foundation*
-*Completed: 2026-03-29*
+
+_Phase: 01-foundation_
+_Completed: 2026-03-29_
 
 ## Self-Check: PASSED
 
 All key files verified present:
+
 - FOUND: src/styles.css
 - FOUND: src/theme.css
-- FOUND: src/routes/__root.tsx
+- FOUND: src/routes/\_\_root.tsx
 - FOUND: src/routes/index.tsx
 - FOUND: src/router.tsx
 - FOUND: src/routeTree.gen.ts
@@ -206,6 +212,7 @@ All key files verified present:
 - FOUND: .planning/phases/01-foundation/01-01-SUMMARY.md
 
 All commits verified:
+
 - FOUND: 5c3ca00 (Task 1: scaffold + shadcn)
 - FOUND: fc5cbd8 (Task 2: OXC tooling)
 - FOUND: 28e8ca7 (docs: SUMMARY + state updates)

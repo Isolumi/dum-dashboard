@@ -15,13 +15,13 @@ created: 2026-03-29
 
 ## Test Infrastructure
 
-| Property | Value |
-|----------|-------|
-| **Framework** | None (Phase 1 is scaffolding + config — CLI/grep verification only) |
-| **Config file** | none — Wave 0 installs |
-| **Quick run command** | `pnpm dev` |
-| **Full suite command** | `pnpm lint && pnpm fmt:check` |
-| **Estimated runtime** | ~10 seconds |
+| Property               | Value                                                               |
+| ---------------------- | ------------------------------------------------------------------- |
+| **Framework**          | None (Phase 1 is scaffolding + config — CLI/grep verification only) |
+| **Config file**        | none — Wave 0 installs                                              |
+| **Quick run command**  | `pnpm dev`                                                          |
+| **Full suite command** | `pnpm lint && pnpm fmt:check`                                       |
+| **Estimated runtime**  | ~10 seconds                                                         |
 
 ---
 
@@ -36,14 +36,14 @@ created: 2026-03-29
 
 ## Per-Task Verification Map
 
-| Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 1-01-01 | 01 | 1 | FOUN-01 | smoke | `pnpm dev` starts without compilation errors | ❌ W0 | ⬜ pending |
-| 1-01-02 | 01 | 1 | FOUN-01 | structural | `grep -r --include="*.tsx" --include="*.ts" "oklch\|hsl\|rgb\|#[0-9a-f]\{3,6\}" src/routes/ src/components/ \| wc -l` → must equal 0 | ❌ W0 | ⬜ pending |
-| 1-02-01 | 02 | 1 | FOUN-02 | structural | `grep -r --include="*.tsx" "gray-\|slate-\|zinc-\|blue-\|red-\|green-" src/routes/ src/components/ \| wc -l` → must equal 0 | ❌ W0 | ⬜ pending |
-| 1-02-02 | 02 | 1 | FOUN-02 | tool run | `pnpm lint && pnpm fmt:check` → exit code 0 | ❌ W0 | ⬜ pending |
+| Task ID | Plan | Wave | Requirement | Test Type  | Automated Command                                                                                                                    | File Exists | Status     |
+| ------- | ---- | ---- | ----------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------- | ---------- |
+| 1-01-01 | 01   | 1    | FOUN-01     | smoke      | `pnpm dev` starts without compilation errors                                                                                         | ❌ W0       | ⬜ pending |
+| 1-01-02 | 01   | 1    | FOUN-01     | structural | `grep -r --include="*.tsx" --include="*.ts" "oklch\|hsl\|rgb\|#[0-9a-f]\{3,6\}" src/routes/ src/components/ \| wc -l` → must equal 0 | ❌ W0       | ⬜ pending |
+| 1-02-01 | 02   | 1    | FOUN-02     | structural | `grep -r --include="*.tsx" "gray-\|slate-\|zinc-\|blue-\|red-\|green-" src/routes/ src/components/ \| wc -l` → must equal 0          | ❌ W0       | ⬜ pending |
+| 1-02-02 | 02   | 1    | FOUN-02     | tool run   | `pnpm lint && pnpm fmt:check` → exit code 0                                                                                          | ❌ W0       | ⬜ pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+_Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky_
 
 ---
 
@@ -51,15 +51,15 @@ created: 2026-03-29
 
 None — existing infrastructure covers all phase requirements (Phase 1 verification is tooling-based, not unit-test based).
 
-*If none: "Existing infrastructure covers all phase requirements."*
+_If none: "Existing infrastructure covers all phase requirements."_
 
 ---
 
 ## Manual-Only Verifications
 
-| Behavior | Requirement | Why Manual | Test Instructions |
-|----------|-------------|------------|-------------------|
-| App renders in browser without errors | FOUN-01 | `pnpm dev` starts a server; visual/browser check needed for runtime errors | Run `pnpm dev`, open localhost in browser, verify no console errors and page renders |
+| Behavior                              | Requirement | Why Manual                                                                 | Test Instructions                                                                    |
+| ------------------------------------- | ----------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| App renders in browser without errors | FOUN-01     | `pnpm dev` starts a server; visual/browser check needed for runtime errors | Run `pnpm dev`, open localhost in browser, verify no console errors and page renders |
 
 ---
 

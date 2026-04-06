@@ -1,7 +1,8 @@
 import type { ComponentType } from "react";
 import type { LucideIcon } from "lucide-react";
-import { CheckSquare } from "lucide-react";
+import { CheckSquare, Clock } from "lucide-react";
 import { TodoBentoCard } from "#/routes/_layout/todos/-TodoBentoCard";
+import { ClockBentoCard } from "#/tools/ClockBentoCard";
 import { getTodos } from "#/routes/todos/todos.functions";
 
 export interface ToolEntry {
@@ -22,5 +23,13 @@ export const tools: ToolEntry[] = [
     icon: CheckSquare,
     BentoCard: TodoBentoCard,
     loadData: getTodos,
+  },
+  {
+    id: "clock",
+    label: "Clock",
+    route: "/",
+    icon: Clock,
+    BentoCard: ClockBentoCard,
+    overviewOnly: true,
   },
 ];

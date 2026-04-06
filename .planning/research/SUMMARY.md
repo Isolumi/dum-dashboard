@@ -24,6 +24,7 @@ The entire stack is already decided and fully compatible. TanStack Start v1 (cur
 See `.planning/research/STACK.md` for full version table, installation commands, and alternatives considered.
 
 **Core technologies:**
+
 - `@tanstack/react-start` ^1.167.13: full-stack meta-framework — file-based routing, SSR, type-safe `createServerFn` RPC
 - `tailwindcss` ^4.2.2: utility CSS with CSS-first config (`@theme` block in CSS, not `tailwind.config.js`)
 - `@shadcn/ui` (CLI-managed): accessible component library, fully updated for Tailwind v4 and React 19
@@ -40,6 +41,7 @@ The MVP is small and well-defined. All P1 features fit in a single focused build
 See `.planning/research/FEATURES.md` for full feature table, dependency graph, and competitor analysis.
 
 **Must have (table stakes):**
+
 - Todo CRUD: create, view list, inline edit, delete — single `todos` Supabase table
 - Status toggle (not started / started / complete) — three-state enum, quick-action UX
 - Priority field (high / medium / low) and due date field on every todo
@@ -50,12 +52,14 @@ See `.planning/research/FEATURES.md` for full feature table, dependency graph, a
 - Colour palette as single source of truth: all tokens in `theme.css`, zero hardcoded values
 
 **Should have (competitive, v1.x):**
+
 - Keyboard shortcuts for task entry (Enter to save, Escape to cancel)
 - Sort/filter within the todo list (by priority, due date, status)
 - Visual overdue indicator per-item (not just on bento card)
 - Bulk complete / bulk delete
 
 **Defer (v2+):**
+
 - Second tool (habit tracker, notes, etc.)
 - Mobile-optimised layout
 - Offline / service worker support
@@ -69,6 +73,7 @@ The architecture is a vertical-slice tool system wrapped in a single TanStack St
 See `.planning/research/ARCHITECTURE.md` for full directory structure, code examples, and data flow diagrams.
 
 **Major components:**
+
 1. `__root.tsx` — document shell, global providers (QueryClientProvider, etc.)
 2. `_app.tsx` (pathless layout) — sidebar + Outlet; wraps all dashboard routes
 3. `src/tools/registry.ts` — central tool manifest; drives sidebar links and bento widgets
@@ -146,6 +151,7 @@ The architecture research provides an explicit 11-step build order with hard dep
 ### Research Flags
 
 Phases with standard patterns (skip dedicated research — existing docs are sufficient):
+
 - **Phase 1:** TanStack Start scaffold + shadcn/ui init is well-documented; oxlint config is zero-config; Tailwind v4 CSS setup is documented in STACK.md
 - **Phase 2:** TanStack Router pathless layout is documented in ARCHITECTURE.md with code examples
 - **Phase 3:** Supabase table creation and `createServerFn` split is documented in ARCHITECTURE.md
@@ -159,12 +165,12 @@ No phase requires a `/gsd:research-phase` spike. All patterns are verified and h
 
 ## Confidence Assessment
 
-| Area | Confidence | Notes |
-|------|------------|-------|
-| Stack | HIGH | All versions verified against npm and official release pages as of 2026-03-28; compatibility matrix confirmed |
-| Features | MEDIUM-HIGH | Todo CRUD patterns are well-established; bento widget registry pattern is architectural inference from design trends — reasonable but less formally documented |
-| Architecture | HIGH | TanStack Router file-based routing, Supabase Realtime patterns, and shadcn/ui theming are all stable and well-documented; code examples verified against official docs |
-| Pitfalls | MEDIUM-HIGH | Critical pitfalls verified against GitHub issues and official docs; some (e.g., loaderDeps) are inferred from framework docs rather than confirmed production incidents |
+| Area         | Confidence  | Notes                                                                                                                                                                   |
+| ------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stack        | HIGH        | All versions verified against npm and official release pages as of 2026-03-28; compatibility matrix confirmed                                                           |
+| Features     | MEDIUM-HIGH | Todo CRUD patterns are well-established; bento widget registry pattern is architectural inference from design trends — reasonable but less formally documented          |
+| Architecture | HIGH        | TanStack Router file-based routing, Supabase Realtime patterns, and shadcn/ui theming are all stable and well-documented; code examples verified against official docs  |
+| Pitfalls     | MEDIUM-HIGH | Critical pitfalls verified against GitHub issues and official docs; some (e.g., loaderDeps) are inferred from framework docs rather than confirmed production incidents |
 
 **Overall confidence:** HIGH
 
@@ -180,6 +186,7 @@ No phase requires a `/gsd:research-phase` spike. All patterns are verified and h
 ## Sources
 
 ### Primary (HIGH confidence)
+
 - [TanStack Start v1 / TanStack Router v1.167 release pages](https://github.com/TanStack/router/releases) — version, React 19 requirement, Vinxi removal
 - [shadcn/ui Tailwind v4 docs](https://ui.shadcn.com/docs/tailwind-v4) — tw-animate-css, OKLCH, cssVariables setup
 - [shadcn/ui TanStack Start install docs](https://ui.shadcn.com/docs/installation/tanstack) — `init -t start` command
@@ -190,6 +197,7 @@ No phase requires a `/gsd:research-phase` spike. All patterns are verified and h
 - [OXC: Oxfmt beta release](https://oxc.rs/blog/2026-02-24-oxfmt-beta) — beta status, Prettier conformance
 
 ### Secondary (MEDIUM confidence)
+
 - [LogRocket: Migrating TanStack Start from Vinxi to Vite](https://blog.logrocket.com/migrating-tanstack-start-vinxi-vite/) — Vinxi removal in v1.121.0
 - [GitHub Issue: createServerFn leaking into client bundle #3990](https://github.com/TanStack/router/issues/3990) — confirmed bundle leakage
 - [GitHub Issue: Realtime strict mode subscriptions #169](https://github.com/supabase/realtime-js/issues/169) — React strict mode double-mount
@@ -198,9 +206,11 @@ No phase requires a `/gsd:research-phase` spike. All patterns are verified and h
 - [freeCodeCamp: TanStack Start + shadcn/ui dashboard](https://www.freecodecamp.org/news/build-an-admin-dashboard-with-shadcnui-and-tanstack-start/) — practical integration
 
 ### Tertiary (LOW confidence)
+
 - [Orbix Studio: Bento Grid Dashboard Design](https://www.orbix.studio/blogs/bento-grid-dashboard-design-aesthetics) — bento UX patterns (design trend inference)
 - [Time Management Ninja: 12 Top Features for the Perfect Todo App](https://timemanagementninja.com/2017/04/12-top-features-for-the-perfect-todo-app/) — todo feature expectations (general guidance)
 
 ---
-*Research completed: 2026-03-28*
-*Ready for roadmap: yes*
+
+_Research completed: 2026-03-28_
+_Ready for roadmap: yes_

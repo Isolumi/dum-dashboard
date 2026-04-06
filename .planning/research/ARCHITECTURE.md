@@ -58,19 +58,19 @@
 
 ### Component Responsibilities
 
-| Component | Responsibility | Communicates With |
-|-----------|----------------|-------------------|
-| `__root.tsx` | Document shell (html, head, body, global providers) | All routes via Outlet |
-| `_app.tsx` (pathless layout) | Sidebar + main area scaffold; renders Outlet | All child pages |
-| `Sidebar` component | Navigation links; lists registered tools | `toolRegistry` (reads nav entries) |
-| Overview page (`index.tsx`) | Bento grid of all tool widgets | `toolRegistry` (reads widget list) |
-| Tool page (e.g., `todos.tsx`) | Full tool UI; owns its own data loading | Tool's `.functions.ts` |
-| Tool widget (e.g., `TodoWidget`) | Compact summary card for overview bento grid | Tool's `.functions.ts` |
-| `toolRegistry` | Central list of all tools with metadata | Sidebar, Overview page |
-| `*.functions.ts` | `createServerFn` wrappers — safe to import anywhere | `*.server.ts` helpers |
-| `*.server.ts` | Supabase queries; server-only, never in client bundle | Supabase singleton client |
-| `src/lib/supabase.ts` | Singleton Supabase client; typed with generated DB types | All `*.server.ts` files |
-| `src/styles/theme.css` | CSS variable token definitions; single source of truth for colours | Tailwind via `@theme inline` |
+| Component                        | Responsibility                                                     | Communicates With                  |
+| -------------------------------- | ------------------------------------------------------------------ | ---------------------------------- |
+| `__root.tsx`                     | Document shell (html, head, body, global providers)                | All routes via Outlet              |
+| `_app.tsx` (pathless layout)     | Sidebar + main area scaffold; renders Outlet                       | All child pages                    |
+| `Sidebar` component              | Navigation links; lists registered tools                           | `toolRegistry` (reads nav entries) |
+| Overview page (`index.tsx`)      | Bento grid of all tool widgets                                     | `toolRegistry` (reads widget list) |
+| Tool page (e.g., `todos.tsx`)    | Full tool UI; owns its own data loading                            | Tool's `.functions.ts`             |
+| Tool widget (e.g., `TodoWidget`) | Compact summary card for overview bento grid                       | Tool's `.functions.ts`             |
+| `toolRegistry`                   | Central list of all tools with metadata                            | Sidebar, Overview page             |
+| `*.functions.ts`                 | `createServerFn` wrappers — safe to import anywhere                | `*.server.ts` helpers              |
+| `*.server.ts`                    | Supabase queries; server-only, never in client bundle              | Supabase singleton client          |
+| `src/lib/supabase.ts`            | Singleton Supabase client; typed with generated DB types           | All `*.server.ts` files            |
+| `src/styles/theme.css`           | CSS variable token definitions; single source of truth for colours | Tailwind via `@theme inline`       |
 
 ---
 
@@ -143,12 +143,12 @@ src/routes/
 
 ```tsx
 // src/routes/_app.tsx
-import { createFileRoute, Outlet } from '@tanstack/react-router'
-import { Sidebar } from '~/components/Sidebar'
+import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { Sidebar } from "~/components/Sidebar";
 
-export const Route = createFileRoute('/_app')({
+export const Route = createFileRoute("/_app")({
   component: AppLayout,
-})
+});
 
 function AppLayout() {
   return (
@@ -158,7 +158,7 @@ function AppLayout() {
         <Outlet />
       </main>
     </div>
-  )
+  );
 }
 ```
 
@@ -174,42 +174,44 @@ function AppLayout() {
 
 ```typescript
 // src/tools/registry.ts
-import { lazy } from 'react'
+import { lazy } from "react";
 
 export interface ToolDefinition {
-  id: string
-  label: string
-  href: string
-  icon: string          // Lucide icon name
-  Widget: React.ComponentType  // Bento card component
+  id: string;
+  label: string;
+  href: string;
+  icon: string; // Lucide icon name
+  Widget: React.ComponentType; // Bento card component
 }
 
 export const toolRegistry: ToolDefinition[] = [
   {
-    id: 'todos',
-    label: 'Todos',
-    href: '/todos',
-    icon: 'CheckSquare',
-    Widget: lazy(() => import('./todos/TodoWidget')),
+    id: "todos",
+    label: "Todos",
+    href: "/todos",
+    icon: "CheckSquare",
+    Widget: lazy(() => import("./todos/TodoWidget")),
   },
   // Add future tools here
-]
+];
 ```
 
 ```tsx
 // src/components/Sidebar.tsx
-import { toolRegistry } from '~/tools/registry'
-import { Link } from '@tanstack/react-router'
+import { toolRegistry } from "~/tools/registry";
+import { Link } from "@tanstack/react-router";
 
 export function Sidebar() {
   return (
     <nav>
       <Link to="/">Overview</Link>
       {toolRegistry.map((tool) => (
-        <Link key={tool.id} to={tool.href}>{tool.label}</Link>
+        <Link key={tool.id} to={tool.href}>
+          {tool.label}
+        </Link>
       ))}
     </nav>
-  )
+  );
 }
 ```
 
@@ -225,37 +227,34 @@ export function Sidebar() {
 
 ```typescript
 // src/tools/todos/todos.server.ts  (server-only)
-import { supabase } from '~/lib/supabase'
+import { supabase } from "~/lib/supabase";
 
 export async function fetchAllTodos() {
   const { data, error } = await supabase
-    .from('todos')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data
+    .from("todos")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
 }
 
 export async function insertTodo(todo: InsertTodo) {
-  const { data, error } = await supabase
-    .from('todos')
-    .insert(todo)
-    .select()
-    .single()
-  if (error) throw error
-  return data
+  const { data, error } = await supabase.from("todos").insert(todo).select().single();
+  if (error) throw error;
+  return data;
 }
 ```
 
 ```typescript
 // src/tools/todos/todos.functions.ts  (safe to import anywhere)
-import { createServerFn } from '@tanstack/react-start'
-import { fetchAllTodos, insertTodo } from './todos.server'
+import { createServerFn } from "@tanstack/react-start";
+import { fetchAllTodos, insertTodo } from "./todos.server";
 
-export const getTodos = createServerFn({ method: 'GET' }).handler(fetchAllTodos)
+export const getTodos = createServerFn({ method: "GET" }).handler(fetchAllTodos);
 
-export const createTodo = createServerFn({ method: 'POST' })
-  .handler(async ({ data }: { data: InsertTodo }) => insertTodo(data))
+export const createTodo = createServerFn({ method: "POST" }).handler(
+  async ({ data }: { data: InsertTodo }) => insertTodo(data),
+);
 ```
 
 ### Pattern 4: Realtime via Invalidation (Not Direct State)
@@ -270,22 +269,24 @@ export const createTodo = createServerFn({ method: 'POST' })
 
 ```typescript
 // Inside a tool page or custom hook
-import { useQueryClient } from '@tanstack/react-query'
-import { supabase } from '~/lib/supabase'
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "~/lib/supabase";
 
 function useTodosRealtime() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const channel = supabase
-      .channel('todos-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'todos' },
-        () => queryClient.invalidateQueries({ queryKey: ['todos'] })
+      .channel("todos-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "todos" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["todos"] }),
       )
-      .subscribe()
+      .subscribe();
 
-    return () => { supabase.removeChannel(channel) }
-  }, [queryClient])
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 }
 ```
 
@@ -420,16 +421,16 @@ Bento grid composes into overview layout
 
 ## Component Boundaries
 
-| Boundary | Communication Method | Direction | Notes |
-|----------|----------------------|-----------|-------|
-| Route → Tool Page | Import (direct) | One-way | Route file imports `TodoPage` from `tools/todos/` |
-| Overview → Tool Widget | Import via registry | One-way | Overview iterates `toolRegistry`, lazy-loads Widget |
-| Sidebar → Registry | Import (direct) | One-way | Sidebar reads `toolRegistry` for nav links |
-| Tool Page → Server Fn | `createServerFn` RPC call | Request/response | Type-safe; server code never reaches browser |
-| Server Fn → Supabase | `supabase-js` SDK | Request/response | Only in `*.server.ts` files |
-| Supabase → Client | Realtime channel | Push (server→client) | Used only to invalidate TanStack Query cache |
-| Components → Theme | CSS custom properties | One-way | Components use `bg-primary`, never hardcoded values |
-| Tools → Each Other | None | — | Tools must not import from sibling tool folders |
+| Boundary               | Communication Method      | Direction            | Notes                                               |
+| ---------------------- | ------------------------- | -------------------- | --------------------------------------------------- |
+| Route → Tool Page      | Import (direct)           | One-way              | Route file imports `TodoPage` from `tools/todos/`   |
+| Overview → Tool Widget | Import via registry       | One-way              | Overview iterates `toolRegistry`, lazy-loads Widget |
+| Sidebar → Registry     | Import (direct)           | One-way              | Sidebar reads `toolRegistry` for nav links          |
+| Tool Page → Server Fn  | `createServerFn` RPC call | Request/response     | Type-safe; server code never reaches browser        |
+| Server Fn → Supabase   | `supabase-js` SDK         | Request/response     | Only in `*.server.ts` files                         |
+| Supabase → Client      | Realtime channel          | Push (server→client) | Used only to invalidate TanStack Query cache        |
+| Components → Theme     | CSS custom properties     | One-way              | Components use `bg-primary`, never hardcoded values |
+| Tools → Each Other     | None                      | —                    | Tools must not import from sibling tool folders     |
 
 ---
 
@@ -479,6 +480,7 @@ Build order follows hard dependencies. Each step produces something the next ste
 ```
 
 **Rationale for this order:**
+
 - Theme first: every component depends on Tailwind utilities existing.
 - DB + client before UI: routes need typed queries to load data.
 - Shell before tools: tools need a place to render (the Outlet).
@@ -535,20 +537,20 @@ Build order follows hard dependencies. Each step produces something the next ste
 
 ### External Services
 
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
+| Service           | Integration Pattern                                              | Notes                                                              |
+| ----------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
 | Supabase Postgres | `supabase-js` client in `*.server.ts` files via `createServerFn` | Singleton client in `src/lib/supabase.ts`; types generated via CLI |
-| Supabase Realtime | Client-side channel subscriptions in React hooks | Used only to call `invalidateQueries`; one channel per tool table |
+| Supabase Realtime | Client-side channel subscriptions in React hooks                 | Used only to call `invalidateQueries`; one channel per tool table  |
 
 ### Internal Boundaries
 
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| Route files ↔ Tool pages | Direct import | Route is thin; imports tool's page component |
-| Overview page ↔ Tool widgets | Via `toolRegistry` | Decoupled; overview doesn't know about specific tools |
-| Sidebar ↔ Tool nav entries | Via `toolRegistry` | Same registry drives both nav and bento |
-| Components ↔ Colour system | CSS custom properties | Zero JS — purely CSS; no theme context or React context needed |
-| shadcn/ui components ↔ Custom components | Shared CSS token layer | Both read from same `--primary`, `--muted`, etc. variables |
+| Boundary                                 | Communication          | Notes                                                          |
+| ---------------------------------------- | ---------------------- | -------------------------------------------------------------- |
+| Route files ↔ Tool pages                 | Direct import          | Route is thin; imports tool's page component                   |
+| Overview page ↔ Tool widgets             | Via `toolRegistry`     | Decoupled; overview doesn't know about specific tools          |
+| Sidebar ↔ Tool nav entries               | Via `toolRegistry`     | Same registry drives both nav and bento                        |
+| Components ↔ Colour system               | CSS custom properties  | Zero JS — purely CSS; no theme context or React context needed |
+| shadcn/ui components ↔ Custom components | Shared CSS token layer | Both read from same `--primary`, `--muted`, etc. variables     |
 
 ---
 
@@ -556,13 +558,13 @@ Build order follows hard dependencies. Each step produces something the next ste
 
 This is a personal tool — single user, no auth, no multi-tenancy. Scaling concerns are minimal.
 
-| Concern | Current scope | If it grows |
-|---------|--------------|-------------|
-| Data volume | Hundreds of todos | Pagination in server functions; add `.range()` to Supabase queries |
-| Tool count | 1 tool (todos) | Registry pattern handles 10+ tools with no architecture changes |
-| Bundle size | Tiny — 1 tool | Tool widgets are lazy-loaded from registry; each loads only when rendered |
-| Realtime connections | 1 channel | One channel per tool; Supabase free tier handles dozens |
-| DB schema | 1 table | Each tool owns its own table(s); no cross-tool tables |
+| Concern              | Current scope     | If it grows                                                               |
+| -------------------- | ----------------- | ------------------------------------------------------------------------- |
+| Data volume          | Hundreds of todos | Pagination in server functions; add `.range()` to Supabase queries        |
+| Tool count           | 1 tool (todos)    | Registry pattern handles 10+ tools with no architecture changes           |
+| Bundle size          | Tiny — 1 tool     | Tool widgets are lazy-loaded from registry; each loads only when rendered |
+| Realtime connections | 1 channel         | One channel per tool; Supabase free tier handles dozens                   |
+| DB schema            | 1 table           | Each tool owns its own table(s); no cross-tool tables                     |
 
 ---
 
@@ -580,5 +582,5 @@ This is a personal tool — single user, no auth, no multi-tenancy. Scaling conc
 
 ---
 
-*Architecture research for: personal dashboard / modular tool aggregator*
-*Researched: 2026-03-28*
+_Architecture research for: personal dashboard / modular tool aggregator_
+_Researched: 2026-03-28_

@@ -17,15 +17,15 @@ created: 2026-03-29
 
 ## Design System
 
-| Property | Value |
-|----------|-------|
-| Tool | shadcn |
-| Preset | base-nova |
-| Init command | `pnpm dlx shadcn@latest init --preset base-nova` |
-| Component library | base (base-ui primitives, not Radix) |
-| Icon library | lucide-react |
-| Font | System font stack (shadcn default — no custom font in Phase 1) |
-| Tailwind version | v4 (CSS-first config, `@theme` block, no `tailwind.config.js`) |
+| Property          | Value                                                          |
+| ----------------- | -------------------------------------------------------------- |
+| Tool              | shadcn                                                         |
+| Preset            | base-nova                                                      |
+| Init command      | `pnpm dlx shadcn@latest init --preset base-nova`               |
+| Component library | base (base-ui primitives, not Radix)                           |
+| Icon library      | lucide-react                                                   |
+| Font              | System font stack (shadcn default — no custom font in Phase 1) |
+| Tailwind version  | v4 (CSS-first config, `@theme` block, no `tailwind.config.js`) |
 
 Source: User decision (preset), CLAUDE.md (stack), RESEARCH.md (versions).
 
@@ -35,10 +35,10 @@ Source: User decision (preset), CLAUDE.md (stack), RESEARCH.md (versions).
 
 Phase 1 establishes two coexisting token layers. Both are required before any shadcn component can be added.
 
-| Layer | File | Owner | Purpose |
-|-------|------|-------|---------|
-| Scale tokens | `src/styles/theme.css` | Project | Raw colour scale — `--color-neutral-950`, `--color-violet-500`, etc. Registered via `@theme` block. Generates Tailwind utilities (`bg-neutral-950`, `text-violet-500`). |
-| Semantic tokens | `{tailwindCssFile}` (shadcn-generated) | shadcn CLI | Maps shadcn concepts (`--background`, `--primary`, etc.) to scale values via `@theme inline`. Managed by the shadcn CLI — do not hand-edit. |
+| Layer           | File                                   | Owner      | Purpose                                                                                                                                                                 |
+| --------------- | -------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scale tokens    | `src/styles/theme.css`                 | Project    | Raw colour scale — `--color-neutral-950`, `--color-violet-500`, etc. Registered via `@theme` block. Generates Tailwind utilities (`bg-neutral-950`, `text-violet-500`). |
+| Semantic tokens | `{tailwindCssFile}` (shadcn-generated) | shadcn CLI | Maps shadcn concepts (`--background`, `--primary`, etc.) to scale values via `@theme inline`. Managed by the shadcn CLI — do not hand-edit.                             |
 
 **CSS entry point order** (`app.css` or equivalent, determined by `pnpm dlx shadcn@latest info` → `tailwindCssFile`):
 
@@ -46,7 +46,7 @@ Phase 1 establishes two coexisting token layers. Both are required before any sh
 @import "tailwindcss";
 @import "tw-animate-css";
 /* shadcn @theme inline block lives here (CLI-generated) */
-@import "./theme.css";   /* project scale tokens — imported last */
+@import "./theme.css"; /* project scale tokens — imported last */
 ```
 
 The project scale tokens import last so `--color-*: initial` purges Tailwind defaults after shadcn's semantic layer is registered.
@@ -63,16 +63,16 @@ The project scale tokens import last so `--color-*: initial` purges Tailwind def
   --color-*: initial;
 
   /* Neutral scale — dark-only UI */
-  --color-neutral-950: oklch(0.09 0 0);   /* page background (~#0f0f0f) */
-  --color-neutral-900: oklch(0.13 0 0);   /* card / surface (~#1a1a1a) */
-  --color-neutral-800: oklch(0.20 0 0);   /* slightly elevated surface */
-  --color-neutral-700: oklch(0.28 0 0);   /* borders, dividers */
-  --color-neutral-400: oklch(0.60 0 0);   /* muted / secondary text */
-  --color-neutral-100: oklch(0.93 0 0);   /* primary text (off-white) */
+  --color-neutral-950: oklch(0.09 0 0); /* page background (~#0f0f0f) */
+  --color-neutral-900: oklch(0.13 0 0); /* card / surface (~#1a1a1a) */
+  --color-neutral-800: oklch(0.2 0 0); /* slightly elevated surface */
+  --color-neutral-700: oklch(0.28 0 0); /* borders, dividers */
+  --color-neutral-400: oklch(0.6 0 0); /* muted / secondary text */
+  --color-neutral-100: oklch(0.93 0 0); /* primary text (off-white) */
 
   /* Violet accent scale */
   --color-violet-500: oklch(0.65 0.2 270); /* primary accent */
-  --color-violet-400: oklch(0.70 0.2 270); /* hover / active state */
+  --color-violet-400: oklch(0.7 0.2 270); /* hover / active state */
 }
 ```
 
@@ -82,18 +82,18 @@ Source: CONTEXT.md (D-01 through D-05), CONTEXT.md §Specifics (exact OKLCH valu
 
 The following `:root` values map shadcn semantic properties to the scale tokens above. These are placed in the shadcn-generated CSS section, not in `theme.css`.
 
-| shadcn Variable | Maps To | Value |
-|-----------------|---------|-------|
-| `--background` | neutral-950 | `oklch(0.09 0 0)` |
-| `--foreground` | neutral-100 | `oklch(0.93 0 0)` |
-| `--card` | neutral-900 | `oklch(0.13 0 0)` |
-| `--card-foreground` | neutral-100 | `oklch(0.93 0 0)` |
-| `--muted` | neutral-800 | `oklch(0.20 0 0)` |
-| `--muted-foreground` | neutral-400 | `oklch(0.60 0 0)` |
-| `--border` | neutral-700 | `oklch(0.28 0 0)` |
-| `--primary` | violet-500 | `oklch(0.65 0.2 270)` |
-| `--primary-foreground` | neutral-100 | `oklch(0.93 0 0)` |
-| `--ring` | violet-500 | `oklch(0.65 0.2 270)` |
+| shadcn Variable        | Maps To     | Value                 |
+| ---------------------- | ----------- | --------------------- |
+| `--background`         | neutral-950 | `oklch(0.09 0 0)`     |
+| `--foreground`         | neutral-100 | `oklch(0.93 0 0)`     |
+| `--card`               | neutral-900 | `oklch(0.13 0 0)`     |
+| `--card-foreground`    | neutral-100 | `oklch(0.93 0 0)`     |
+| `--muted`              | neutral-800 | `oklch(0.20 0 0)`     |
+| `--muted-foreground`   | neutral-400 | `oklch(0.60 0 0)`     |
+| `--border`             | neutral-700 | `oklch(0.28 0 0)`     |
+| `--primary`            | violet-500  | `oklch(0.65 0.2 270)` |
+| `--primary-foreground` | neutral-100 | `oklch(0.93 0 0)`     |
+| `--ring`               | violet-500  | `oklch(0.65 0.2 270)` |
 
 Source: RESEARCH.md (Pattern 2), CONTEXT.md (D-02).
 
@@ -103,19 +103,20 @@ Note: Exact shadcn variable set is determined by `base-nova` preset output. The 
 
 ## Colour
 
-| Role | Token | Value | Usage |
-|------|-------|-------|-------|
-| Dominant (60%) | `--color-neutral-950` | `oklch(0.09 0 0)` | Page background — `bg-neutral-950` on `:root` and root layout |
-| Secondary (30%) | `--color-neutral-900` | `oklch(0.13 0 0)` | Cards, surfaces, sidebar panels — `bg-neutral-900` |
-| Accent (10%) | `--color-violet-500` | `oklch(0.65 0.2 270)` | See reserved list below |
-| Accent hover | `--color-violet-400` | `oklch(0.70 0.2 270)` | Hover and active state for accent elements only |
-| Surface elevated | `--color-neutral-800` | `oklch(0.20 0 0)` | Slightly elevated surfaces within cards |
-| Border | `--color-neutral-700` | `oklch(0.28 0 0)` | All borders and dividers |
-| Text primary | `--color-neutral-100` | `oklch(0.93 0 0)` | Body text, headings |
-| Text muted | `--color-neutral-400` | `oklch(0.60 0 0)` | Secondary text, placeholders, labels |
-| Destructive | TBD (Phase 2) | — | Destructive actions — not needed in Phase 1 |
+| Role             | Token                 | Value                 | Usage                                                         |
+| ---------------- | --------------------- | --------------------- | ------------------------------------------------------------- |
+| Dominant (60%)   | `--color-neutral-950` | `oklch(0.09 0 0)`     | Page background — `bg-neutral-950` on `:root` and root layout |
+| Secondary (30%)  | `--color-neutral-900` | `oklch(0.13 0 0)`     | Cards, surfaces, sidebar panels — `bg-neutral-900`            |
+| Accent (10%)     | `--color-violet-500`  | `oklch(0.65 0.2 270)` | See reserved list below                                       |
+| Accent hover     | `--color-violet-400`  | `oklch(0.70 0.2 270)` | Hover and active state for accent elements only               |
+| Surface elevated | `--color-neutral-800` | `oklch(0.20 0 0)`     | Slightly elevated surfaces within cards                       |
+| Border           | `--color-neutral-700` | `oklch(0.28 0 0)`     | All borders and dividers                                      |
+| Text primary     | `--color-neutral-100` | `oklch(0.93 0 0)`     | Body text, headings                                           |
+| Text muted       | `--color-neutral-400` | `oklch(0.60 0 0)`     | Secondary text, placeholders, labels                          |
+| Destructive      | TBD (Phase 2)         | —                     | Destructive actions — not needed in Phase 1                   |
 
 **Accent (`violet-500`) reserved for:**
+
 - Primary call-to-action buttons
 - Active navigation item indicators
 - Focus rings on interactive elements
@@ -125,6 +126,7 @@ Note: Exact shadcn variable set is determined by `base-nova` preset output. The 
 Source: CONTEXT.md (D-01, D-02, D-03, §Specifics).
 
 **Hard constraints (from CLAUDE.md + CONTEXT.md D-04/D-05):**
+
 - No hardcoded hex, rgb, hsl, or raw oklch values in component files.
 - No raw Tailwind default palette classes (`gray-500`, `slate-100`, `blue-600`, etc.) in components.
 - No `dark:` utility prefixes — dark mode only; no switcher.
@@ -136,15 +138,15 @@ Source: CONTEXT.md (D-01, D-02, D-03, §Specifics).
 
 Standard 8-point scale applies to all future phases. Phase 1 does not render any UI, so no spacing tokens are consumed this phase. Declared here as the contract for downstream phases.
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| xs | 4px | Icon gaps, tight inline padding |
-| sm | 8px | Compact element spacing, icon-to-label gaps |
-| md | 16px | Default element spacing, form field gaps |
-| lg | 24px | Section padding, card inner padding |
-| xl | 32px | Layout gaps between major sections |
-| 2xl | 48px | Major section breaks |
-| 3xl | 64px | Page-level vertical spacing |
+| Token | Value | Usage                                       |
+| ----- | ----- | ------------------------------------------- |
+| xs    | 4px   | Icon gaps, tight inline padding             |
+| sm    | 8px   | Compact element spacing, icon-to-label gaps |
+| md    | 16px  | Default element spacing, form field gaps    |
+| lg    | 24px  | Section padding, card inner padding         |
+| xl    | 32px  | Layout gaps between major sections          |
+| 2xl   | 48px  | Major section breaks                        |
+| 3xl   | 64px  | Page-level vertical spacing                 |
 
 Exceptions: Touch targets for interactive elements minimum 44px (accessibility). This applies from Phase 2 onward.
 
@@ -156,12 +158,12 @@ Source: Standard 8-point scale default; no upstream artifact override.
 
 No typography is rendered in Phase 1. Declared here as the contract for downstream phases.
 
-| Role | Size | Weight | Line Height | Token |
-|------|------|--------|-------------|-------|
-| Body | 16px | 400 (regular) | 1.5 | `text-base` |
-| Label | 14px | 400 (regular) | 1.4 | `text-sm` |
-| Heading | 20px | 600 (semibold) | 1.2 | `text-xl` |
-| Display | 28px | 600 (semibold) | 1.15 | `text-2xl` |
+| Role    | Size | Weight         | Line Height | Token       |
+| ------- | ---- | -------------- | ----------- | ----------- |
+| Body    | 16px | 400 (regular)  | 1.5         | `text-base` |
+| Label   | 14px | 400 (regular)  | 1.4         | `text-sm`   |
+| Heading | 20px | 600 (semibold) | 1.2         | `text-xl`   |
+| Display | 28px | 600 (semibold) | 1.15        | `text-2xl`  |
 
 Weights used: 400 (regular) and 600 (semibold). No other weights are permitted.
 
@@ -175,12 +177,12 @@ Source: Standard defaults; no upstream artifact override.
 
 Phase 1 is a pure infrastructure phase with no user-facing copy. No CTA, empty state, error state, or destructive confirmation copy is needed.
 
-| Element | Copy | Phase |
-|---------|------|-------|
-| Primary CTA | Not applicable — no UI rendered | Phase 2+ |
-| Empty state | Not applicable | Phase 2+ |
-| Error state | Not applicable | Phase 2+ |
-| Destructive confirmation | Not applicable | Phase 2+ |
+| Element                  | Copy                            | Phase    |
+| ------------------------ | ------------------------------- | -------- |
+| Primary CTA              | Not applicable — no UI rendered | Phase 2+ |
+| Empty state              | Not applicable                  | Phase 2+ |
+| Error state              | Not applicable                  | Phase 2+ |
+| Destructive confirmation | Not applicable                  | Phase 2+ |
 
 Source: Phase boundary — CONTEXT.md §Phase Boundary.
 
@@ -188,13 +190,14 @@ Source: Phase boundary — CONTEXT.md §Phase Boundary.
 
 ## Registry Safety
 
-| Registry | Blocks Used | Safety Gate |
-|----------|-------------|-------------|
+| Registry        | Blocks Used                                | Safety Gate  |
+| --------------- | ------------------------------------------ | ------------ |
 | shadcn official | Init only (no components added in Phase 1) | not required |
 
 No third-party registries declared for Phase 1. Registry vetting gate: not applicable this phase.
 
 Init command is official shadcn CLI only:
+
 ```
 pnpm dlx shadcn@latest init --preset base-nova
 ```
@@ -207,15 +210,15 @@ Source: User decision (preset = base-nova), SKILL.md (CLI pattern).
 
 These are not UI states but structural constraints that the executor must verify before closing Phase 1.
 
-| Gate | Command | Pass Condition |
-|------|---------|----------------|
-| No hardcoded colour values in components | `grep -r --include="*.tsx" --include="*.ts" "oklch\|hsl\|rgb\|#[0-9a-f]\{3,6\}" src/routes/ src/components/` | Zero matches |
-| No raw Tailwind palette classes | `grep -r --include="*.tsx" "gray-\|slate-\|zinc-\|blue-\|red-\|green-\|sky-\|indigo-\|purple-\|emerald-\|amber-" src/routes/ src/components/` | Zero matches |
-| OXC linting passes | `pnpm lint` | Exit code 0 |
-| OXC formatting passes | `pnpm fmt:check` | Exit code 0 |
-| App starts | `pnpm dev` | No compilation errors |
-| `components.json` exists | `test -f components.json` | File present |
-| `theme.css` exists with `--color-*: initial` | `grep "color-\*: initial" src/styles/theme.css` | Match found |
+| Gate                                         | Command                                                                                                                                       | Pass Condition        |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| No hardcoded colour values in components     | `grep -r --include="*.tsx" --include="*.ts" "oklch\|hsl\|rgb\|#[0-9a-f]\{3,6\}" src/routes/ src/components/`                                  | Zero matches          |
+| No raw Tailwind palette classes              | `grep -r --include="*.tsx" "gray-\|slate-\|zinc-\|blue-\|red-\|green-\|sky-\|indigo-\|purple-\|emerald-\|amber-" src/routes/ src/components/` | Zero matches          |
+| OXC linting passes                           | `pnpm lint`                                                                                                                                   | Exit code 0           |
+| OXC formatting passes                        | `pnpm fmt:check`                                                                                                                              | Exit code 0           |
+| App starts                                   | `pnpm dev`                                                                                                                                    | No compilation errors |
+| `components.json` exists                     | `test -f components.json`                                                                                                                     | File present          |
+| `theme.css` exists with `--color-*: initial` | `grep "color-\*: initial" src/styles/theme.css`                                                                                               | Match found           |
 
 Source: RESEARCH.md §Validation Architecture, REQUIREMENTS.md FOUN-01/FOUN-02.
 

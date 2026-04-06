@@ -5,9 +5,11 @@
 **Confidence:** HIGH
 
 <user_constraints>
+
 ## User Constraints (from CONTEXT.md)
 
 ### Locked Decisions
+
 - **D-01:** Dark mode only — one dark theme, no light/system switching. Keeps palette simple; no dual-palette to maintain.
 - **D-02:** Accent colour is violet/indigo family (~oklch(65% 0.2 270) for primary, slightly lighter/brighter for hover). Used for buttons, active states, focus rings.
 - **D-03:** Minimal palette at this stage — define only what Phase 1 needs: backgrounds, surfaces, text, borders, and one accent scale. Expand in later phases as components reveal what's needed.
@@ -17,21 +19,25 @@
 - **D-07:** oxfmt only — no Prettier fallback installed. Validate in Phase 1 by running `oxfmt --check` on the scaffold.
 
 ### Claude's Discretion
+
 - Exact OKLCH values for the neutral scale (choose values that produce good contrast ratios and a cohesive dark palette)
 - Number of neutral steps to define in Phase 1 (define only what's needed for scaffold verification)
 - Tailwind `@theme` block structure within the CSS file
 
 ### Deferred Ideas (OUT OF SCOPE)
+
 None — discussion stayed within phase scope.
 </user_constraints>
 
 <phase_requirements>
+
 ## Phase Requirements
 
-| ID | Description | Research Support |
-|----|-------------|------------------|
-| FOUN-01 | Colour palette is defined as CSS custom properties in a single theme file — no hardcoded colour values exist in any component | Tailwind v4 `@theme` block allows all colour definitions in one CSS file; `--color-*` variables auto-generate utility classes |
-| FOUN-02 | All Tailwind colour utilities reference the palette tokens (no raw `gray-500`-style classes) | The `@theme` block replaces the default colour palette when tokens are defined with matching names; using `--color-*: initial` to purge defaults is an option |
+| ID      | Description                                                                                                                   | Research Support                                                                                                                                              |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FOUN-01 | Colour palette is defined as CSS custom properties in a single theme file — no hardcoded colour values exist in any component | Tailwind v4 `@theme` block allows all colour definitions in one CSS file; `--color-*` variables auto-generate utility classes                                 |
+| FOUN-02 | All Tailwind colour utilities reference the palette tokens (no raw `gray-500`-style classes)                                  | The `@theme` block replaces the default colour palette when tokens are defined with matching names; using `--color-*: initial` to purge defaults is an option |
+
 </phase_requirements>
 
 ---
@@ -52,38 +58,38 @@ OXC tooling (oxlint + oxfmt) is installed as devDependencies using exact-pin ver
 
 ### Core
 
-| Library | Version | Purpose | Why Standard |
-|---------|---------|---------|--------------|
-| `@tanstack/react-start` | 1.167.13 | Full-stack meta-framework | v1 stable, Vite-native, type-safe server functions; locked in CLAUDE.md |
-| `@tanstack/react-router` | 1.168.8 | File-based routing | Underpins TanStack Start; `createFileRoute` per route file |
-| `react` + `react-dom` | 19.2.4 | UI rendering | Required peer dep for TanStack Start v1 |
-| `tailwindcss` | 4.2.2 | Utility-first CSS (v4 CSS-first config) | No `tailwind.config.js`; all config in CSS via `@theme` |
-| `tw-animate-css` | 1.4.0 | CSS animations for shadcn/ui | Replaces deprecated `tailwindcss-animate`; import via `@import "tw-animate-css"` in CSS |
-| `vite` | 6.x (latest 8.0.3) | Build tool / dev server | Used natively by TanStack Start since v1.121.0 |
-| `typescript` | 5.x (latest 6.0.2) | Type safety | Required for TanStack Start type inference |
+| Library                  | Version            | Purpose                                 | Why Standard                                                                            |
+| ------------------------ | ------------------ | --------------------------------------- | --------------------------------------------------------------------------------------- |
+| `@tanstack/react-start`  | 1.167.13           | Full-stack meta-framework               | v1 stable, Vite-native, type-safe server functions; locked in CLAUDE.md                 |
+| `@tanstack/react-router` | 1.168.8            | File-based routing                      | Underpins TanStack Start; `createFileRoute` per route file                              |
+| `react` + `react-dom`    | 19.2.4             | UI rendering                            | Required peer dep for TanStack Start v1                                                 |
+| `tailwindcss`            | 4.2.2              | Utility-first CSS (v4 CSS-first config) | No `tailwind.config.js`; all config in CSS via `@theme`                                 |
+| `tw-animate-css`         | 1.4.0              | CSS animations for shadcn/ui            | Replaces deprecated `tailwindcss-animate`; import via `@import "tw-animate-css"` in CSS |
+| `vite`                   | 6.x (latest 8.0.3) | Build tool / dev server                 | Used natively by TanStack Start since v1.121.0                                          |
+| `typescript`             | 5.x (latest 6.0.2) | Type safety                             | Required for TanStack Start type inference                                              |
 
 > **Note:** npm shows `vite@8.0.3` and `typescript@6.0.2` as latest. CLAUDE.md specifies `^6.x` and `^5.x` respectively. Use the versions the `@tanstack/cli create` scaffold pins — do not manually override unless the scaffold is outdated.
 
 ### Supporting (Phase 1 only)
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| `lucide-react` | 1.7.0 | Icon set | Required by shadcn/ui internally; install at init time |
-| `shadcn` CLI | 4.1.1 (dlx) | Component scaffolding | Run via `pnpm dlx shadcn@latest` at init; not a runtime dep |
+| Library        | Version     | Purpose               | When to Use                                                 |
+| -------------- | ----------- | --------------------- | ----------------------------------------------------------- |
+| `lucide-react` | 1.7.0       | Icon set              | Required by shadcn/ui internally; install at init time      |
+| `shadcn` CLI   | 4.1.1 (dlx) | Component scaffolding | Run via `pnpm dlx shadcn@latest` at init; not a runtime dep |
 
 ### Dev Tools
 
-| Tool | Version | Purpose | Notes |
-|------|---------|---------|-------|
-| `oxlint` | 1.57.0 | Linting | `pnpm add -D oxlint`; run via `oxlint .`; zero-config works immediately |
-| `oxfmt` | 0.42.0 | Formatting + Tailwind class sorting | `pnpm add -D oxfmt`; run via `oxfmt` or `oxfmt --check`; exact-pin version due to beta status |
+| Tool     | Version | Purpose                             | Notes                                                                                         |
+| -------- | ------- | ----------------------------------- | --------------------------------------------------------------------------------------------- |
+| `oxlint` | 1.57.0  | Linting                             | `pnpm add -D oxlint`; run via `oxlint .`; zero-config works immediately                       |
+| `oxfmt`  | 0.42.0  | Formatting + Tailwind class sorting | `pnpm add -D oxfmt`; run via `oxfmt` or `oxfmt --check`; exact-pin version due to beta status |
 
 ### Alternatives Considered
 
-| Instead of | Could Use | Tradeoff |
-|------------|-----------|----------|
-| oxfmt | Prettier + prettier-plugin-tailwindcss | Prettier is stable but slower; oxfmt has built-in Tailwind class sorting. Decision D-07 locks oxfmt. |
-| oxlint | ESLint | ESLint is slower; oxlint v1.0 stable covers full React/TS/import ruleset. Decision D-06 locks oxlint. |
+| Instead of | Could Use                              | Tradeoff                                                                                              |
+| ---------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| oxfmt      | Prettier + prettier-plugin-tailwindcss | Prettier is stable but slower; oxfmt has built-in Tailwind class sorting. Decision D-07 locks oxfmt.  |
+| oxlint     | ESLint                                 | ESLint is slower; oxlint v1.0 stable covers full React/TS/import ruleset. Decision D-06 locks oxlint. |
 
 ### Installation
 
@@ -117,14 +123,14 @@ pnpm add -D oxlint@1.57.0 oxfmt@0.42.0
 
 Confirmed against npm registry on 2026-03-29:
 
-| Package | Verified Version | Published |
-|---------|-----------------|-----------|
-| `@tanstack/react-start` | 1.167.13 | recent |
-| `tailwindcss` | 4.2.2 | 2026-03-18 |
-| `oxlint` | 1.57.0 | 2026-03-24 |
-| `oxfmt` | 0.42.0 | 2026-03-24 |
-| `lucide-react` | 1.7.0 | recent |
-| `tw-animate-css` | 1.4.0 | recent |
+| Package                 | Verified Version | Published  |
+| ----------------------- | ---------------- | ---------- |
+| `@tanstack/react-start` | 1.167.13         | recent     |
+| `tailwindcss`           | 4.2.2            | 2026-03-18 |
+| `oxlint`                | 1.57.0           | 2026-03-24 |
+| `oxfmt`                 | 0.42.0           | 2026-03-24 |
+| `lucide-react`          | 1.7.0            | recent     |
+| `tw-animate-css`        | 1.4.0            | recent     |
 
 ---
 
@@ -167,16 +173,16 @@ src/
   --color-*: initial;
 
   /* Neutral scale — dark UI backgrounds, surfaces, text */
-  --color-neutral-950: oklch(0.09 0 0);    /* ~#0f0f0f — page background */
-  --color-neutral-900: oklch(0.13 0 0);    /* ~#1a1a1a — surface/card */
-  --color-neutral-800: oklch(0.20 0 0);    /* slightly lighter surface */
-  --color-neutral-700: oklch(0.28 0 0);    /* borders */
-  --color-neutral-400: oklch(0.60 0 0);    /* muted text */
-  --color-neutral-100: oklch(0.93 0 0);    /* primary text (off-white) */
+  --color-neutral-950: oklch(0.09 0 0); /* ~#0f0f0f — page background */
+  --color-neutral-900: oklch(0.13 0 0); /* ~#1a1a1a — surface/card */
+  --color-neutral-800: oklch(0.2 0 0); /* slightly lighter surface */
+  --color-neutral-700: oklch(0.28 0 0); /* borders */
+  --color-neutral-400: oklch(0.6 0 0); /* muted text */
+  --color-neutral-100: oklch(0.93 0 0); /* primary text (off-white) */
 
   /* Violet accent scale */
   --color-violet-500: oklch(0.65 0.2 270); /* primary accent (from D-02) */
-  --color-violet-400: oklch(0.70 0.2 270); /* hover state (from D-02) */
+  --color-violet-400: oklch(0.7 0.2 270); /* hover state (from D-02) */
 }
 ```
 
@@ -196,6 +202,7 @@ src/
 ```
 
 Usage in components:
+
 ```tsx
 // Correct — references palette token via generated utility class
 <div className="bg-neutral-900 text-neutral-100 border border-neutral-700">
@@ -224,9 +231,9 @@ Usage in components:
 }
 
 :root {
-  --background: oklch(0.09 0 0);   /* maps to neutral-950 */
-  --foreground: oklch(0.93 0 0);   /* maps to neutral-100 */
-  --primary: oklch(0.65 0.2 270);  /* maps to violet-500 */
+  --background: oklch(0.09 0 0); /* maps to neutral-950 */
+  --foreground: oklch(0.93 0 0); /* maps to neutral-100 */
+  --primary: oklch(0.65 0.2 270); /* maps to violet-500 */
   /* ... */
 }
 ```
@@ -264,13 +271,13 @@ Running `pnpm fmt:check` will fail (exit code 1) if any files are unformatted �
 
 ## Don't Hand-Roll
 
-| Problem | Don't Build | Use Instead | Why |
-|---------|-------------|-------------|-----|
-| Colour token registration | Manual CSS variables without `@theme` | Tailwind v4 `@theme` block | Without `@theme`, variables exist in CSS but produce no utility classes — components must use `[bg:var(...)]` which is verbose and harder to lint |
-| Tailwind class sorting | Manual ordering convention | oxfmt built-in | oxfmt has built-in Tailwind class sorting; a manual convention will drift and become inconsistent |
-| Linting rule config | Custom `.oxlintrc.json` in Phase 1 | oxlint zero-config defaults | Decision D-06; zero-config covers correctness, React, TypeScript rules; premature config adds maintenance cost |
-| Dark mode toggling | `next-themes` or manual class toggling | No toggler needed | Decision D-01 is dark-only; no runtime theme switching |
-| Formatter config file | `.oxfmtrc` or `.prettierrc` | oxfmt defaults | oxfmt defaults align closely with Prettier; no config file needed for Phase 1 |
+| Problem                   | Don't Build                            | Use Instead                 | Why                                                                                                                                               |
+| ------------------------- | -------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Colour token registration | Manual CSS variables without `@theme`  | Tailwind v4 `@theme` block  | Without `@theme`, variables exist in CSS but produce no utility classes — components must use `[bg:var(...)]` which is verbose and harder to lint |
+| Tailwind class sorting    | Manual ordering convention             | oxfmt built-in              | oxfmt has built-in Tailwind class sorting; a manual convention will drift and become inconsistent                                                 |
+| Linting rule config       | Custom `.oxlintrc.json` in Phase 1     | oxlint zero-config defaults | Decision D-06; zero-config covers correctness, React, TypeScript rules; premature config adds maintenance cost                                    |
+| Dark mode toggling        | `next-themes` or manual class toggling | No toggler needed           | Decision D-01 is dark-only; no runtime theme switching                                                                                            |
+| Formatter config file     | `.oxfmtrc` or `.prettierrc`            | oxfmt defaults              | oxfmt defaults align closely with Prettier; no config file needed for Phase 1                                                                     |
 
 **Key insight:** The `@theme` block is the architectural foundation — everything downstream (components, shadcn, lint rules) depends on tokens being registered correctly here. Getting this wrong in Phase 1 means every subsequent phase inherits the misalignment.
 
@@ -335,13 +342,13 @@ Verified patterns from official sources:
 
   --color-neutral-950: oklch(0.09 0 0);
   --color-neutral-900: oklch(0.13 0 0);
-  --color-neutral-800: oklch(0.20 0 0);
+  --color-neutral-800: oklch(0.2 0 0);
   --color-neutral-700: oklch(0.28 0 0);
-  --color-neutral-400: oklch(0.60 0 0);
+  --color-neutral-400: oklch(0.6 0 0);
   --color-neutral-100: oklch(0.93 0 0);
 
   --color-violet-500: oklch(0.65 0.2 270);
-  --color-violet-400: oklch(0.70 0.2 270);
+  --color-violet-400: oklch(0.7 0.2 270);
 }
 ```
 
@@ -377,32 +384,33 @@ pnpm exec oxfmt
 ```tsx
 // Source: TanStack Start docs / shadcn TanStack install guide
 // src/routes/__root.tsx
-import { createRootRoute, Outlet } from '@tanstack/react-router'
-import appCss from '../styles/app.css?url'
+import { createRootRoute, Outlet } from "@tanstack/react-router";
+import appCss from "../styles/app.css?url";
 
 export const Route = createRootRoute({
   head: () => ({
-    links: [{ rel: 'stylesheet', href: appCss }],
+    links: [{ rel: "stylesheet", href: appCss }],
   }),
   component: () => <Outlet />,
-})
+});
 ```
 
 ---
 
 ## State of the Art
 
-| Old Approach | Current Approach | When Changed | Impact |
-|--------------|------------------|--------------|--------|
-| `tailwind.config.js` | `@theme` block in CSS | Tailwind v4 (late 2024) | No JS config file; all tokens in CSS |
-| `tailwindcss-animate` plugin | `tw-animate-css` CSS import | March 2025 | `@plugin` directive gone; use `@import "tw-animate-css"` |
-| `@shadcn/ui` npm package | Components copied to project via CLI | Always | No installed shadcn package; `shadcn` CLI is latest name |
-| HSL colour format | OKLCH colour format | shadcn/ui Tailwind v4 update | Better perceptual uniformity; CSS var wrapping simplified |
-| Vinxi build tool | Vite natively | TanStack Start v1.121.0 | Any docs referencing Vinxi are outdated |
-| `React.forwardRef` | Plain function component with `ref` prop | React 19 | shadcn components no longer use `forwardRef` |
-| ESLint | oxlint v1.0 | June 2025 | 50-100x faster; 700+ rules; zero-config for this stack |
+| Old Approach                 | Current Approach                         | When Changed                 | Impact                                                    |
+| ---------------------------- | ---------------------------------------- | ---------------------------- | --------------------------------------------------------- |
+| `tailwind.config.js`         | `@theme` block in CSS                    | Tailwind v4 (late 2024)      | No JS config file; all tokens in CSS                      |
+| `tailwindcss-animate` plugin | `tw-animate-css` CSS import              | March 2025                   | `@plugin` directive gone; use `@import "tw-animate-css"`  |
+| `@shadcn/ui` npm package     | Components copied to project via CLI     | Always                       | No installed shadcn package; `shadcn` CLI is latest name  |
+| HSL colour format            | OKLCH colour format                      | shadcn/ui Tailwind v4 update | Better perceptual uniformity; CSS var wrapping simplified |
+| Vinxi build tool             | Vite natively                            | TanStack Start v1.121.0      | Any docs referencing Vinxi are outdated                   |
+| `React.forwardRef`           | Plain function component with `ref` prop | React 19                     | shadcn components no longer use `forwardRef`              |
+| ESLint                       | oxlint v1.0                              | June 2025                    | 50-100x faster; 700+ rules; zero-config for this stack    |
 
 **Deprecated / outdated:**
+
 - `tailwind.config.js`: Does not exist in this project; any AI suggestion to create one is wrong.
 - `tailwindcss-animate`: Do not install; `tw-animate-css` is the replacement.
 - `prettier` + `prettier-plugin-tailwindcss`: Not installed; oxfmt handles both.
@@ -431,19 +439,21 @@ export const Route = createRootRoute({
 
 ## Environment Availability
 
-| Dependency | Required By | Available | Version | Fallback |
-|------------|------------|-----------|---------|----------|
-| Node.js | All JS tooling | Yes | 25.8.2 | — |
-| npm | Package install fallback | Yes | 11.11.1 | — |
-| pnpm | shadcn CLI, TanStack scaffold | No | — | Install via `npm install -g pnpm` |
-| oxlint | Linting (Phase 1 gate) | No | — | Install as devDependency during Phase 1 |
-| oxfmt | Formatting (Phase 1 gate) | No | — | Install as devDependency during Phase 1 |
-| TanStack CLI | Scaffold | No | — | Install via `npx @tanstack/cli@latest create` |
+| Dependency   | Required By                   | Available | Version | Fallback                                      |
+| ------------ | ----------------------------- | --------- | ------- | --------------------------------------------- |
+| Node.js      | All JS tooling                | Yes       | 25.8.2  | —                                             |
+| npm          | Package install fallback      | Yes       | 11.11.1 | —                                             |
+| pnpm         | shadcn CLI, TanStack scaffold | No        | —       | Install via `npm install -g pnpm`             |
+| oxlint       | Linting (Phase 1 gate)        | No        | —       | Install as devDependency during Phase 1       |
+| oxfmt        | Formatting (Phase 1 gate)     | No        | —       | Install as devDependency during Phase 1       |
+| TanStack CLI | Scaffold                      | No        | —       | Install via `npx @tanstack/cli@latest create` |
 
 **Missing dependencies with no fallback:**
+
 - None that block execution — all can be installed as part of Phase 1 tasks.
 
 **Missing dependencies with fallback:**
+
 - pnpm: not globally installed; install via `npm install -g pnpm` as the first task.
 - oxlint/oxfmt: not globally installed; installed as project devDependencies (expected for per-project tools).
 
@@ -455,21 +465,21 @@ export const Route = createRootRoute({
 
 This phase is a pure scaffolding + configuration phase. There is no application logic to unit test. The "tests" for Phase 1 are CLI commands that verify tooling and structural constraints.
 
-| Property | Value |
-|----------|-------|
-| Framework | None (no test framework needed for Phase 1) |
-| Config file | None — scaffold verification uses CLI commands only |
-| Quick run command | `pnpm dev` (app starts without errors) |
-| Full suite command | `pnpm lint && pnpm fmt:check` (zero violations) |
+| Property           | Value                                               |
+| ------------------ | --------------------------------------------------- |
+| Framework          | None (no test framework needed for Phase 1)         |
+| Config file        | None — scaffold verification uses CLI commands only |
+| Quick run command  | `pnpm dev` (app starts without errors)              |
+| Full suite command | `pnpm lint && pnpm fmt:check` (zero violations)     |
 
 ### Phase Requirements → Test Map
 
-| Req ID | Behavior | Test Type | Automated Command | File Exists? |
-|--------|----------|-----------|-------------------|-------------|
-| FOUN-01 | No hardcoded colour values in components | Structural / grep | `grep -r --include="*.tsx" --include="*.ts" "oklch\|hsl\|rgb\|#[0-9a-f]\{3,6\}" src/routes/ src/components/` → must return zero hits | N/A (grep audit) |
-| FOUN-02 | No raw palette classes (`gray-500`, etc.) in components | Structural / grep | `grep -r --include="*.tsx" "gray-\|slate-\|zinc-\|blue-\|red-\|green-\|sky-\|stone-\|amber-\|yellow-\|lime-\|emerald-\|teal-\|cyan-\|indigo-\|purple-\|pink-\|rose-\|fuchsia-\|orange-" src/routes/ src/components/` → must return zero hits | N/A (grep audit) |
-| Phase gate | OXC tools run cleanly | Tool run | `pnpm lint && pnpm fmt:check` → exit code 0 | N/A (shell command) |
-| Phase gate | App renders without errors | Smoke | `pnpm dev` starts without compilation errors | N/A (manual check) |
+| Req ID     | Behavior                                                | Test Type         | Automated Command                                                                                                                                                                                                                            | File Exists?        |
+| ---------- | ------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| FOUN-01    | No hardcoded colour values in components                | Structural / grep | `grep -r --include="*.tsx" --include="*.ts" "oklch\|hsl\|rgb\|#[0-9a-f]\{3,6\}" src/routes/ src/components/` → must return zero hits                                                                                                         | N/A (grep audit)    |
+| FOUN-02    | No raw palette classes (`gray-500`, etc.) in components | Structural / grep | `grep -r --include="*.tsx" "gray-\|slate-\|zinc-\|blue-\|red-\|green-\|sky-\|stone-\|amber-\|yellow-\|lime-\|emerald-\|teal-\|cyan-\|indigo-\|purple-\|pink-\|rose-\|fuchsia-\|orange-" src/routes/ src/components/` → must return zero hits | N/A (grep audit)    |
+| Phase gate | OXC tools run cleanly                                   | Tool run          | `pnpm lint && pnpm fmt:check` → exit code 0                                                                                                                                                                                                  | N/A (shell command) |
+| Phase gate | App renders without errors                              | Smoke             | `pnpm dev` starts without compilation errors                                                                                                                                                                                                 | N/A (manual check)  |
 
 ### Sampling Rate
 
@@ -487,18 +497,18 @@ None — existing test infrastructure covers all phase requirements (Phase 1 ver
 
 Directives the planner must verify compliance with:
 
-| Directive | Constraint |
-|-----------|------------|
-| Tech Stack locked | TanStack Start + Tailwind + shadcn + Lucide + OXC + Supabase — no deviations |
-| Colour system | All colours defined via a single Tailwind CSS config palette — no hardcoded values in components |
-| Modularity | Each tool self-contained — Phase 1 establishes the base, not any tool-specific code |
-| Tailwind v4 | CSS-first config; no `tailwind.config.js`; all config in `@theme` block |
-| `tw-animate-css` | Use `@import "tw-animate-css"` — not `tailwindcss-animate` plugin |
-| shadcn/ui | Init via `pnpm dlx shadcn@latest init -t start`; components copied to project |
-| OXC | oxlint replaces ESLint; oxfmt replaces Prettier + prettier-plugin-tailwindcss |
-| No `React.forwardRef` | React 19 components use plain function components with `ref` prop |
-| No hardcoded hex/rgb | Violates single-source-of-truth constraint |
-| GSD workflow | Changes must go through GSD (`/gsd:execute-phase`) — no direct repo edits |
+| Directive             | Constraint                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------ |
+| Tech Stack locked     | TanStack Start + Tailwind + shadcn + Lucide + OXC + Supabase — no deviations                     |
+| Colour system         | All colours defined via a single Tailwind CSS config palette — no hardcoded values in components |
+| Modularity            | Each tool self-contained — Phase 1 establishes the base, not any tool-specific code              |
+| Tailwind v4           | CSS-first config; no `tailwind.config.js`; all config in `@theme` block                          |
+| `tw-animate-css`      | Use `@import "tw-animate-css"` — not `tailwindcss-animate` plugin                                |
+| shadcn/ui             | Init via `pnpm dlx shadcn@latest init -t start`; components copied to project                    |
+| OXC                   | oxlint replaces ESLint; oxfmt replaces Prettier + prettier-plugin-tailwindcss                    |
+| No `React.forwardRef` | React 19 components use plain function components with `ref` prop                                |
+| No hardcoded hex/rgb  | Violates single-source-of-truth constraint                                                       |
+| GSD workflow          | Changes must go through GSD (`/gsd:execute-phase`) — no direct repo edits                        |
 
 ---
 
@@ -529,6 +539,7 @@ Directives the planner must verify compliance with:
 ## Metadata
 
 **Confidence breakdown:**
+
 - Standard stack: HIGH — all versions verified against npm registry 2026-03-29
 - Architecture (Tailwind @theme): HIGH — verified via official Tailwind v4 docs and shadcn/ui Tailwind v4 docs
 - Architecture (scaffold flow): MEDIUM — `@tanstack/cli create` + `shadcn init` flow confirmed by multiple sources but exact CSS file paths depend on interactive prompts

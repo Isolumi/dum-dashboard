@@ -40,15 +40,18 @@ Requirements in scope: FOUN-01, FOUN-02
 </decisions>
 
 <canonical_refs>
+
 ## Canonical References
 
 **Downstream agents MUST read these before planning or implementing.**
 
 ### Stack Documentation
+
 - `CLAUDE.md` §Technology Stack — full stack spec including Tailwind v4 `@theme` setup, oxfmt/oxlint usage, and version constraints
 - `CLAUDE.md` §What NOT to Use — hardcoded hex/rgb values in components, `tailwind.config.js`, `tailwindcss-animate`, ESLint
 
 ### Requirements
+
 - `.planning/REQUIREMENTS.md` §Foundation — FOUN-01 and FOUN-02 acceptance criteria
 - `.planning/ROADMAP.md` §Phase 1 — success criteria (all 4 must be TRUE after this phase)
 
@@ -57,15 +60,19 @@ No external ADRs or specs — all decisions captured above.
 </canonical_refs>
 
 <code_context>
+
 ## Existing Code Insights
 
 ### Reusable Assets
+
 - None (greenfield project — no existing code)
 
 ### Established Patterns
+
 - None yet — Phase 1 establishes the first patterns
 
 ### Integration Points
+
 - `src/styles/theme.css` (to be created) — single source of truth for all colour tokens; all subsequent phases read from here
 - `@theme` block within that file — where Tailwind v4 picks up custom colour utilities
 
@@ -88,5 +95,5 @@ None — discussion stayed within phase scope.
 
 ---
 
-*Phase: 01-foundation*
-*Context gathered: 2026-03-29*
+_Phase: 01-foundation_
+_Context gathered: 2026-03-29_

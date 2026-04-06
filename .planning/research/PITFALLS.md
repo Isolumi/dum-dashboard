@@ -17,12 +17,14 @@ Server-only code (database credentials, Node.js modules like `fs`, Supabase serv
 TanStack Start's `createServerFn` wraps server code, but if you place server-only logic (imports from `.server.ts` files, direct `process.env` reads) directly in route loaders or shared files that run isomorphically, the bundler cannot strip them. Dynamic imports of server functions also break the bundler's dead-code elimination for server stubs.
 
 **How to avoid:**
+
 - Use the three-file-suffix convention strictly: `.functions.ts` for `createServerFn` wrappers (safe to import anywhere), `.server.ts` for server-only helpers (only called inside handler bodies), plain `.ts` for shared types and schemas.
 - Never use dynamic imports (`await import('./foo.server')`) for server functions — use static imports only.
 - Add `@tanstack/react-start/server-only` as a top-level import in any file that must never reach the client.
 - Keep the Supabase `service_role` key exclusively inside `.server.ts` files; the `VITE_SUPABASE_PUBLISHABLE_OR_ANON_KEY` is safe for client use.
 
 **Warning signs:**
+
 - Build output includes Node.js built-in module warnings in the client chunk.
 - `process is not defined` errors in the browser console.
 - Network tab shows API secrets in JS bundle source.
@@ -40,11 +42,13 @@ WebSocket connections accumulate. Each navigation to a page that subscribes to a
 React's strict mode in development mounts components twice. Without a cleanup function in `useEffect`, the subscription setup runs twice and teardown never runs. The pattern is easy to miss because it works silently in single-tab development.
 
 **How to avoid:**
+
 - Always return a cleanup function from `useEffect` that calls `supabase.removeChannel(channel)`.
 - Use TanStack Query's `useQuery` + `invalidateQueries` pattern: subscribe to realtime changes in a single top-level effect that calls `queryClient.invalidateQueries` on change, rather than subscribing inside every component.
 - Create the Supabase client as a singleton (one instance for the whole app) to prevent multiple WebSocket connections.
 
 **Warning signs:**
+
 - Realtime events fire multiple times for one database change.
 - Supabase dashboard shows steadily climbing connection count.
 - Console logs from unmounted components after navigating away.
@@ -62,6 +66,7 @@ Tailwind utility classes like `text-gray-500`, `bg-blue-600`, or inline `style={
 shadcn/ui components generate code that uses Tailwind's raw colour scale by default when `cssVariables: false` in `components.json`. Developers also reach for familiar utility names during rapid prototyping and forget to replace them.
 
 **How to avoid:**
+
 - Set `cssVariables: true` in `components.json` before installing any shadcn/ui components.
 - Define all project colours as CSS custom properties in `:root` (and `.dark`) and expose them through `@theme inline` in your Tailwind v4 CSS entry file.
 - Never use raw Tailwind colour scale classes (`text-gray-*`, `bg-blue-*`) in application code — use semantic tokens only (`text-muted-foreground`, `bg-primary`, or project-specific tokens like `--color-brand`).
@@ -69,6 +74,7 @@ shadcn/ui components generate code that uses Tailwind's raw colour scale by defa
 - Do not repurpose shadcn's `--primary` as a brand colour — it is reserved for interactive element semantics. Add a `--brand` token if you need one.
 
 **Warning signs:**
+
 - Grep for `text-(gray|slate|zinc|stone|neutral|red|orange|yellow|green|teal|blue|indigo|violet|purple|fuchsia|pink|rose)-` in component files returns hits.
 - Any shadcn component added after initial setup looks visually different from existing UI.
 
@@ -85,6 +91,7 @@ TanStack Start renders the page on the server and sends HTML to the browser. If 
 Route loaders are isomorphic — they run server-side on initial load and client-side on navigation. It is easy to write code that assumes it always runs in one environment. Time-zone differences between server and client are a particularly silent form of this bug.
 
 **How to avoid:**
+
 - Use `ssr: "data-only"` for any route or component that depends on browser-only APIs. This sends loader data to the client but skips server rendering the component.
 - Never read `window`, `localStorage`, or `navigator` at module evaluation time — guard with `typeof window !== 'undefined'` or move into `useEffect`.
 - Use `useId()` instead of `Math.random()` for generated IDs.
@@ -92,6 +99,7 @@ Route loaders are isomorphic — they run server-side on initial load and client
 - Test SSR output explicitly: run `vite build && vite preview` and compare server HTML to client render in DevTools.
 
 **Warning signs:**
+
 - Console warning: "Hydration failed because the server rendered HTML didn't match the client".
 - Components flash or re-render on first page load.
 - Any `useEffect` that reads a value and immediately sets state to format it for display.
@@ -109,12 +117,14 @@ Tool modules (todo, future tools) share a single global state slice or bleed Sup
 The easiest path is a single top-level store with all state. Developers add keys to a shared store as they build each tool, and the bento card for each tool directly imports the tool's internal store or hooks.
 
 **How to avoid:**
+
 - Establish a tool registration contract from the start: each tool exports exactly two things to the outside world — a `<FullPage />` component and a `<BentoCard />` component. Nothing else is imported cross-module.
 - Each tool owns its own Supabase subscription and data-fetching hooks. No cross-tool shared queries.
 - The bento overview page imports only from a `tools/registry.ts` manifest — an array of `{ slug, BentoCard }` objects — never from individual tool internals.
 - Each tool has its own DB schema namespace (e.g., `todos` table, not a generic `items` table that all tools share).
 
 **Warning signs:**
+
 - `import` statements in bento overview that reach into `tools/todo/store.ts` or `tools/todo/hooks.ts`.
 - Adding a new tool requires editing an existing tool's files.
 - A bug in one tool's realtime subscription causes another tool's data to stale.
@@ -132,12 +142,14 @@ The project spec says "OXC for linting + formatting." Oxlint (linter) is product
 "OXC" as a project umbrella is conflated with both tools being production-ready. The linter and formatter have separate maturity levels.
 
 **How to avoid:**
+
 - Use oxlint for all linting — it is production-ready and 50-100x faster than ESLint.
 - Use Prettier (or Biome) as the formatter until oxfmt reaches stable v1.0, unless you are comfortable with beta software.
 - Alternatively, adopt oxfmt but pin to an exact version and review the changelog before updating. Review oxfmt's "Unsupported features" list at `oxc.rs/docs/guide/usage/formatter` before committing.
 - If you proceed with oxfmt, lock the version in `package.json` with an exact version pin (no `^` or `~`).
 
 **Warning signs:**
+
 - Formatter output differs between developer machines on the same codebase (version drift).
 - CI reports formatting errors that pass locally.
 - Edge cases in TypeScript generics or complex JSX produce unexpected whitespace.
@@ -155,10 +167,12 @@ A route's `loaderDeps` returns the whole search params object. Any URL param cha
 `loaderDeps` is easy to write as `({ search }) => search` when prototyping. Developers overlook that all active route loaders in the tree re-run when deps change.
 
 **How to avoid:**
+
 - In `loaderDeps`, extract only the specific search params that affect data fetching: `({ search }) => ({ todoId: search.todoId })`.
 - Separate data-fetching params from UI-state params. Store sort/filter UI state in component-local state or in a URL param that is not included in `loaderDeps`.
 
 **Warning signs:**
+
 - Changing a sort dropdown triggers a network request visible in the browser DevTools Network tab.
 - Loader runs more frequently than expected during normal UI interaction.
 
@@ -168,63 +182,63 @@ A route's `loaderDeps` returns the whole search params object. Any URL param cha
 
 ## Technical Debt Patterns
 
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Hardcoding `text-gray-500` instead of a token | Faster to type during prototyping | Every colour reference must be hunted and replaced when palette changes | Never — takes 10 seconds to add a token instead |
-| Putting all tool state in one Zustand/Jotai store | Simple to set up initially | Adding a third tool requires restructuring shared state; tools cannot be removed cleanly | Never for this project — tool isolation is a first-class requirement |
-| Skipping `removeChannel` cleanup in `useEffect` | One fewer line of code | WebSocket connection leak; realtime events fire on unmounted components | Never |
-| Running `supabase gen types` manually ad-hoc | No automation setup needed | Types drift from schema; TypeScript stops catching DB mismatches | MVP only — automate before first production use |
-| Skipping `inputValidator` on `createServerFn` | Faster to prototype | Network boundary becomes unvalidated; type errors only surface at runtime | Never — use Zod schema from day one |
-| Using `--primary` as your brand colour | Convenient semantic name | Breaks shadcn/ui button and interactive component intent; confusing for future maintainers | Never |
+| Shortcut                                          | Immediate Benefit                 | Long-term Cost                                                                             | When Acceptable                                                      |
+| ------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Hardcoding `text-gray-500` instead of a token     | Faster to type during prototyping | Every colour reference must be hunted and replaced when palette changes                    | Never — takes 10 seconds to add a token instead                      |
+| Putting all tool state in one Zustand/Jotai store | Simple to set up initially        | Adding a third tool requires restructuring shared state; tools cannot be removed cleanly   | Never for this project — tool isolation is a first-class requirement |
+| Skipping `removeChannel` cleanup in `useEffect`   | One fewer line of code            | WebSocket connection leak; realtime events fire on unmounted components                    | Never                                                                |
+| Running `supabase gen types` manually ad-hoc      | No automation setup needed        | Types drift from schema; TypeScript stops catching DB mismatches                           | MVP only — automate before first production use                      |
+| Skipping `inputValidator` on `createServerFn`     | Faster to prototype               | Network boundary becomes unvalidated; type errors only surface at runtime                  | Never — use Zod schema from day one                                  |
+| Using `--primary` as your brand colour            | Convenient semantic name          | Breaks shadcn/ui button and interactive component intent; confusing for future maintainers | Never                                                                |
 
 ---
 
 ## Integration Gotchas
 
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| Supabase + TanStack Start | Reading `SUPABASE_SERVICE_ROLE_KEY` directly in a loader function | Keep service role key in `.server.ts` only; loaders use the anon/publishable key via `createServerFn` |
-| Supabase Realtime + React Strict Mode | Subscription fires twice on mount; cleanup doesn't run correctly | Create subscription inside `useEffect` and always return `supabase.removeChannel(channel)` in the cleanup |
-| Supabase types + CI | `supabase gen types` output has non-deterministic field ordering across runs | Pin Supabase CLI version; use `supabase gen types` in a GitHub Action that commits the result; treat the file as generated (don't hand-edit) |
-| shadcn/ui + Tailwind v4 | Installing shadcn components when `cssVariables: false` is set | Set `cssVariables: true` in `components.json` before running any `shadcn add` commands |
-| shadcn/ui v4 + `tailwindcss-animate` | Old animation plugin not included in v4 setup | Use the built-in `tw-animate-css` package or the new `@theme inline` animation tokens instead |
-| TanStack Start + Supabase anon key | Prefixing the anon key with `VITE_` thinking it makes it "private" | `VITE_` prefix makes env vars public in the client bundle by design — this is correct for the anon key, but never use `VITE_` for the service role key |
-| OXC + type-aware linting | Expecting oxlint to replace ESLint type-aware rules | Type-aware linting in oxlint is preview-only as of late 2025 — run `tsc --noEmit` in CI for type checking |
+| Integration                           | Common Mistake                                                               | Correct Approach                                                                                                                                       |
+| ------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Supabase + TanStack Start             | Reading `SUPABASE_SERVICE_ROLE_KEY` directly in a loader function            | Keep service role key in `.server.ts` only; loaders use the anon/publishable key via `createServerFn`                                                  |
+| Supabase Realtime + React Strict Mode | Subscription fires twice on mount; cleanup doesn't run correctly             | Create subscription inside `useEffect` and always return `supabase.removeChannel(channel)` in the cleanup                                              |
+| Supabase types + CI                   | `supabase gen types` output has non-deterministic field ordering across runs | Pin Supabase CLI version; use `supabase gen types` in a GitHub Action that commits the result; treat the file as generated (don't hand-edit)           |
+| shadcn/ui + Tailwind v4               | Installing shadcn components when `cssVariables: false` is set               | Set `cssVariables: true` in `components.json` before running any `shadcn add` commands                                                                 |
+| shadcn/ui v4 + `tailwindcss-animate`  | Old animation plugin not included in v4 setup                                | Use the built-in `tw-animate-css` package or the new `@theme inline` animation tokens instead                                                          |
+| TanStack Start + Supabase anon key    | Prefixing the anon key with `VITE_` thinking it makes it "private"           | `VITE_` prefix makes env vars public in the client bundle by design — this is correct for the anon key, but never use `VITE_` for the service role key |
+| OXC + type-aware linting              | Expecting oxlint to replace ESLint type-aware rules                          | Type-aware linting in oxlint is preview-only as of late 2025 — run `tsc --noEmit` in CI for type checking                                              |
 
 ---
 
 ## Performance Traps
 
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Supabase Realtime subscription per component | Network tab shows N WebSocket connections for N tool components | Single subscription at the app level per table; use TanStack Query invalidation to propagate updates | When bento overview + tool page are both mounted |
-| Overly broad `loaderDeps` (whole search object) | Every UI interaction triggers a loader network request | Extract only data-relevant search params in `loaderDeps` | Immediately, as soon as sort/filter UI is added |
-| RLS policies with `auth.uid()` without index | Slow queries as todo list grows (even at 1k rows it matters) | Add index on `user_id` column; for no-auth apps, use simple permissive RLS or disable RLS with service-role client on server | At ~500+ rows with complex policies |
-| CSS Grid bento layout using fixed `px` spans | Cards overflow or collapse on narrow viewports | Use `minmax()` with `auto-fill` and `span` keyword, not fixed pixel column definitions | When viewport is narrower than card minimum width |
-| All bento cards loaded eagerly | Slow initial page load as tool count grows | Use `React.lazy` + `Suspense` for each tool's bento card import | When more than 4-5 tools are registered |
+| Trap                                            | Symptoms                                                        | Prevention                                                                                                                   | When It Breaks                                    |
+| ----------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Supabase Realtime subscription per component    | Network tab shows N WebSocket connections for N tool components | Single subscription at the app level per table; use TanStack Query invalidation to propagate updates                         | When bento overview + tool page are both mounted  |
+| Overly broad `loaderDeps` (whole search object) | Every UI interaction triggers a loader network request          | Extract only data-relevant search params in `loaderDeps`                                                                     | Immediately, as soon as sort/filter UI is added   |
+| RLS policies with `auth.uid()` without index    | Slow queries as todo list grows (even at 1k rows it matters)    | Add index on `user_id` column; for no-auth apps, use simple permissive RLS or disable RLS with service-role client on server | At ~500+ rows with complex policies               |
+| CSS Grid bento layout using fixed `px` spans    | Cards overflow or collapse on narrow viewports                  | Use `minmax()` with `auto-fill` and `span` keyword, not fixed pixel column definitions                                       | When viewport is narrower than card minimum width |
+| All bento cards loaded eagerly                  | Slow initial page load as tool count grows                      | Use `React.lazy` + `Suspense` for each tool's bento card import                                                              | When more than 4-5 tools are registered           |
 
 ---
 
 ## Security Mistakes
 
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| Using the Supabase `service_role` key in a client-side Supabase instance | Full database access bypass — any user can read/write all rows, bypassing RLS | Never expose service role key via `VITE_` prefix; only use in `.server.ts` files via `createServerFn` |
-| Tables with RLS enabled but no policies defined | All queries return zero rows silently — data appears missing | After `ENABLE ROW LEVEL SECURITY`, always create at least one permissive policy; test queries immediately |
-| Returning raw error objects from `createServerFn` | Internal server details (file paths, stack traces, DB schema names) leaked to client | Catch errors in server functions and throw sanitised, user-facing messages only |
-| Serialising data with `JSON.stringify` in custom SSR setup | XSS vulnerability via injected `</script>` in serialised data | Use `devalue` or `serialize-javascript` for SSR data serialisation, not raw `JSON.stringify` |
+| Mistake                                                                  | Risk                                                                                 | Prevention                                                                                                |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Using the Supabase `service_role` key in a client-side Supabase instance | Full database access bypass — any user can read/write all rows, bypassing RLS        | Never expose service role key via `VITE_` prefix; only use in `.server.ts` files via `createServerFn`     |
+| Tables with RLS enabled but no policies defined                          | All queries return zero rows silently — data appears missing                         | After `ENABLE ROW LEVEL SECURITY`, always create at least one permissive policy; test queries immediately |
+| Returning raw error objects from `createServerFn`                        | Internal server details (file paths, stack traces, DB schema names) leaked to client | Catch errors in server functions and throw sanitised, user-facing messages only                           |
+| Serialising data with `JSON.stringify` in custom SSR setup               | XSS vulnerability via injected `</script>` in serialised data                        | Use `devalue` or `serialize-javascript` for SSR data serialisation, not raw `JSON.stringify`              |
 
 ---
 
 ## UX Pitfalls
 
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| Bento cards with no loading state | Page appears blank or broken while Supabase data loads | Each bento card renders a skeleton immediately; data populates in place |
-| Realtime updates cause jarring re-renders | List items visibly jump when a todo changes in another tab | Use optimistic updates in TanStack Query; animate list item changes with CSS transitions |
-| Todo due-date formatted server-side | Dates show in server timezone, not user's timezone | Format dates client-side only in a `useEffect` or use `Intl.DateTimeFormat` on the client |
-| Priority and status displayed as raw enum values | "NOT_STARTED" instead of "Not started"; "HIGH" instead of "High" | Map enum values to human labels in a shared constants file; never display raw DB values |
-| Sidebar navigation has no active-state highlight | Users lose their place in the app | TanStack Router's `Link` component provides `data-status="active"` — use it to apply active styles |
+| Pitfall                                          | User Impact                                                      | Better Approach                                                                                    |
+| ------------------------------------------------ | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Bento cards with no loading state                | Page appears blank or broken while Supabase data loads           | Each bento card renders a skeleton immediately; data populates in place                            |
+| Realtime updates cause jarring re-renders        | List items visibly jump when a todo changes in another tab       | Use optimistic updates in TanStack Query; animate list item changes with CSS transitions           |
+| Todo due-date formatted server-side              | Dates show in server timezone, not user's timezone               | Format dates client-side only in a `useEffect` or use `Intl.DateTimeFormat` on the client          |
+| Priority and status displayed as raw enum values | "NOT_STARTED" instead of "Not started"; "HIGH" instead of "High" | Map enum values to human labels in a shared constants file; never display raw DB values            |
+| Sidebar navigation has no active-state highlight | Users lose their place in the app                                | TanStack Router's `Link` component provides `data-status="active"` — use it to apply active styles |
 
 ---
 
@@ -243,29 +257,29 @@ A route's `loaderDeps` returns the whole search params object. Any URL param cha
 
 ## Recovery Strategies
 
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Hardcoded colours found throughout components | MEDIUM | Audit with grep; create a token for each unique hardcoded value; find-replace per component |
-| Server bundle leakage discovered post-build | HIGH | Identify leaking file via bundle analyser (`npx vite-bundle-visualizer`); move to `.server.ts` convention; rebuild |
-| Realtime subscription leak (connections piling up) | LOW | Add `useEffect` cleanup in every subscription site; single-instance Supabase client check |
-| Type generation producing non-deterministic diffs in CI | LOW | Pin `supabase` CLI version exactly; check GitHub issue tracker for the specific CLI version |
-| Tool isolation violated (cross-tool imports) | MEDIUM-HIGH | Refactor to registry pattern; move shared logic to a `src/lib/` layer; update import paths |
-| Hydration mismatch in production | MEDIUM | Identify the non-deterministic value (usually date/time or random ID); move formatting to client-only `useEffect` or switch route to `ssr: "data-only"` |
+| Pitfall                                                 | Recovery Cost | Recovery Steps                                                                                                                                          |
+| ------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hardcoded colours found throughout components           | MEDIUM        | Audit with grep; create a token for each unique hardcoded value; find-replace per component                                                             |
+| Server bundle leakage discovered post-build             | HIGH          | Identify leaking file via bundle analyser (`npx vite-bundle-visualizer`); move to `.server.ts` convention; rebuild                                      |
+| Realtime subscription leak (connections piling up)      | LOW           | Add `useEffect` cleanup in every subscription site; single-instance Supabase client check                                                               |
+| Type generation producing non-deterministic diffs in CI | LOW           | Pin `supabase` CLI version exactly; check GitHub issue tracker for the specific CLI version                                                             |
+| Tool isolation violated (cross-tool imports)            | MEDIUM-HIGH   | Refactor to registry pattern; move shared logic to a `src/lib/` layer; update import paths                                                              |
+| Hydration mismatch in production                        | MEDIUM        | Identify the non-deterministic value (usually date/time or random ID); move formatting to client-only `useEffect` or switch route to `ssr: "data-only"` |
 
 ---
 
 ## Pitfall-to-Phase Mapping
 
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| Server code leaking into client bundle | Foundation / scaffolding | Run `vite build` and inspect bundle; check for Node.js module warnings |
-| Realtime subscriptions not cleaned up | Supabase / data layer | Monitor Supabase dashboard connection count across page navigations |
-| Hardcoded colours in components | Foundation / design system | Grep for raw Tailwind palette classes in `src/` returning zero results |
-| Hydration mismatch from non-deterministic values | Foundation / SSR config | Run `vite build && vite preview` and compare server HTML to client render |
-| Tool architecture not actually isolated | Architecture / scaffolding | Verify no cross-tool imports via dependency graph tool |
-| OXC formatter beta instability | Foundation / tooling setup | CI formatting check passes on two separate machines with clean installs |
-| loaderDeps returning entire search object | Todo tool / data loading | Open Network tab; confirm sort/filter UI changes produce zero network requests |
-| Supabase types drifting from schema | Any DB schema change milestone | `supabase gen types` in CI; fail build on diff |
+| Pitfall                                          | Prevention Phase               | Verification                                                                   |
+| ------------------------------------------------ | ------------------------------ | ------------------------------------------------------------------------------ |
+| Server code leaking into client bundle           | Foundation / scaffolding       | Run `vite build` and inspect bundle; check for Node.js module warnings         |
+| Realtime subscriptions not cleaned up            | Supabase / data layer          | Monitor Supabase dashboard connection count across page navigations            |
+| Hardcoded colours in components                  | Foundation / design system     | Grep for raw Tailwind palette classes in `src/` returning zero results         |
+| Hydration mismatch from non-deterministic values | Foundation / SSR config        | Run `vite build && vite preview` and compare server HTML to client render      |
+| Tool architecture not actually isolated          | Architecture / scaffolding     | Verify no cross-tool imports via dependency graph tool                         |
+| OXC formatter beta instability                   | Foundation / tooling setup     | CI formatting check passes on two separate machines with clean installs        |
+| loaderDeps returning entire search object        | Todo tool / data loading       | Open Network tab; confirm sort/filter UI changes produce zero network requests |
+| Supabase types drifting from schema              | Any DB schema change milestone | `supabase gen types` in CI; fail build on diff                                 |
 
 ---
 
@@ -291,5 +305,6 @@ A route's `loaderDeps` returns the whole search params object. Any URL param cha
 - [LogRocket: Selective SSR in TanStack Start](https://blog.logrocket.com/selective-ssr-tanstack-start/) — ssr: "data-only" pattern
 
 ---
-*Pitfalls research for: Personal dashboard — TanStack Start + Supabase + shadcn/ui + Tailwind v4 + OXC*
-*Researched: 2026-03-28*
+
+_Pitfalls research for: Personal dashboard — TanStack Start + Supabase + shadcn/ui + Tailwind v4 + OXC_
+_Researched: 2026-03-28_
