@@ -40,7 +40,6 @@ function makeTodo(overrides: Partial<Todo> = {}): Todo {
 }
 
 const PAST_DATE = "2020-01-01";
-const FUTURE_DATE = "2099-12-31";
 
 const mockTool = {
   id: "todos",
