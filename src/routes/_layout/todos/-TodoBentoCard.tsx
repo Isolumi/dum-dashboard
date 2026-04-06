@@ -27,23 +27,23 @@ function TodoRow({ todo, today }: { todo: Todo; today: Date }) {
   return (
     <div className="flex items-center gap-2 border-b border-border/40 py-1 last:border-0">
       {todo.status === "not_started" && (
-        <Circle className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Circle className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       )}
       {todo.status === "started" && (
-        <CircleDot className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+        <CircleDot className="size-4 shrink-0 text-primary" aria-hidden="true" />
       )}
       {todo.status === "complete" && (
-        <CircleCheck className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <CircleCheck className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       )}
 
       {isComplete ? (
-        <s className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{todo.name}</s>
+        <s className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{todo.name}</s>
       ) : (
-        <span className="min-w-0 flex-1 truncate text-xs text-foreground">{todo.name}</span>
+        <span className="min-w-0 flex-1 truncate text-sm text-foreground">{todo.name}</span>
       )}
 
       <span
-        className={`shrink-0 text-xs ${isOverdue ? "text-destructive" : "text-muted-foreground"}`}
+        className={`shrink-0 text-sm ${isOverdue ? "text-destructive" : "text-muted-foreground"}`}
         aria-label={isOverdue ? `Overdue: ${formatDueDate(todo.due_date!)}` : undefined}
       >
         {todo.due_date ? formatDueDate(todo.due_date) : "—"}
