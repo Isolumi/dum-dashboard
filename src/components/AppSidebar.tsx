@@ -62,15 +62,17 @@ export function AppSidebar() {
             </SidebarMenuItem>
 
             {/* Tool entries — driven by registry (FOUN-03) */}
-            {tools.map((tool: ToolEntry) => {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const isActive = Boolean(matchRoute({ to: tool.route as any }));
-              return (
-                <SidebarMenuItem key={tool.id}>
-                  <NavItem tool={tool} isActive={isActive} />
-                </SidebarMenuItem>
-              );
-            })}
+            {tools
+              .filter((tool) => !tool.overviewOnly)
+              .map((tool: ToolEntry) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const isActive = Boolean(matchRoute({ to: tool.route as any }));
+                return (
+                  <SidebarMenuItem key={tool.id}>
+                    <NavItem tool={tool} isActive={isActive} />
+                  </SidebarMenuItem>
+                );
+              })}
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>

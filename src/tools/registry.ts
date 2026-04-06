@@ -11,6 +11,7 @@ export interface ToolEntry {
   icon: LucideIcon;
   BentoCard: ComponentType<{ tool: ToolEntry; data: unknown }>;
   loadData?: () => Promise<unknown>;
+  overviewOnly?: boolean;
 }
 
 export const tools: ToolEntry[] = [
