@@ -1,15 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { Circle, CircleCheck } from "lucide-react";
 
-import type { Todo, TodoPriority } from "#/lib/database.types";
+import type { Todo } from "#/lib/database.types";
 import type { ToolEntry } from "#/tools/registry";
-
-const PRIORITY_ORDER: TodoPriority[] = ["high", "medium", "low"];
-const PRIORITY_LABELS: Record<TodoPriority, string> = {
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-};
+import { PRIORITY_ORDER, PRIORITY_LABELS, groupAndSortTodos } from "./-todoUtils";
 
 function formatDueDate(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -71,15 +65,7 @@ export function TodoBentoCard({ tool: _tool, data }: { tool: ToolEntry; data: un
   const todos = Array.isArray(data) ? (data as Todo[]) : [];
   const today = new Date(new Date().toISOString().split("T")[0]);
 
-  const grouped = PRIORITY_ORDER.reduce<Record<TodoPriority, Todo[]>>(
-    (acc, p) => {
-      acc[p] = todos
-        .filter((t) => t.priority === p)
-        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-      return acc;
-    },
-    { high: [], medium: [], low: [] },
-  );
+  const grouped = groupAndSortTodos(todos);
 
   return (
     <Link
