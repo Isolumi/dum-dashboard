@@ -42,6 +42,7 @@ export function AddTodoRow({ onCreate, defaultPriority = "low" }: AddTodoRowProp
   const priorityButtonRef = useRef<HTMLButtonElement>(null);
   const collapsedRowRef = useRef<HTMLDivElement>(null);
   const dateTriggerRef = useRef<HTMLButtonElement>(null);
+  const expandedContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isExpanded) {
@@ -68,6 +69,30 @@ export function AddTodoRow({ onCreate, defaultPriority = "low" }: AddTodoRowProp
     resetForm();
   }, [name, priority, dueDate, onCreate, resetForm]);
 
+  // Always-current refs so the mousedown handler doesn't go stale
+  const handleSubmitRef = useRef(handleSubmit);
+  handleSubmitRef.current = handleSubmit;
+  const resetFormRef = useRef(resetForm);
+  resetFormRef.current = resetForm;
+  const nameRef = useRef(name);
+  nameRef.current = name;
+
+  useEffect(() => {
+    if (!isExpanded) return;
+    function handleMouseDown(e: MouseEvent) {
+      const target = e.target as Element;
+      if (expandedContainerRef.current?.contains(target)) return;
+      if (target.closest?.('[data-add-todo-popover]')) return;
+      if (nameRef.current.trim().length === 0) {
+        resetFormRef.current();
+      } else {
+        handleSubmitRef.current();
+      }
+    }
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [isExpanded]);
+
   if (!isExpanded) {
     return (
       <div
@@ -93,7 +118,7 @@ export function AddTodoRow({ onCreate, defaultPriority = "low" }: AddTodoRowProp
   }
 
   return (
-    <div className="bg-accent/50 rounded-md">
+    <div ref={expandedContainerRef} className="bg-accent/50 rounded-md">
       <div className="flex items-center gap-2 px-4 min-h-[44px]">
         {/* Status icon placeholder spacer — new todos are always not_started */}
         <div className="size-8 shrink-0" />
@@ -158,7 +183,7 @@ export function AddTodoRow({ onCreate, defaultPriority = "low" }: AddTodoRowProp
           >
             {PRIORITY_LABELS[priority]}
           </PopoverTrigger>
-          <PopoverContent className="w-32 p-1" align="end">
+          <PopoverContent className="w-32 p-1" align="end" data-add-todo-popover>
             {(["high", "medium", "low"] as const).map((p) => (
               <button
                 key={p}
@@ -209,7 +234,7 @@ export function AddTodoRow({ onCreate, defaultPriority = "low" }: AddTodoRowProp
               {dueDate ? format(dueDate, "MMM d") : "Date"}
             </span>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="end">
+          <PopoverContent className="w-auto p-0" align="end" data-add-todo-popover>
             <Calendar
               mode="single"
               selected={dueDate}
@@ -227,7 +252,7 @@ export function AddTodoRow({ onCreate, defaultPriority = "low" }: AddTodoRowProp
 
       {/* Keyboard hint */}
       <div className="flex justify-end px-4 pb-1.5">
-        <span className="text-xs text-muted-foreground">Enter to save &middot; Esc to cancel</span>
+        <span className="text-xs text-muted-foreground">Esc to cancel</span>
       </div>
     </div>
   );

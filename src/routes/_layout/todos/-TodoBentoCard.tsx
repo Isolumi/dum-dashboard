@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, CheckSquare, Circle, CircleCheck } from "lucide-react";
+import { Circle, CircleCheck } from "lucide-react";
 
 import type { Todo, TodoPriority } from "#/lib/database.types";
 import type { ToolEntry } from "#/tools/registry";
@@ -87,12 +87,6 @@ export function TodoBentoCard({ tool: _tool, data }: { tool: ToolEntry; data: un
       aria-label="Open Todos tool"
       className="block rounded-lg border border-border bg-card transition-colors duration-150 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-        <CheckSquare className="size-4 text-muted-foreground" aria-hidden="true" />
-        <span className="flex-1 text-sm font-normal text-foreground">Todos</span>
-        <ArrowRight className="size-4 text-muted-foreground" aria-hidden="true" />
-      </div>
-
       <div className="max-h-96 overflow-y-auto p-4">
         {todos.length === 0 ? (
           <p className="text-xs text-muted-foreground">No todos yet.</p>
