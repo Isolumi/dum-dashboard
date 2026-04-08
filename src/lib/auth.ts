@@ -7,10 +7,10 @@ export async function getSession() {
   return data.session;
 }
 
-/** Initiates GitHub OAuth redirect. */
-export async function signInWithGitHub() {
+/** Initiates Google OAuth redirect. */
+export async function signInWithGoogle() {
   const { error } = await supabase.auth.signInWithOAuth({
-    provider: "github",
+    provider: "google",
     options: {
       redirectTo: `${window.location.origin}/auth/callback`,
     },

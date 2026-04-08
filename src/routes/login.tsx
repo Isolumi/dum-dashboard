@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "#/components/ui/button";
-import { getSession, signInWithGitHub } from "#/lib/auth";
+import { getSession, signInWithGoogle } from "#/lib/auth";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
@@ -19,8 +19,8 @@ function LoginPage() {
     try {
       setLoading(true);
       setError(null);
-      await signInWithGitHub();
-      // signInWithGitHub redirects the browser — nothing to do after
+      await signInWithGoogle();
+      // signInWithGoogle redirects the browser — nothing to do after
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign-in failed");
       setLoading(false);
@@ -40,7 +40,7 @@ function LoginPage() {
           </p>
         )}
         <Button className="w-full" onClick={handleSignIn} disabled={loading}>
-          {loading ? "Redirecting..." : "Sign in with GitHub"}
+          {loading ? "Redirecting..." : "Sign in with Google"}
         </Button>
       </div>
     </div>
