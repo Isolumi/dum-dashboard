@@ -7,6 +7,10 @@ export const Route = createFileRoute("/_layout")({
   beforeLoad: async () => {
     const session = await getSession();
     if (!session) throw redirect({ to: "/login" });
+    if (session.user.email !== import.meta.env.VITE_OWNER_EMAIL) {
+      await import("#/lib/auth").then((m) => m.signOut());
+      throw redirect({ to: "/login" });
+    }
   },
   component: LayoutComponent,
 });
