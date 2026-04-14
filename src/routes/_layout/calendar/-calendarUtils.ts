@@ -11,12 +11,15 @@ function eventStartDate(event: CalendarEvent): Date {
 
 function eventStartIsoDate(event: CalendarEvent): string {
   if (event.start.date) return event.start.date;
-  const d = new Date(event.start.dateTime!);
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, "0"),
-    String(d.getDate()).padStart(2, "0"),
-  ].join("-");
+  if (event.start.dateTime) {
+    const d = new Date(event.start.dateTime);
+    return [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, "0"),
+      String(d.getDate()).padStart(2, "0"),
+    ].join("-");
+  }
+  return "1970-01-01";
 }
 
 /**
