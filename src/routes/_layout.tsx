@@ -5,6 +5,7 @@ import { getSession } from "#/lib/auth";
 
 export const Route = createFileRoute("/_layout")({
   beforeLoad: async () => {
+    if (typeof window === "undefined") return; // session lives in localStorage — skip on server
     const session = await getSession();
     if (!session) throw redirect({ to: "/login" });
     if (session.user.id !== import.meta.env.VITE_OWNER_ID) {

@@ -26,18 +26,18 @@ export const tools: ToolEntry[] = [
     loadData: getTodos,
   },
   {
-    id: "calendar",
-    label: "Calendar",
-    route: "/calendar",
-    icon: CalendarDays,
-    BentoCard: CalendarBentoCard,
-  },
-  {
     id: "clock",
     label: "Clock",
     route: "/",
     icon: Clock,
     BentoCard: ClockBentoCard,
     overviewOnly: true,
+  },
+  {
+    id: "calendar",
+    label: "Calendar",
+    route: "/calendar",
+    icon: CalendarDays,
+    BentoCard: CalendarBentoCard,
   },
 ];

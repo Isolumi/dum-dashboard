@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Calendar } from "#/components/ui/calendar";
 import { Skeleton } from "#/components/ui/skeleton";
@@ -35,30 +35,39 @@ function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [status, setStatus] = useState<PageStatus>("loading");
 
-  useEffect(() => {
-    async function load() {
-      setStatus("loading");
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.provider_token;
-      if (!token) {
-        setStatus("auth_expired");
-        return;
-      }
+  const load = useCallback(async () => {
+    setStatus("loading");
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.provider_token;
 
-      const timeMin = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-      const timeMax = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
-
-      try {
-        const fetched = await fetchCalendarEvents(token, timeMin, timeMax);
-        setEvents(fetched);
-        setStatus("ready");
-      } catch (err: unknown) {
-        const e = err as { type?: string };
-        setStatus(e?.type === "auth_expired" ? "auth_expired" : "error");
-      }
+    if (!token) {
+      setStatus("auth_expired");
+      return;
     }
-    void load();
+
+    const timeMin = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const timeMax = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+
+    try {
+      const fetched = await fetchCalendarEvents(token, timeMin, timeMax);
+      setEvents(fetched);
+      setStatus("ready");
+    } catch (err: unknown) {
+      const e = err as { type?: string };
+      setStatus(e?.type === "auth_expired" ? "auth_expired" : "error");
+    }
   }, [currentMonth]);
+
+  // Initial load + reload when month changes
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Poll every 5 minutes so the calendar stays fresh without manual refresh
+  useEffect(() => {
+    const id = setInterval(() => void load(), 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [load]);
 
   const eventDates = useMemo(
     () =>

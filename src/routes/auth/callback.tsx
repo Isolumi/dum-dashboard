@@ -1,5 +1,5 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { supabase } from "#/lib/supabase";
 
 export const Route = createFileRoute("/auth/callback")({
@@ -7,25 +7,50 @@ export const Route = createFileRoute("/auth/callback")({
 });
 
 function AuthCallback() {
-  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Supabase detectSessionInUrl handles the code exchange automatically.
-    // Listen for the session to be established, then redirect.
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN") {
-        void navigate({ to: "/", replace: true });
+    // detectSessionInUrl:true exchanges the PKCE code and cleans the URL
+    // during Supabase client init — before this effect runs. The session is
+    // already established. Just check for it, or wait for SIGNED_IN.
+    void supabase.auth.getSession().then(({ data: { session }, error: sessionError }) => {
+      if (sessionError) {
+        setError(sessionError.message);
+        return;
       }
+      if (session) {
+        window.location.href = "/";
+        return;
+      }
+      // Exchange not yet complete — wait for the event
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event, s) => {
+        if (event === "SIGNED_IN" && s) {
+          window.location.href = "/";
+        }
+      });
+      // Timeout so we don't spin forever if something went wrong upstream
+      const timer = setTimeout(() => {
+        setError("Sign-in timed out. Check the browser console for details.");
+      }, 10000);
+      return () => {
+        subscription.unsubscribe();
+        clearTimeout(timer);
+      };
     });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, []);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
-      <p className="text-sm text-muted-foreground">Signing you in...</p>
+      {error ? (
+        <div className="max-w-md rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+          <p className="font-semibold">Auth error</p>
+          <p className="mt-1 font-mono text-xs break-all">{error}</p>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">Signing you in...</p>
+      )}
     </div>
   );
 }
