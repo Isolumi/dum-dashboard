@@ -15,6 +15,7 @@ import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as LayoutDevColoursRouteImport } from './routes/_layout/dev-colours'
 import { Route as LayoutTodosIndexRouteImport } from './routes/_layout/todos/index'
+import { Route as LayoutCalendarIndexRouteImport } from './routes/_layout/calendar/index'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -45,12 +46,18 @@ const LayoutTodosIndexRoute = LayoutTodosIndexRouteImport.update({
   path: '/todos/',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutCalendarIndexRoute = LayoutCalendarIndexRouteImport.update({
+  id: '/calendar/',
+  path: '/calendar/',
+  getParentRoute: () => LayoutRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
   '/login': typeof LoginRoute
   '/dev-colours': typeof LayoutDevColoursRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/calendar/': typeof LayoutCalendarIndexRoute
   '/todos/': typeof LayoutTodosIndexRoute
 }
 export interface FileRoutesByTo {
@@ -58,6 +65,7 @@ export interface FileRoutesByTo {
   '/dev-colours': typeof LayoutDevColoursRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/': typeof LayoutIndexRoute
+  '/calendar': typeof LayoutCalendarIndexRoute
   '/todos': typeof LayoutTodosIndexRoute
 }
 export interface FileRoutesById {
@@ -67,13 +75,26 @@ export interface FileRoutesById {
   '/_layout/dev-colours': typeof LayoutDevColoursRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/calendar/': typeof LayoutCalendarIndexRoute
   '/_layout/todos/': typeof LayoutTodosIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/dev-colours' | '/auth/callback' | '/todos/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/dev-colours'
+    | '/auth/callback'
+    | '/calendar/'
+    | '/todos/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/dev-colours' | '/auth/callback' | '/' | '/todos'
+  to:
+    | '/login'
+    | '/dev-colours'
+    | '/auth/callback'
+    | '/'
+    | '/calendar'
+    | '/todos'
   id:
     | '__root__'
     | '/_layout'
@@ -81,6 +102,7 @@ export interface FileRouteTypes {
     | '/_layout/dev-colours'
     | '/auth/callback'
     | '/_layout/'
+    | '/_layout/calendar/'
     | '/_layout/todos/'
   fileRoutesById: FileRoutesById
 }
@@ -134,18 +156,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutTodosIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/calendar/': {
+      id: '/_layout/calendar/'
+      path: '/calendar'
+      fullPath: '/calendar/'
+      preLoaderRoute: typeof LayoutCalendarIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
   }
 }
 
 interface LayoutRouteChildren {
   LayoutDevColoursRoute: typeof LayoutDevColoursRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
+  LayoutCalendarIndexRoute: typeof LayoutCalendarIndexRoute
   LayoutTodosIndexRoute: typeof LayoutTodosIndexRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutDevColoursRoute: LayoutDevColoursRoute,
   LayoutIndexRoute: LayoutIndexRoute,
+  LayoutCalendarIndexRoute: LayoutCalendarIndexRoute,
   LayoutTodosIndexRoute: LayoutTodosIndexRoute,
 }
 
