@@ -159,10 +159,11 @@ describe("PrometheusProvider", () => {
     await rejection;
   });
 
-  it("reuses an identical range result for ten seconds without a second fetch", async () => {
+  it("reuses an identical range result for ten seconds and replaces it after expiry", async () => {
     let now = NOW;
+    let upstreamValue = 40;
     const fetchApi = vi.fn(async (_url: string, _options: RequestInit) =>
-      jsonResponse(fixture.matrix),
+      jsonResponse(matrix([[NOW, upstreamValue++]])),
     );
     const provider = new PrometheusProvider({
       baseUrl: "http://prometheus.test",
@@ -176,10 +177,117 @@ describe("PrometheusProvider", () => {
     const cached = await provider.queryRange(...args);
 
     expect(cached).toEqual(first);
+    expect(cached[0]?.points[0]?.value).toBe(40);
     expect(fetchApi).toHaveBeenCalledTimes(1);
 
     now += 1;
-    await provider.queryRange(...args);
+    const refreshed = await provider.queryRange(...args);
+    expect(refreshed[0]?.points[0]?.value).toBe(41);
+    expect(fetchApi).toHaveBeenCalledTimes(2);
+  });
+
+  it("isolates cached range data from caller mutations at every nested level", async () => {
+    const fetchApi = vi.fn(async (_url: string, _options: RequestInit) =>
+      jsonResponse(fixture.matrix),
+    );
+    const provider = new PrometheusProvider({
+      baseUrl: "http://prometheus.test",
+      fetchApi,
+      now: () => NOW,
+    });
+    const args = ["up", "2026-08-04T11:55:00.000Z", "2026-08-04T12:00:00.000Z", "300s"] as const;
+
+    const first = await provider.queryRange(...args);
+    first[0]!.metric.instance = "mutated:9100";
+    first[0]!.points[0]!.value = 999;
+    first[0]!.points.push({ timestamp: "2026-08-04T12:05:00.000Z", value: 999 });
+    first.push({ metric: { injected: "true" }, points: [] });
+
+    const cached = await provider.queryRange(...args);
+
+    expect(cached).toEqual([
+      {
+        metric: { instance: "dumachine:9100", job: "node-exporter" },
+        points: [
+          { timestamp: "2026-08-04T11:55:00.000Z", value: 40 },
+          { timestamp: "2026-08-04T12:00:00.000Z", value: 42.5 },
+        ],
+      },
+    ]);
+    expect(cached).not.toBe(first);
+    expect(cached[0]).not.toBe(first[0]);
+    expect(cached[0]!.metric).not.toBe(first[0]!.metric);
+    expect(cached[0]!.points).not.toBe(first[0]!.points);
+    expect(fetchApi).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses both resource-history range queries inside one ten-second bucket", async () => {
+    let now = NOW + 1;
+    const fetchApi = vi.fn(async (_url: string, _options: RequestInit) =>
+      jsonResponse(fixture.matrix),
+    );
+    const provider = new PrometheusProvider({
+      baseUrl: "http://prometheus.test",
+      fetchApi,
+      now: () => now,
+    });
+
+    await provider.getResourceHistory("24h");
+    now = NOW + 9_999;
+    await provider.getResourceHistory("24h");
+
+    expect(fetchApi).toHaveBeenCalledTimes(2);
+    expect(
+      new Set(fetchApi.mock.calls.map(([url]) => new URL(url).searchParams.get("end"))),
+    ).toEqual(new Set(["2026-08-04T12:00:00.000Z"]));
+  });
+
+  it("shares one in-flight request across concurrent identical range misses", async () => {
+    let resolveUpstream!: (response: Response) => void;
+    const upstream = new Promise<Response>((resolve) => {
+      resolveUpstream = resolve;
+    });
+    const fetchApi = vi.fn((_url: string, _options: RequestInit) => upstream);
+    const provider = new PrometheusProvider({
+      baseUrl: "http://prometheus.test",
+      fetchApi,
+      now: () => NOW,
+    });
+    const args = ["up", "2026-08-04T11:55:00.000Z", "2026-08-04T12:00:00.000Z", "300s"] as const;
+
+    const firstRequest = provider.queryRange(...args);
+    const secondRequest = provider.queryRange(...args);
+    resolveUpstream(jsonResponse(fixture.matrix));
+    const [first, second] = await Promise.all([firstRequest, secondRequest]);
+
+    expect(fetchApi).toHaveBeenCalledTimes(1);
+    expect(second).toEqual(first);
+    expect(second).not.toBe(first);
+    expect(second[0]!.points).not.toBe(first[0]!.points);
+  });
+
+  it("removes a rejected in-flight range request so the next call retries", async () => {
+    let rejectFirst = true;
+    const fetchApi = vi.fn(async (_url: string, _options: RequestInit) => {
+      if (rejectFirst) {
+        rejectFirst = false;
+        throw new Error("temporary upstream failure");
+      }
+      return jsonResponse(fixture.matrix);
+    });
+    const provider = new PrometheusProvider({
+      baseUrl: "http://prometheus.test",
+      fetchApi,
+      now: () => NOW,
+    });
+    const args = ["up", "2026-08-04T11:55:00.000Z", "2026-08-04T12:00:00.000Z", "300s"] as const;
+
+    await expect(
+      Promise.all([provider.queryRange(...args), provider.queryRange(...args)]),
+    ).rejects.toThrow("Prometheus request failed");
+    expect(fetchApi).toHaveBeenCalledTimes(1);
+
+    await expect(provider.queryRange(...args)).resolves.toHaveLength(1);
     expect(fetchApi).toHaveBeenCalledTimes(2);
   });
 

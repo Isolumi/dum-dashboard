@@ -111,6 +111,13 @@ function parameter(value: string | number | Date): string {
   return value instanceof Date ? value.toISOString() : String(value);
 }
 
+function cloneMetricSeries(series: readonly MetricSeries[]): MetricSeries[] {
+  return series.map(({ metric, points }) => ({
+    metric: { ...metric },
+    points: points.map((point) => ({ ...point })),
+  }));
+}
+
 export class PrometheusProvider implements Provider<ResourceMetrics> {
   readonly source = "prometheus" as const;
 
@@ -118,6 +125,7 @@ export class PrometheusProvider implements Provider<ResourceMetrics> {
   private readonly fetchApi: FetchApi;
   private readonly now: () => number;
   private readonly rangeCache = new Map<string, CacheEntry>();
+  private readonly rangeInFlight = new Map<string, Promise<MetricSeries[]>>();
 
   constructor(options: PrometheusProviderOptions = {}) {
     const baseUrl =
@@ -193,18 +201,37 @@ export class PrometheusProvider implements Provider<ResourceMetrics> {
       step: String(step),
     };
     const cacheKey = JSON.stringify(parameters);
-    const cached = this.rangeCache.get(cacheKey);
-    if (cached && this.now() < cached.expiresAt) return cached.value;
-
-    const payload = await this.request("query_range", parameters, signal);
-    let value: MetricSeries[];
-    try {
-      value = parseMatrix(payload);
-    } catch {
-      throw new Error("Prometheus response invalid");
+    const now = this.now();
+    for (const [key, entry] of this.rangeCache) {
+      if (entry.expiresAt <= now) this.rangeCache.delete(key);
     }
-    this.rangeCache.set(cacheKey, { expiresAt: this.now() + RANGE_CACHE_TTL_MS, value });
-    return value;
+    const cached = this.rangeCache.get(cacheKey);
+    if (cached) return cloneMetricSeries(cached.value);
+
+    const existingRequest = this.rangeInFlight.get(cacheKey);
+    if (existingRequest) return cloneMetricSeries(await existingRequest);
+
+    const request = (async () => {
+      const payload = await this.request("query_range", parameters, signal);
+      let value: MetricSeries[];
+      try {
+        value = parseMatrix(payload);
+      } catch {
+        throw new Error("Prometheus response invalid");
+      }
+      const cachedValue = cloneMetricSeries(value);
+      this.rangeCache.set(cacheKey, {
+        expiresAt: this.now() + RANGE_CACHE_TTL_MS,
+        value: cachedValue,
+      });
+      return cachedValue;
+    })();
+    this.rangeInFlight.set(cacheKey, request);
+    try {
+      return cloneMetricSeries(await request);
+    } finally {
+      if (this.rangeInFlight.get(cacheKey) === request) this.rangeInFlight.delete(cacheKey);
+    }
   }
 
   queryRange(
@@ -221,8 +248,9 @@ export class PrometheusProvider implements Provider<ResourceMetrics> {
     signal?: AbortSignal,
   ): Promise<ResourceHistory> {
     const { durationMs, step } = WINDOWS[window];
-    const end = new Date(this.now()).toISOString();
-    const start = new Date(this.now() - durationMs).toISOString();
+    const bucketEnd = Math.floor(this.now() / RANGE_CACHE_TTL_MS) * RANGE_CACHE_TTL_MS;
+    const end = new Date(bucketEnd).toISOString();
+    const start = new Date(bucketEnd - durationMs).toISOString();
     const [cpu, memory] = await Promise.all([
       this.queryRangeWithSignal(CPU_QUERY, start, end, step, signal),
       this.queryRangeWithSignal(MEMORY_QUERY, start, end, step, signal),
