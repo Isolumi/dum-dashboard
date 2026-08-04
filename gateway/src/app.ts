@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { getGatewayConfig } from "./config";
 import type { KubernetesReader, PodLogStream } from "./providers/kubernetes";
@@ -6,6 +6,16 @@ import type { Provider } from "./providers/provider";
 import { collectSnapshot, type Now } from "./snapshot";
 
 type SnapshotRoute = "overview" | "cluster" | "deployments" | "services";
+
+const DNS_LABEL = /^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/;
+
+function isDnsLabel(value: string): boolean {
+  return value.length > 0 && value.length <= 63 && DNS_LABEL.test(value);
+}
+
+function isDnsSubdomain(value: string): boolean {
+  return value.length > 0 && value.length <= 253 && value.split(".").every(isDnsLabel);
+}
 
 export interface GatewayDependencies {
   providers?: Partial<Record<SnapshotRoute, readonly Provider<unknown>[]>>;
@@ -36,13 +46,14 @@ export function createGateway(dependencies: GatewayDependencies = {}): Hono {
       return context.json({ error: "Kubernetes unavailable" }, 503);
     }
 
+    const namespace = context.req.param("namespace");
+    const pod = context.req.param("pod");
+    if (!isDnsLabel(namespace) || !isDnsSubdomain(pod)) {
+      return context.json({ error: "Invalid Kubernetes resource name" }, 400);
+    }
+
     try {
-      return context.json(
-        await dependencies.kubernetesProvider.getPod(
-          context.req.param("namespace"),
-          context.req.param("pod"),
-        ),
-      );
+      return context.json(await dependencies.kubernetesProvider.getPod(namespace, pod));
     } catch {
       return context.json({ error: "Pod unavailable" }, 502);
     }
@@ -52,8 +63,12 @@ export function createGateway(dependencies: GatewayDependencies = {}): Hono {
     const provider = dependencies.kubernetesProvider;
     if (!provider) return context.json({ error: "Kubernetes unavailable" }, 503);
 
+    const namespace = context.req.param("namespace");
+    const pod = context.req.param("pod");
     const container = context.req.query("container");
-    if (!container) return context.json({ error: "Container is required" }, 400);
+    if (!isDnsLabel(namespace) || !isDnsSubdomain(pod) || !container || !isDnsLabel(container)) {
+      return context.json({ error: "Invalid Kubernetes resource name" }, 400);
+    }
 
     return streamSSE(context, async (stream) => {
       const controller = new AbortController();
@@ -62,12 +77,7 @@ export function createGateway(dependencies: GatewayDependencies = {}): Hono {
       context.req.raw.signal.addEventListener("abort", abort, { once: true });
 
       try {
-        const logs = provider.streamPodLogs(
-          context.req.param("namespace"),
-          context.req.param("pod"),
-          container,
-          controller.signal,
-        );
+        const logs = provider.streamPodLogs(namespace, pod, container, controller.signal);
         const ready = (logs as Partial<PodLogStream>).ready;
         if (ready) await ready;
         await stream.writeSSE({ event: "ready", data: JSON.stringify({ status: "ready" }) });
@@ -88,6 +98,11 @@ export function createGateway(dependencies: GatewayDependencies = {}): Hono {
       }
     });
   });
+
+  const invalidPodRoute = (context: Context) =>
+    context.json({ error: "Invalid Kubernetes resource name" }, 400);
+  app.all("/pods", invalidPodRoute);
+  app.all("/pods/*", invalidPodRoute);
 
   return app;
 }

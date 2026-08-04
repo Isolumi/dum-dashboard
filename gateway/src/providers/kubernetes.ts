@@ -1,13 +1,12 @@
-import { PassThrough, type Writable } from "node:stream";
+import { PassThrough, type Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import {
   AppsV1Api,
   CoreV1Api,
   KubeConfig,
-  Log,
   Observable,
   type ConfigurationOptions,
   type CoreV1EventList,
-  type LogOptions,
   type ObservableMiddleware,
   type RequestContext,
   type ResponseContext,
@@ -19,6 +18,7 @@ import {
   type V1PodList,
   type V1StatefulSetList,
 } from "@kubernetes/client-node";
+import fetch, { type RequestInit, type Response } from "node-fetch";
 import type { ClusterData, PodDetail } from "../../../shared/homelab/contracts";
 import { getKubernetesConfigSource } from "../config";
 import type { Provider } from "./provider";
@@ -58,15 +58,7 @@ interface AppsReadApi {
   ): Promise<V1DaemonSetList>;
 }
 
-interface PodLogClient {
-  log(
-    namespace: string,
-    pod: string,
-    container: string,
-    output: Writable,
-    options?: LogOptions,
-  ): Promise<AbortController>;
-}
+type LogFetch = (url: string, options: RequestInit) => Promise<Response>;
 
 export interface PodLogStream extends AsyncIterable<string> {
   ready: Promise<void>;
@@ -87,7 +79,7 @@ export interface KubernetesProviderOptions {
   kubeConfig?: KubeConfig;
   coreApi?: CoreReadApi;
   appsApi?: AppsReadApi;
-  logClient?: PodLogClient;
+  fetchApi?: LogFetch;
 }
 
 export function loadKubernetesConfig<T extends KubeConfigLoader>(
@@ -138,14 +130,14 @@ export class KubernetesProvider implements KubernetesReader {
   private kubeConfig?: KubeConfig;
   private coreApi?: CoreReadApi;
   private appsApi?: AppsReadApi;
-  private logClient?: PodLogClient;
+  private readonly fetchApi: LogFetch;
 
   constructor(options: KubernetesProviderOptions = {}) {
     this.environment = options.environment ?? process.env;
     this.kubeConfig = options.kubeConfig;
     this.coreApi = options.coreApi;
     this.appsApi = options.appsApi;
-    this.logClient = options.logClient;
+    this.fetchApi = options.fetchApi ?? fetch;
   }
 
   private getKubeConfig(): KubeConfig {
@@ -161,11 +153,6 @@ export class KubernetesProvider implements KubernetesReader {
   private getAppsApi(): AppsReadApi {
     this.appsApi ??= this.getKubeConfig().makeApiClient(AppsV1Api);
     return this.appsApi;
-  }
-
-  private getLogClient(): PodLogClient {
-    this.logClient ??= new Log(this.getKubeConfig());
-    return this.logClient;
   }
 
   async collect(signal: AbortSignal): Promise<ClusterData> {
@@ -199,41 +186,74 @@ export class KubernetesProvider implements KubernetesReader {
     return mapPodDetail(detail);
   }
 
+  private async connectPodLogs(
+    namespace: string,
+    pod: string,
+    container: string,
+    signal: AbortSignal,
+  ): Promise<{ output: PassThrough; completion: Promise<void> }> {
+    const kubeConfig = this.getKubeConfig();
+    const cluster = kubeConfig.getCurrentCluster();
+    if (!cluster) throw new Error("Kubernetes cluster configuration is unavailable");
+
+    const url = new URL(cluster.server);
+    const basePath = url.pathname.replace(/\/$/, "");
+    url.pathname = `${basePath}/api/v1/namespaces/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(pod)}/log`;
+    url.searchParams.set("container", container);
+    url.searchParams.set("tailLines", "200");
+    url.searchParams.set("follow", "true");
+    url.searchParams.set("timestamps", "true");
+
+    const authenticatedOptions = await kubeConfig.applyToFetchOptions({});
+    const response = await this.fetchApi(url.toString(), {
+      ...authenticatedOptions,
+      method: "GET",
+      signal,
+    });
+    if (!response.ok || !response.body) {
+      if (response.body) (response.body as Readable).destroy();
+      throw new Error("Kubernetes log request failed");
+    }
+
+    const output = new PassThrough();
+    const completion = pipeline(response.body as Readable, output, { signal });
+    void completion.catch(() => undefined);
+    return { output, completion };
+  }
+
   streamPodLogs(
     namespace: string,
     pod: string,
     container: string,
     signal: AbortSignal,
   ): PodLogStream {
-    const output = new PassThrough();
-    let upstream: AbortController | undefined;
+    const upstream = new AbortController();
+    let output: PassThrough | undefined;
+    let completion: Promise<void> | undefined;
     const abortUpstream = () => {
-      upstream?.abort();
-      output.destroy();
+      upstream.abort();
+      output?.destroy();
     };
 
     signal.addEventListener("abort", abortUpstream, { once: true });
-    const connection = this.getLogClient()
-      .log(namespace, pod, container, output, {
-        tailLines: 200,
-        follow: true,
-        timestamps: true,
-      })
-      .then((controller) => {
-        upstream = controller;
+    if (signal.aborted) abortUpstream();
+
+    const connection = this.connectPodLogs(namespace, pod, container, upstream.signal).then(
+      (connected) => {
+        output = connected.output;
+        completion = connected.completion;
         if (signal.aborted) abortUpstream();
-      })
-      .catch((error: unknown) => {
-        output.destroy(error instanceof Error ? error : new Error("Kubernetes log stream failed"));
-        throw error;
-      });
+      },
+    );
+    void connection.catch(() => undefined);
 
     return {
       ready: connection,
       async *[Symbol.asyncIterator]() {
         try {
           await connection;
-          yield* linesFrom(output);
+          yield* linesFrom(output!);
+          await completion;
         } finally {
           signal.removeEventListener("abort", abortUpstream);
           abortUpstream();
