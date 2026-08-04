@@ -82,7 +82,7 @@ describe("collectDeploymentSnapshot", () => {
     const application: ArgoApplicationState = {
       name: "yootoob-mp3-dumachine",
       namespace: "argocd",
-      sync: { status: "Synced", revision: "0123456789abcdef0123456789abcdef01234567" },
+      sync: { status: "Synced", revision: "feedfacefeedfacefeedfacefeedfacefeedface" },
       health: {
         status: "Healthy",
         message: "Application is healthy",
@@ -91,14 +91,14 @@ describe("collectDeploymentSnapshot", () => {
       operation: {
         phase: "Succeeded",
         message: "successfully synced",
-        revision: "0123456789abcdef0123456789abcdef01234567",
+        revision: "feedfacefeedfacefeedfacefeedfacefeedface",
         startedAt: "2026-08-03T23:59:00.000Z",
         finishedAt: "2026-08-04T00:00:00.000Z",
       },
       resources: [],
       images: [
-        "ghcr.io/isolumi/youtube-mp3-api:sha-0123456@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "ghcr.io/isolumi/youtube-mp3-frontend:sha-0123456@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "ghcr.io/isolumi/yootoob-mp3-api:1829d6ba3b55e66a2134ae64161b9e48ad39a197",
+        "ghcr.io/isolumi/yootoob-mp3-frontend:1829d6ba3b55e66a2134ae64161b9e48ad39a197",
       ],
     };
     const cluster: ClusterData = {
@@ -137,9 +137,18 @@ describe("collectDeploymentSnapshot", () => {
           restartCount: 0,
           node: "dumachine",
           image:
-            "ghcr.io/isolumi/youtube-mp3-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          imageTag: "ghcr.io/isolumi/youtube-mp3-api:sha-0123456",
+            "ghcr.io/isolumi/yootoob-mp3-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          imageTag: "ghcr.io/isolumi/yootoob-mp3-api:1829d6ba3b55e66a2134ae64161b9e48ad39a197",
           imageDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          containerImages: [
+            {
+              name: "api",
+              repository: "ghcr.io/isolumi/yootoob-mp3-api",
+              reference: "ghcr.io/isolumi/yootoob-mp3-api:1829d6ba3b55e66a2134ae64161b9e48ad39a197",
+              tag: "1829d6ba3b55e66a2134ae64161b9e48ad39a197",
+              digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            },
+          ],
           createdAt: "2026-08-03T23:59:30.000Z",
         },
         {
@@ -150,9 +159,19 @@ describe("collectDeploymentSnapshot", () => {
           restartCount: 0,
           node: "dumachine",
           image:
-            "ghcr.io/isolumi/youtube-mp3-frontend@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          imageTag: "ghcr.io/isolumi/youtube-mp3-frontend:sha-0123456",
+            "ghcr.io/isolumi/yootoob-mp3-frontend@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          imageTag: "ghcr.io/isolumi/yootoob-mp3-frontend:1829d6ba3b55e66a2134ae64161b9e48ad39a197",
           imageDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          containerImages: [
+            {
+              name: "frontend",
+              repository: "ghcr.io/isolumi/yootoob-mp3-frontend",
+              reference:
+                "ghcr.io/isolumi/yootoob-mp3-frontend:1829d6ba3b55e66a2134ae64161b9e48ad39a197",
+              tag: "1829d6ba3b55e66a2134ae64161b9e48ad39a197",
+              digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            },
+          ],
           createdAt: "2026-08-03T23:59:30.000Z",
         },
       ],
@@ -198,5 +217,62 @@ describe("collectDeploymentSnapshot", () => {
         }),
       ]),
     );
+  });
+
+  it("downgrades malformed successful GitHub and Argo payloads to partial source failures", async () => {
+    const cluster: ClusterData = {
+      nodes: [],
+      namespaces: [],
+      events: [],
+      resources: { current: [], history: [] },
+      workloads: [
+        {
+          kind: "Deployment",
+          name: "yootoob-mp3-api",
+          namespace: "yootoob-mp3",
+          status: "healthy",
+          desiredReplicas: 1,
+          availableReplicas: 1,
+          failureReason: null,
+          restartIncrease15m: false,
+        },
+        {
+          kind: "Deployment",
+          name: "yootoob-mp3-frontend",
+          namespace: "yootoob-mp3",
+          status: "healthy",
+          desiredReplicas: 1,
+          availableReplicas: 1,
+          failureReason: null,
+          restartIncrease15m: false,
+        },
+      ],
+      pods: [],
+    };
+    const providers: Provider<unknown>[] = [
+      { source: "github", collect: async () => ({ status: "completed", commit: null }) },
+      { source: "argocd", collect: async () => ({ health: { status: "Healthy" } }) },
+      { source: "kubernetes", collect: async () => cluster },
+    ];
+
+    const snapshot = await collectDeploymentSnapshot(providers, 1_000, now);
+
+    expect(snapshot.status).toBe("unknown");
+    expect(snapshot.data?.applications).toHaveLength(1);
+    expect(snapshot.sources).toEqual([
+      expect.objectContaining({
+        source: "github",
+        status: "unknown",
+        stale: true,
+        error: "GitHub unavailable",
+      }),
+      expect.objectContaining({
+        source: "argocd",
+        status: "unknown",
+        stale: true,
+        error: "Argo CD unavailable",
+      }),
+      expect.objectContaining({ source: "kubernetes", status: "healthy", stale: false }),
+    ]);
   });
 });

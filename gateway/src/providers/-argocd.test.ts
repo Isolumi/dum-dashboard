@@ -14,7 +14,7 @@ describe("ArgoProvider", () => {
       namespace: "argocd",
       sync: {
         status: "Synced",
-        revision: "0123456789abcdef0123456789abcdef01234567",
+        revision: "feedfacefeedfacefeedfacefeedfacefeedface",
       },
       health: {
         status: "Healthy",
@@ -24,7 +24,7 @@ describe("ArgoProvider", () => {
       operation: {
         phase: "Succeeded",
         message: "successfully synced",
-        revision: "0123456789abcdef0123456789abcdef01234567",
+        revision: "feedfacefeedfacefeedfacefeedfacefeedface",
         startedAt: "2026-08-04T12:00:00Z",
         finishedAt: "2026-08-04T12:01:00Z",
       },
@@ -50,7 +50,10 @@ describe("ArgoProvider", () => {
           healthMessage: "Deployment has minimum availability",
         },
       ],
-      images: fixture.status.summary.images,
+      images: [
+        "ghcr.io/isolumi/yootoob-mp3-api:1829d6ba3b55e66a2134ae64161b9e48ad39a197",
+        "ghcr.io/isolumi/yootoob-mp3-frontend:1829d6ba3b55e66a2134ae64161b9e48ad39a197",
+      ],
     });
 
     expect(customObjectsApi.getNamespacedCustomObject).toHaveBeenCalledWith(

@@ -17,8 +17,8 @@ import {
 } from "../../shared/homelab/health-rules";
 import type { Provider } from "./providers/provider";
 import { correlateDeployment } from "./deployment-correlation";
-import type { ArgoApplicationState } from "./providers/argocd";
-import type { WorkflowRun } from "./providers/github";
+import { isArgoApplicationState } from "./providers/argocd";
+import { isWorkflowRun } from "./providers/github";
 
 export type Now = () => Date;
 
@@ -271,7 +271,21 @@ export async function collectDeploymentSnapshot(
   timeoutMs: number,
   now: Now = () => new Date(),
 ): Promise<DeploymentSnapshot> {
-  const results = await collectProviders(providers, timeoutMs, now);
+  const collected = await collectProviders(providers, timeoutMs, now);
+  const results: SourceResult<unknown>[] = collected.map((result) => {
+    const invalidGitHub = result.ok && result.source === "github" && !isWorkflowRun(result.data);
+    const invalidArgo =
+      result.ok && result.source === "argocd" && !isArgoApplicationState(result.data);
+    if (!invalidGitHub && !invalidArgo) return result;
+
+    const error = sourceUnavailableMessage(result.source);
+    return {
+      source: result.source,
+      ok: false,
+      error,
+      state: { ...result.state, status: "unknown", stale: true, error },
+    };
+  });
   const workflow = results.find((result) => result.ok && result.source === "github");
   const application = results.find((result) => result.ok && result.source === "argocd");
   const cluster = results.find(
@@ -292,8 +306,9 @@ export async function collectDeploymentSnapshot(
   }
 
   const state = correlateDeployment({
-    workflow: workflow?.ok ? (workflow.data as WorkflowRun) : null,
-    application: application?.ok ? (application.data as ArgoApplicationState) : null,
+    workflow: workflow?.ok && isWorkflowRun(workflow.data) ? workflow.data : null,
+    application:
+      application?.ok && isArgoApplicationState(application.data) ? application.data : null,
     kubernetes:
       cluster?.ok && isClusterData(cluster.data)
         ? {
@@ -302,8 +317,7 @@ export async function collectDeploymentSnapshot(
               name: pod.name,
               namespace: pod.namespace,
               ready: pod.ready,
-              imageTag: pod.imageTag,
-              imageDigest: pod.imageDigest,
+              containerImages: pod.containerImages,
             })),
           }
         : null,

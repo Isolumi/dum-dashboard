@@ -130,6 +130,14 @@ export interface WorkloadSummary {
   restartIncrease15m: boolean;
 }
 
+export interface PodContainerImageEvidence {
+  name: string;
+  repository: string | null;
+  reference: string | null;
+  tag: string | null;
+  digest: string | null;
+}
+
 export interface PodSummary {
   name: string;
   namespace: string;
@@ -140,6 +148,7 @@ export interface PodSummary {
   image: string | null;
   imageTag: string | null;
   imageDigest: string | null;
+  containerImages: PodContainerImageEvidence[];
   createdAt: string;
 }
 
@@ -229,6 +238,7 @@ export interface ApplicationPipelineSummary {
   branch: string;
   status: HealthStatus;
   commit: DeploymentCommitSummary | null;
+  argoRevision: string | null;
   workflow: PipelineStage;
   argo: PipelineStage;
   rollout: PipelineStage;

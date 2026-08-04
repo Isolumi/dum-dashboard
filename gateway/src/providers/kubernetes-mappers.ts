@@ -22,6 +22,7 @@ import type {
   NamespaceSummary,
   NodeSummary,
   PodContainerDetail,
+  PodContainerImageEvidence,
   PodDetail,
   PodSummary,
   WorkloadSummary,
@@ -61,6 +62,26 @@ function imageDigest(value: string | undefined): string | null {
   if (!reference) return null;
   const digestSeparator = reference.indexOf("@");
   return digestSeparator >= 0 ? reference.slice(digestSeparator + 1) : null;
+}
+
+function containerImageEvidence(
+  name: string,
+  image: string | undefined,
+  imageId: string | undefined,
+): PodContainerImageEvidence {
+  const reference = imageReference(image);
+  const withoutDigest = reference?.split("@", 1)[0] ?? null;
+  const lastSlash = withoutDigest?.lastIndexOf("/") ?? -1;
+  const lastColon = withoutDigest?.lastIndexOf(":") ?? -1;
+  const hasTag = withoutDigest !== null && lastColon > lastSlash;
+
+  return {
+    name,
+    repository: withoutDigest ? (hasTag ? withoutDigest.slice(0, lastColon) : withoutDigest) : null,
+    reference,
+    tag: hasTag ? withoutDigest.slice(lastColon + 1) : null,
+    digest: imageDigest(imageId),
+  };
 }
 
 function podReady(pod: V1Pod): boolean {
@@ -153,10 +174,18 @@ function mapWorkload(workload: Workload): WorkloadSummary {
 function mapPod(pod: V1Pod): PodSummary {
   const ready = podReady(pod);
   const containerStatuses = pod.status?.containerStatuses ?? [];
-  const image =
-    containerStatuses.map((container) => imageReference(container.imageID)).find(Boolean) ??
-    pod.spec?.containers.map((container) => container.image).find(Boolean) ??
-    null;
+  const statuses = new Map(containerStatuses.map((status) => [status.name, status]));
+  const containerImages =
+    pod.spec?.containers.map((container) => {
+      const status = statuses.get(container.name);
+      return containerImageEvidence(
+        container.name,
+        container.image ?? status?.image,
+        status?.imageID,
+      );
+    }) ?? [];
+  const singleImage = containerImages.length === 1 ? containerImages[0] : undefined;
+  const singleStatus = singleImage ? statuses.get(singleImage.name) : undefined;
 
   return {
     name: pod.metadata?.name ?? "unknown",
@@ -168,13 +197,10 @@ function mapPod(pod: V1Pod): PodSummary {
       0,
     ),
     node: pod.spec?.nodeName ?? null,
-    image,
-    imageTag:
-      pod.spec?.containers.map((container) => container.image).find(Boolean) ??
-      containerStatuses.map((container) => container.image).find(Boolean) ??
-      null,
-    imageDigest:
-      containerStatuses.map((container) => imageDigest(container.imageID)).find(Boolean) ?? null,
+    image: singleImage ? (imageReference(singleStatus?.imageID) ?? singleImage.reference) : null,
+    imageTag: singleImage?.reference ?? null,
+    imageDigest: singleImage?.digest ?? null,
+    containerImages,
     createdAt: timestamp(pod.metadata?.creationTimestamp),
   };
 }

@@ -4,22 +4,22 @@
     "workflow_runs": [
       {
         "id": 987654321,
-        "name": "Build images",
-        "head_branch": "main",
-        "head_sha": "0123456789abcdef0123456789abcdef01234567",
+        "name": "Build and publish images",
+        "head_branch": "development",
+        "head_sha": "1829d6ba3b55e66a2134ae64161b9e48ad39a197",
         "status": "completed",
         "conclusion": "success",
         "run_started_at": "2026-08-04T11:58:00Z",
         "updated_at": "2026-08-04T12:00:30Z",
-        "html_url": "https://github.com/Isolumi/youtube-mp3/actions/runs/987654321"
+        "html_url": "https://evil.example/steal?token=private"
       }
     ]
   },
   "commit": {
-    "sha": "0123456789abcdef0123456789abcdef01234567",
-    "html_url": "https://github.com/Isolumi/youtube-mp3/commit/0123456789abcdef0123456789abcdef01234567",
+    "sha": "1829d6ba3b55e66a2134ae64161b9e48ad39a197",
+    "html_url": "javascript:alert('malicious upstream URL')",
     "commit": {
-      "message": "Deploy API and frontend",
+      "message": "Ship API and frontend changes",
       "author": {
         "name": "Isolumi",
         "date": "2026-08-04T11:57:00Z"

@@ -146,3 +146,71 @@ Modified for actual runtime integration:
 - Argo `status.summary.images` supplies the expected image references. Digest equality is enforced when a digest is present; when Argo reports only a tag, the live digest is still retained as evidence and tag equality remains enforceable.
 - The successful application build continues to emit existing generated-CSS and third-party bundler warnings outside Task 7.
 - Full-project TypeScript remains blocked only by the two known unrelated errors listed above.
+
+## Fix Round 1 (2026-08-04)
+
+### Status
+
+DONE — all six Important findings and the one Minor finding from review of commit `5534254` are addressed with tests-first evidence.
+
+### Review Finding Resolution
+
+1. GitHub collection now defaults to `development` and reads only `GET /repos/Isolumi/youtube-mp3/actions/workflows/build-images.yml/runs?branch=development&per_page=1`, followed by the read-only commit metadata request. Repository components, workflow path, branch query, commit SHA, and run ID are validated or encoded before use. The provider test asserts the exact request URL.
+2. Correlation and production-shaped Argo fixtures now use `ghcr.io/isolumi/yootoob-mp3-api` and `ghcr.io/isolumi/yootoob-mp3-frontend`.
+3. The workflow source SHA is correlated to each expected image tag. It is no longer compared to the separate Argo GitOps revision. `argoRevision` remains explicit application evidence, and the healthy test uses source SHA `1829d6ba3b55e66a2134ae64161b9e48ad39a197` with distinct Argo revision `feedfacefeedfacefeedfacefeedfacefeedface`.
+4. Every pod/container now retains `{ name, repository, reference, tag, digest }`. Correlation selects containers by exact target repository and passes the sidecar-first regression. Legacy pod-level image fields are populated only for a truthful single-container pod and are `null` for multi-container pods.
+5. Missing expected Argo image/tag, pod, live tag, or live digest creates an explicit Unknown issue. Tag/digest mismatch is emitted only when both sides are comparable. Unknown evidence cannot roll up as Healthy, while zero available replicas remains Critical.
+6. Upstream GitHub `html_url` values are ignored. Browser evidence is constructed as canonical `https://github.com/Isolumi/youtube-mp3/actions/runs/{numericId}` and `/commit/{validatedSha}` URLs. The fixture contains malicious upstream URLs and proves they are not propagated.
+7. Snapshot collection uses runtime guards for `WorkflowRun` and `ArgoApplicationState`; no unknown casts remain at these boundaries. A malformed successful provider result becomes an Unknown/stale source failure and a partial deployment snapshot without crashing or producing false Healthy state.
+
+Read-only APIs, provider cancellation/timeouts, optional GitHub startup, token secrecy, nullable `HealthIssue.source`, and the Task 1–6 gateway behavior remain preserved. No Argo token or mutation/exec API was added.
+
+### Strict TDD Evidence
+
+Tests and production-shaped fixtures were changed before implementation. The initial focused command was:
+
+`bunx vitest run gateway/src/providers/-github.test.ts gateway/src/providers/-argocd.test.ts gateway/src/-deployment-correlation.test.ts gateway/src/providers/-kubernetes.test.ts gateway/src/-snapshot.test.ts gateway/src/-runtime.test.ts`
+
+RED result: exit 1; 6 files ran, with 12 failed and 48 passed. Failures demonstrated the old `main`/all-workflows URL, propagation of malicious `html_url`, source-SHA/Argo-revision coupling, stale repository names, sidecar-first evidence collapse, missing evidence incorrectly becoming Healthy, absent mismatch rules, and a malformed Argo payload crash.
+
+Final GREEN result for the same command: exit 0; 6 files and 60 tests passed.
+
+### Verification Evidence
+
+- Focused Fix Round 1 suites: exit 0; 6 files and 60 tests passed.
+- Gateway/shared regressions: `bunx vitest run gateway/src shared/homelab` — exit 0; 9 files and 111 tests passed.
+- Full repository suite: `bun run test` — exit 0; 21 files and 192 tests passed.
+- Gateway build: `bun run build:gateway` — exit 0; 968 modules bundled.
+- Application build: `bun run build` — exit 0; client, SSR, and Nitro builds completed. Existing generated-CSS and third-party bundler warnings remain non-fatal.
+- Lint: `bun run lint` — exit 0; 0 warnings and 0 errors across 79 files.
+- Scoped formatting: `bunx oxfmt` and `bunx oxfmt --check` over the 13 changed Task 7 code/test/fixture files — exit 0.
+- Diff validation: `git diff --check` — exit 0.
+- TypeScript: `bunx tsc --noEmit` exits 2 only for the two known unrelated diagnostics in `src/lib/secret-vault.ts:46` and `src/routes/_layout/todos/-PrioritySection.tsx:59`; no Task 7 diagnostic is present.
+
+The literal `bun test` command was also attempted, but Bun interpreted it as its native test runner rather than the repository script. That runner lacks this suite's configured jsdom/Vitest helpers and was stopped after reproducing unrelated runner-only failures. The authoritative full-suite command is the package script `bun run test`, which passed all 192 tests.
+
+### Files Changed in Fix Round 1
+
+- `.superpowers/sdd/2026-08-04-homelab-dashboard/task-7-report.md`
+- `gateway/src/providers/github.ts`
+- `gateway/src/providers/argocd.ts`
+- `gateway/src/deployment-correlation.ts`
+- `gateway/src/providers/kubernetes-mappers.ts`
+- `gateway/src/snapshot.ts`
+- `shared/homelab/contracts.ts`
+- `gateway/src/providers/-github.test.ts`
+- `gateway/src/providers/-argocd.test.ts`
+- `gateway/src/-deployment-correlation.test.ts`
+- `gateway/src/providers/-kubernetes.test.ts`
+- `gateway/src/-snapshot.test.ts`
+- `gateway/src/providers/fixtures/github.json`
+- `gateway/src/providers/fixtures/argocd.json`
+
+### Fix Round 1 Self-Review and Concerns
+
+- The review was checked finding-by-finding against the current production `youtube-mp3` workflow and Kustomize/Argo manifests; those files confirm the `development` branch, full source-SHA image tags, separate GitOps overlay commit, and `yootoob-*` GHCR names.
+- All GitHub HTTP calls remain GET-only with injected fetch boundaries in tests. The read token is retained only in the server-side authorization header and is absent from normalized data/errors.
+- Argo remains a Kubernetes Custom Objects Application read in namespace `argocd`; no direct Argo credential or write client exists.
+- No test performs a live network request.
+- No independent reviewer subagent was available in this environment, so the final review gate was performed directly against the complete diff and all seven findings.
+- Live GitHub/Argo/Kubernetes endpoints were intentionally not contacted; production-shaped fixtures and injected read-only boundaries remain the verification mechanism.

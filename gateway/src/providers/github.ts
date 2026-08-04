@@ -4,7 +4,11 @@ import type { Provider } from "./provider";
 
 const GITHUB_API_VERSION = "2022-11-28";
 const DEFAULT_REPOSITORY = "Isolumi/youtube-mp3";
-const DEFAULT_BRANCH = "main";
+const DEFAULT_BRANCH = "development";
+const WORKFLOW_FILE = "build-images.yml";
+const REPOSITORY_COMPONENT = /^[A-Za-z0-9_.-]+$/;
+const COMMIT_SHA = /^[0-9a-f]{40}$/i;
+const RUN_ID = /^[1-9][0-9]*$/;
 
 type FetchApi = (url: string, options: RequestInit) => Promise<Response>;
 
@@ -32,6 +36,40 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+export function isWorkflowRun(value: unknown): value is WorkflowRun {
+  if (!isRecord(value) || !isRecord(value.commit)) return false;
+  const commit = value.commit;
+  if (
+    value.repository !== DEFAULT_REPOSITORY ||
+    value.branch !== DEFAULT_BRANCH ||
+    !isString(value.name) ||
+    !isString(value.status) ||
+    (value.conclusion !== null && !isString(value.conclusion)) ||
+    !isString(value.startedAt) ||
+    (value.completedAt !== null && !isString(value.completedAt)) ||
+    (value.durationMs !== null &&
+      (typeof value.durationMs !== "number" || !Number.isFinite(value.durationMs))) ||
+    !isString(value.url) ||
+    !COMMIT_SHA.test(isString(commit.sha) ? commit.sha : "") ||
+    !isString(commit.message) ||
+    !isString(commit.author) ||
+    !isString(commit.committedAt) ||
+    !isString(commit.url)
+  ) {
+    return false;
+  }
+
+  return (
+    new RegExp("^https://github\\.com/Isolumi/youtube-mp3/actions/runs/[1-9][0-9]*$").test(
+      value.url,
+    ) && commit.url === `https://github.com/Isolumi/youtube-mp3/commit/${commit.sha}`
+  );
+}
+
 function requiredString(value: unknown): string {
   if (typeof value !== "string" || value.length === 0) throw new Error("invalid value");
   return value;
@@ -49,12 +87,30 @@ function duration(startedAt: string, completedAt: string | null): number | null 
   return Number.isNaN(started) || Number.isNaN(completed) ? null : Math.max(0, completed - started);
 }
 
-function repositoryPath(repository: string): string {
+function repositoryParts(repository: string): [string, string] {
   const parts = repository.split("/");
-  if (parts.length !== 2 || parts.some((part) => !part)) {
+  if (parts.length !== 2 || parts.some((part) => !REPOSITORY_COMPONENT.test(part))) {
     throw new Error("GitHub repository invalid");
   }
-  return parts.map(encodeURIComponent).join("/");
+  return parts as [string, string];
+}
+
+function commitSha(value: unknown): string {
+  const sha = requiredString(value);
+  if (!COMMIT_SHA.test(sha)) throw new Error("invalid commit SHA");
+  return sha;
+}
+
+function runId(value: unknown): string {
+  const id = typeof value === "number" && Number.isSafeInteger(value) ? String(value) : value;
+  if (typeof id !== "string" || !RUN_ID.test(id)) throw new Error("invalid workflow run ID");
+  return id;
+}
+
+function githubUrl(owner: string, repository: string, ...segments: string[]): string {
+  const url = new URL("https://github.com/");
+  url.pathname = [owner, repository, ...segments].map(encodeURIComponent).join("/");
+  return url.toString();
 }
 
 export class GitHubProvider implements Provider<WorkflowRun> {
@@ -65,8 +121,7 @@ export class GitHubProvider implements Provider<WorkflowRun> {
   private readonly baseUrl: URL;
 
   constructor(options: GitHubProviderOptions = {}) {
-    this.token =
-      options.token ?? options.environment?.GITHUB_READ_TOKEN ?? process.env.GITHUB_READ_TOKEN;
+    this.token = options.token ?? (options.environment ?? process.env).GITHUB_READ_TOKEN;
     this.fetchApi = options.fetchApi ?? fetch;
     this.baseUrl = new URL(options.baseUrl ?? "https://api.github.com/");
   }
@@ -96,8 +151,12 @@ export class GitHubProvider implements Provider<WorkflowRun> {
     branch: string,
     signal?: AbortSignal,
   ): Promise<WorkflowRun> {
-    const path = repositoryPath(repository);
-    const runsUrl = new URL(`repos/${path}/actions/runs`, this.baseUrl);
+    const [owner, name] = repositoryParts(repository);
+    const path = [owner, name].map(encodeURIComponent).join("/");
+    const runsUrl = new URL(
+      `repos/${path}/actions/workflows/${encodeURIComponent(WORKFLOW_FILE)}/runs`,
+      this.baseUrl,
+    );
     runsUrl.searchParams.set("branch", branch);
     runsUrl.searchParams.set("per_page", "1");
     const runsPayload = await this.request(`${runsUrl.pathname}${runsUrl.search}`, signal);
@@ -109,7 +168,8 @@ export class GitHubProvider implements Provider<WorkflowRun> {
       const run = runsPayload.workflow_runs[0];
       if (!isRecord(run)) throw new Error("missing workflow run");
 
-      const sha = requiredString(run.head_sha);
+      const sha = commitSha(run.head_sha);
+      const id = runId(run.id);
       const commitPayload = await this.request(
         `repos/${path}/commits/${encodeURIComponent(sha)}`,
         signal,
@@ -118,6 +178,7 @@ export class GitHubProvider implements Provider<WorkflowRun> {
         throw new Error("invalid commit response");
       }
       const commit = commitPayload.commit;
+      if (commitSha(commitPayload.sha) !== sha) throw new Error("commit SHA mismatch");
       const commitAuthor = isRecord(commit.author) ? commit.author : undefined;
       const user = isRecord(commitPayload.author) ? commitPayload.author : undefined;
       const startedAt = requiredString(run.run_started_at);
@@ -135,12 +196,12 @@ export class GitHubProvider implements Provider<WorkflowRun> {
           author:
             (typeof user?.login === "string" && user.login) || requiredString(commitAuthor?.name),
           committedAt: requiredString(commitAuthor?.date),
-          url: requiredString(commitPayload.html_url),
+          url: githubUrl(owner, name, "commit", sha),
         },
         startedAt,
         completedAt,
         durationMs: duration(startedAt, completedAt),
-        url: requiredString(run.html_url),
+        url: githubUrl(owner, name, "actions", "runs", id),
       };
     } catch (error) {
       if (error instanceof Error && error.message === "GitHub request failed") throw error;

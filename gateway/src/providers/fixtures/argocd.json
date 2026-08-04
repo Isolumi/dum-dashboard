@@ -8,7 +8,7 @@
   "status": {
     "sync": {
       "status": "Synced",
-      "revision": "0123456789abcdef0123456789abcdef01234567"
+      "revision": "feedfacefeedfacefeedfacefeedfacefeedface"
     },
     "health": {
       "status": "Healthy",
@@ -21,7 +21,7 @@
       "startedAt": "2026-08-04T12:00:00Z",
       "finishedAt": "2026-08-04T12:01:00Z",
       "syncResult": {
-        "revision": "0123456789abcdef0123456789abcdef01234567"
+        "revision": "feedfacefeedfacefeedfacefeedfacefeedface"
       }
     },
     "resources": [
@@ -52,8 +52,8 @@
     ],
     "summary": {
       "images": [
-        "ghcr.io/isolumi/youtube-mp3-api:sha-0123456@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "ghcr.io/isolumi/youtube-mp3-frontend:sha-0123456@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        "ghcr.io/isolumi/yootoob-mp3-api:1829d6ba3b55e66a2134ae64161b9e48ad39a197",
+        "ghcr.io/isolumi/yootoob-mp3-frontend:1829d6ba3b55e66a2134ae64161b9e48ad39a197"
       ]
     }
   }

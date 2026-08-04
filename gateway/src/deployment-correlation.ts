@@ -4,6 +4,7 @@ import type {
   HealthIssue,
   HealthStatus,
   PipelineStage,
+  PodContainerImageEvidence,
 } from "../../shared/homelab/contracts";
 import type { ArgoApplicationState } from "./providers/argocd";
 import type { WorkflowRun } from "./providers/github";
@@ -11,10 +12,16 @@ import type { WorkflowRun } from "./providers/github";
 const DEPLOYMENT_NAMESPACE = "yootoob-mp3";
 const ARGO_APPLICATION = "yootoob-mp3-dumachine";
 const GITHUB_REPOSITORY = "Isolumi/youtube-mp3";
-const GITHUB_BRANCH = "main";
+const GITHUB_BRANCH = "development";
 const TARGETS = [
-  { name: "yootoob-mp3-api", imageName: "youtube-mp3-api" },
-  { name: "yootoob-mp3-frontend", imageName: "youtube-mp3-frontend" },
+  {
+    name: "yootoob-mp3-api",
+    repository: "ghcr.io/isolumi/yootoob-mp3-api",
+  },
+  {
+    name: "yootoob-mp3-frontend",
+    repository: "ghcr.io/isolumi/yootoob-mp3-frontend",
+  },
 ] as const;
 
 export interface KubernetesDeploymentEvidence {
@@ -29,8 +36,7 @@ export interface KubernetesDeploymentEvidence {
     name: string;
     namespace: string;
     ready: boolean;
-    imageTag?: string | null;
-    imageDigest?: string | null;
+    containerImages: PodContainerImageEvidence[];
   }>;
 }
 
@@ -43,6 +49,13 @@ export interface DeploymentCorrelationInput {
 
 export type DeploymentState = ApplicationPipelineSummary;
 
+interface ImageParts {
+  repository: string | null;
+  reference: string | null;
+  tag: string | null;
+  digest: string | null;
+}
+
 function worstStatus(statuses: readonly HealthStatus[]): HealthStatus {
   for (const status of ["critical", "warning", "unknown", "healthy"] as const) {
     if (statuses.includes(status)) return status;
@@ -50,30 +63,30 @@ function worstStatus(statuses: readonly HealthStatus[]): HealthStatus {
   return "unknown";
 }
 
-function imageParts(image: string | null | undefined): {
-  tagReference: string | null;
-  digest: string | null;
-} {
-  if (!image) return { tagReference: null, digest: null };
-  const [tagReference, digest] = image.split("@", 2);
-  return { tagReference: tagReference || null, digest: digest || null };
+function imageParts(image: string | null | undefined): ImageParts {
+  if (!image) return { repository: null, reference: null, tag: null, digest: null };
+  const reference = image.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+  const [nameAndTag, digest] = reference.split("@", 2);
+  const lastSlash = nameAndTag.lastIndexOf("/");
+  const lastColon = nameAndTag.lastIndexOf(":");
+  const hasTag = lastColon > lastSlash;
+  return {
+    repository: hasTag ? nameAndTag.slice(0, lastColon) : nameAndTag,
+    reference,
+    tag: hasTag ? nameAndTag.slice(lastColon + 1) : null,
+    digest: digest || null,
+  };
 }
 
 function unique(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value)))];
 }
 
-function expectedImage(application: ArgoApplicationState | null, imageName: string): string | null {
-  if (!application) return null;
-  return (
-    application.images.find((image) => {
-      const path = imageParts(image).tagReference ?? image;
-      const lastSlash = path.lastIndexOf("/");
-      const lastColon = path.lastIndexOf(":");
-      const repository = lastColon > lastSlash ? path.slice(0, lastColon) : path;
-      return repository.endsWith(`/${imageName}`);
-    }) ?? null
+function expectedImage(application: ArgoApplicationState | null, repository: string): ImageParts {
+  const image = application?.images.find(
+    (candidate) => imageParts(candidate).repository === repository,
   );
+  return imageParts(image);
 }
 
 function issue(
@@ -92,6 +105,7 @@ function workloadState(
   input: DeploymentCorrelationInput,
   target: (typeof TARGETS)[number],
 ): { state: DeploymentWorkloadSummary; issues: HealthIssue[] } {
+  const resource = `Deployment/${target.name}`;
   const workload = input.kubernetes?.workloads.find(
     (candidate) => candidate.namespace === DEPLOYMENT_NAMESPACE && candidate.name === target.name,
   );
@@ -101,18 +115,13 @@ function workloadState(
         pod.namespace === DEPLOYMENT_NAMESPACE &&
         (pod.name === target.name || pod.name.startsWith(`${target.name}-`)),
     ) ?? [];
-  const expected = expectedImage(input.application, target.imageName);
-  const expectedParts = imageParts(expected);
-  const liveImages = unique(pods.map((pod) => pod.imageTag));
-  const liveDigests = unique(
-    pods.map((pod) => imageParts(pod.imageDigest).digest ?? pod.imageDigest ?? null),
+  const expected = expectedImage(input.application, target.repository);
+  const targetContainers = pods.flatMap((pod) =>
+    pod.containerImages.filter((container) => container.repository === target.repository),
   );
-  const tagMatches = expectedParts.tagReference
-    ? liveImages.length > 0 && liveImages.every((image) => image === expectedParts.tagReference)
-    : null;
-  const digestMatches = expectedParts.digest
-    ? liveDigests.length > 0 && liveDigests.every((digest) => digest === expectedParts.digest)
-    : null;
+  const liveImages = unique(targetContainers.map((container) => container.reference));
+  const liveTags = unique(targetContainers.map((container) => container.tag));
+  const liveDigests = unique(targetContainers.map((container) => container.digest));
   const desiredReplicas = workload?.desiredReplicas ?? 0;
   const availableReplicas = workload?.availableReplicas ?? 0;
   const issues: HealthIssue[] = [];
@@ -124,7 +133,7 @@ function workloadState(
         "unknown",
         `Deployment evidence for ${target.name} is unavailable.`,
         "kubernetes",
-        `Deployment/${target.name}`,
+        resource,
         input.observedAt,
         { desiredReplicas: null, availableReplicas: null },
       ),
@@ -136,7 +145,7 @@ function workloadState(
         "critical",
         `Deployment ${target.name} has no available replicas.`,
         "kubernetes",
-        `Deployment/${target.name}`,
+        resource,
         input.observedAt,
         { desiredReplicas, availableReplicas },
       ),
@@ -148,13 +157,89 @@ function workloadState(
         "warning",
         `Deployment ${target.name} has fewer available replicas than desired.`,
         "kubernetes",
-        `Deployment/${target.name}`,
+        resource,
         input.observedAt,
         { desiredReplicas, availableReplicas },
       ),
     );
   }
 
+  if (!expected.reference) {
+    issues.push(
+      issue(
+        "deployment-expected-image-unavailable",
+        "unknown",
+        `Argo CD does not report the expected image for ${target.name}.`,
+        "argocd",
+        resource,
+        input.observedAt,
+        { repository: target.repository, expectedImage: null },
+      ),
+    );
+  } else if (!expected.tag) {
+    issues.push(
+      issue(
+        "deployment-expected-tag-unavailable",
+        "unknown",
+        `Argo CD does not report an expected image tag for ${target.name}.`,
+        "argocd",
+        resource,
+        input.observedAt,
+        { repository: target.repository, expectedImage: expected.reference },
+      ),
+    );
+  }
+
+  if (input.kubernetes && pods.length === 0) {
+    issues.push(
+      issue(
+        "deployment-pod-unavailable",
+        "unknown",
+        `No live pod evidence is available for ${target.name}.`,
+        "kubernetes",
+        resource,
+        input.observedAt,
+        { podCount: 0, repository: target.repository },
+      ),
+    );
+  } else if (pods.length > 0) {
+    const missingTag =
+      targetContainers.length === 0 || targetContainers.some((container) => !container.tag);
+    const missingDigest =
+      targetContainers.length === 0 || targetContainers.some((container) => !container.digest);
+    if (missingTag) {
+      issues.push(
+        issue(
+          "deployment-live-tag-unavailable",
+          "unknown",
+          `A live image tag is unavailable for ${target.name}.`,
+          "kubernetes",
+          resource,
+          input.observedAt,
+          { repository: target.repository, containerCount: targetContainers.length },
+        ),
+      );
+    }
+    if (missingDigest) {
+      issues.push(
+        issue(
+          "deployment-live-digest-unavailable",
+          "unknown",
+          `A live image digest is unavailable for ${target.name}.`,
+          "kubernetes",
+          resource,
+          input.observedAt,
+          { repository: target.repository, containerCount: targetContainers.length },
+        ),
+      );
+    }
+  }
+
+  const comparableTags =
+    expected.tag !== null &&
+    liveTags.length > 0 &&
+    targetContainers.every((container) => container.tag !== null);
+  const tagMatches = comparableTags ? liveTags.every((tag) => tag === expected.tag) : null;
   if (tagMatches === false) {
     issues.push(
       issue(
@@ -162,12 +247,20 @@ function workloadState(
         "warning",
         `Deployment ${target.name} is not running the expected image tag.`,
         null,
-        `Deployment/${target.name}`,
+        resource,
         input.observedAt,
-        { expectedImage: expected, liveImage: liveImages[0] ?? null },
+        { expectedTag: expected.tag, liveTag: liveTags[0] ?? null },
       ),
     );
   }
+
+  const comparableDigests =
+    expected.digest !== null &&
+    liveDigests.length > 0 &&
+    targetContainers.every((container) => container.digest !== null);
+  const digestMatches = comparableDigests
+    ? liveDigests.every((digest) => digest === expected.digest)
+    : null;
   if (digestMatches === false) {
     issues.push(
       issue(
@@ -175,9 +268,23 @@ function workloadState(
         "warning",
         `Deployment ${target.name} is not running the expected image digest.`,
         null,
-        `Deployment/${target.name}`,
+        resource,
         input.observedAt,
-        { expectedDigest: expectedParts.digest, liveDigest: liveDigests[0] ?? null },
+        { expectedDigest: expected.digest, liveDigest: liveDigests[0] ?? null },
+      ),
+    );
+  }
+
+  if (input.workflow && expected.tag && input.workflow.commit.sha !== expected.tag) {
+    issues.push(
+      issue(
+        "deployment-source-tag-mismatch",
+        "warning",
+        `The latest workflow source SHA has not reached the desired image for ${target.name}.`,
+        null,
+        resource,
+        input.observedAt,
+        { workflowCommit: input.workflow.commit.sha, expectedTag: expected.tag },
       ),
     );
   }
@@ -189,7 +296,7 @@ function workloadState(
       status: issues.length === 0 ? "healthy" : worstStatus(issues.map(({ status }) => status)),
       desiredReplicas,
       availableReplicas,
-      expectedImage: expected,
+      expectedImage: expected.reference,
       liveImage: liveImages[0] ?? null,
       liveDigests,
       tagMatches,
@@ -244,7 +351,7 @@ function argoStage(application: ArgoApplicationState | null, observedAt: string)
       application.health.lastTransitionAt ??
       application.operation.finishedAt ??
       application.operation.startedAt ??
-      "",
+      observedAt,
     url: null,
   };
 }
@@ -280,30 +387,10 @@ export function correlateDeployment(input: DeploymentCorrelationInput): Deployme
         argo.summary,
         "argocd",
         input.application?.name ?? ARGO_APPLICATION,
-        argo.observedAt || input.observedAt,
+        argo.observedAt,
         {
           syncStatus: input.application?.sync.status ?? null,
           healthStatus: input.application?.health.status ?? null,
-        },
-      ),
-    );
-  }
-  if (
-    input.application &&
-    input.workflow &&
-    input.application.sync.revision !== input.workflow.commit.sha
-  ) {
-    issues.push(
-      issue(
-        "deployment-revision-mismatch",
-        "warning",
-        "The Argo CD revision does not match the latest workflow commit.",
-        null,
-        input.application.name,
-        input.observedAt,
-        {
-          workflowCommit: input.workflow.commit.sha,
-          argoRevision: input.application.sync.revision,
         },
       ),
     );
@@ -315,7 +402,7 @@ export function correlateDeployment(input: DeploymentCorrelationInput): Deployme
     summary:
       rolloutStatus === "healthy"
         ? "Both deployments are available and running the expected images."
-        : "One or more deployments do not match the expected live state.",
+        : "One or more deployments lack evidence or do not match the expected live state.",
     observedAt: input.observedAt,
     url: null,
   };
@@ -327,6 +414,7 @@ export function correlateDeployment(input: DeploymentCorrelationInput): Deployme
     branch: input.workflow?.branch ?? GITHUB_BRANCH,
     status: worstStatus([workflow.status, argo.status, rollout.status]),
     commit: input.workflow?.commit ?? null,
+    argoRevision: input.application?.sync.revision ?? null,
     workflow,
     argo,
     rollout,

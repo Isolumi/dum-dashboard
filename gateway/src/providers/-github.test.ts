@@ -13,22 +13,22 @@ function jsonResponse(payload: unknown, status = 200): Response {
 describe("GitHubProvider", () => {
   it("reads the latest workflow and commit metadata with read-only GitHub headers", async () => {
     const fetchApi = vi.fn(async (url: string, _options: RequestInit) =>
-      jsonResponse(url.includes("/actions/runs") ? fixture.workflowRuns : fixture.commit),
+      jsonResponse(url.includes("/actions/") ? fixture.workflowRuns : fixture.commit),
     );
     const provider = new GitHubProvider({ token: "read-only-secret", fetchApi });
 
-    await expect(provider.getLatestWorkflow("Isolumi/youtube-mp3", "main")).resolves.toEqual({
+    await expect(provider.collect(new AbortController().signal)).resolves.toEqual({
       repository: "Isolumi/youtube-mp3",
-      branch: "main",
-      name: "Build images",
+      branch: "development",
+      name: "Build and publish images",
       status: "completed",
       conclusion: "success",
       commit: {
-        sha: "0123456789abcdef0123456789abcdef01234567",
-        message: "Deploy API and frontend",
+        sha: "1829d6ba3b55e66a2134ae64161b9e48ad39a197",
+        message: "Ship API and frontend changes",
         author: "Isolumi",
         committedAt: "2026-08-04T11:57:00Z",
-        url: "https://github.com/Isolumi/youtube-mp3/commit/0123456789abcdef0123456789abcdef01234567",
+        url: "https://github.com/Isolumi/youtube-mp3/commit/1829d6ba3b55e66a2134ae64161b9e48ad39a197",
       },
       startedAt: "2026-08-04T11:58:00Z",
       completedAt: "2026-08-04T12:00:30Z",
@@ -37,9 +37,9 @@ describe("GitHubProvider", () => {
     });
 
     expect(fetchApi).toHaveBeenCalledTimes(2);
-    const workflowUrl = new URL(fetchApi.mock.calls[0]![0]);
-    expect(workflowUrl.pathname).toBe("/repos/Isolumi/youtube-mp3/actions/runs");
-    expect(Object.fromEntries(workflowUrl.searchParams)).toEqual({ branch: "main", per_page: "1" });
+    expect(fetchApi.mock.calls[0]![0]).toBe(
+      "https://api.github.com/repos/Isolumi/youtube-mp3/actions/workflows/build-images.yml/runs?branch=development&per_page=1",
+    );
     expect(fetchApi.mock.calls[0]![1]).toMatchObject({
       method: "GET",
       headers: {
@@ -48,10 +48,40 @@ describe("GitHubProvider", () => {
         "x-github-api-version": "2022-11-28",
       },
     });
-    expect(new URL(fetchApi.mock.calls[1]![0]).pathname).toBe(
-      "/repos/Isolumi/youtube-mp3/commits/0123456789abcdef0123456789abcdef01234567",
+    expect(fetchApi.mock.calls[1]![0]).toBe(
+      "https://api.github.com/repos/Isolumi/youtube-mp3/commits/1829d6ba3b55e66a2134ae64161b9e48ad39a197",
     );
+    expect(
+      JSON.stringify(await provider.getLatestWorkflow("Isolumi/youtube-mp3", "development")),
+    ).not.toContain("evil.example");
+    expect(fetchApi).toHaveBeenCalledTimes(4);
   });
+
+  it.each([
+    { id: "987/../../evil", sha: fixture.commit.sha },
+    { id: 987654321, sha: "../../evil" },
+  ])(
+    "rejects untrusted workflow identity fields before constructing evidence URLs",
+    async (run) => {
+      const fetchApi = vi.fn(async (url: string) =>
+        jsonResponse(
+          url.includes("/workflows/")
+            ? {
+                ...fixture.workflowRuns,
+                workflow_runs: [
+                  { ...fixture.workflowRuns.workflow_runs[0], ...run, head_sha: run.sha },
+                ],
+              }
+            : fixture.commit,
+        ),
+      );
+      const provider = new GitHubProvider({ token: "read-only-secret", fetchApi });
+
+      await expect(
+        provider.getLatestWorkflow("Isolumi/youtube-mp3", "development"),
+      ).rejects.toThrow(/^GitHub response invalid$/);
+    },
+  );
 
   it("uses the configured repository and contains missing credentials or upstream secrets", async () => {
     const missing = new GitHubProvider({ environment: {} });
@@ -65,7 +95,7 @@ describe("GitHubProvider", () => {
     await expect(missing.collect(new AbortController().signal)).rejects.toThrow(
       /^GitHub is not configured$/,
     );
-    await expect(failed.getLatestWorkflow("Isolumi/youtube-mp3", "main")).rejects.toThrow(
+    await expect(failed.getLatestWorkflow("Isolumi/youtube-mp3", "development")).rejects.toThrow(
       /^GitHub request failed$/,
     );
   });

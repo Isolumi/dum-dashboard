@@ -63,6 +63,49 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isOptionalString(value: unknown): value is string | null {
+  return value === null || (typeof value === "string" && value.length > 0);
+}
+
+export function isArgoApplicationState(value: unknown): value is ArgoApplicationState {
+  if (
+    !isRecord(value) ||
+    value.name !== ARGO_APPLICATION ||
+    value.namespace !== ARGO_NAMESPACE ||
+    !isRecord(value.sync) ||
+    typeof value.sync.status !== "string" ||
+    typeof value.sync.revision !== "string" ||
+    !isRecord(value.health) ||
+    typeof value.health.status !== "string" ||
+    !isOptionalString(value.health.message) ||
+    !isOptionalString(value.health.lastTransitionAt) ||
+    !isRecord(value.operation) ||
+    typeof value.operation.phase !== "string" ||
+    !isOptionalString(value.operation.message) ||
+    !isOptionalString(value.operation.revision) ||
+    !isOptionalString(value.operation.startedAt) ||
+    !isOptionalString(value.operation.finishedAt) ||
+    !Array.isArray(value.resources) ||
+    !Array.isArray(value.images) ||
+    value.images.some((image) => typeof image !== "string" || image.length === 0)
+  ) {
+    return false;
+  }
+
+  return value.resources.every(
+    (resource) =>
+      isRecord(resource) &&
+      typeof resource.group === "string" &&
+      typeof resource.version === "string" &&
+      typeof resource.kind === "string" &&
+      typeof resource.namespace === "string" &&
+      typeof resource.name === "string" &&
+      typeof resource.syncStatus === "string" &&
+      isOptionalString(resource.healthStatus) &&
+      isOptionalString(resource.healthMessage),
+  );
+}
+
 function requiredString(value: unknown): string {
   if (typeof value !== "string" || value.length === 0) throw new Error("invalid value");
   return value;

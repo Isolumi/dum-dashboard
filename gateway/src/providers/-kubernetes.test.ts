@@ -119,6 +119,68 @@ describe("Kubernetes mappers", () => {
     expect(() => JSON.stringify(detail satisfies PodDetail)).not.toThrow();
   });
 
+  it("preserves every container image and does not present a sidecar as the pod image", () => {
+    const inventory = structuredClone(kubernetesFixture);
+    const pod = inventory.pods.items[0]!;
+    pod.spec!.containers = [
+      { name: "metrics", image: "quay.io/prometheus/node-exporter:v1.9.1" },
+      ...pod.spec!.containers,
+    ];
+    pod.status!.containerStatuses = [
+      {
+        name: "metrics",
+        image: "quay.io/prometheus/node-exporter:v1.9.1",
+        imageID:
+          "docker-pullable://quay.io/prometheus/node-exporter@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        ready: true,
+        restartCount: 0,
+        state: { running: { startedAt: new Date("2026-08-04T11:01:00Z") } },
+      },
+      ...pod.status!.containerStatuses!,
+    ];
+    inventory.pods.items = [pod];
+
+    const summary = mapClusterData(inventory).pods[0];
+
+    expect(summary).toMatchObject({ image: null, imageTag: null, imageDigest: null });
+    expect(summary?.containerImages).toEqual([
+      {
+        name: "metrics",
+        repository: "quay.io/prometheus/node-exporter",
+        reference: "quay.io/prometheus/node-exporter:v1.9.1",
+        tag: "v1.9.1",
+        digest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      },
+      {
+        name: "gateway",
+        repository: "ghcr.io/isolumi/gateway",
+        reference: "ghcr.io/isolumi/gateway:main",
+        tag: "main",
+        digest: "sha256:0123456789abcdef",
+      },
+    ]);
+  });
+
+  it("retains a container with an Unknown digest when imageID is absent", () => {
+    const inventory = structuredClone(kubernetesFixture);
+    const pod = inventory.pods.items[0]!;
+    (pod.status!.containerStatuses![0] as { imageID?: string }).imageID = undefined;
+    inventory.pods.items = [pod];
+
+    const summary = mapClusterData(inventory).pods[0];
+
+    expect(summary?.containerImages).toEqual([
+      {
+        name: "gateway",
+        repository: "ghcr.io/isolumi/gateway",
+        reference: "ghcr.io/isolumi/gateway:main",
+        tag: "main",
+        digest: null,
+      },
+    ]);
+    expect(summary?.imageDigest).toBeNull();
+  });
+
   it("does not classify a normal ContainerCreating wait as a critical failure", () => {
     const pod = structuredClone(fixturePod);
     pod.status!.containerStatuses![0]!.state = {
