@@ -19,7 +19,7 @@ const config = defineConfig(({ mode }) => ({
         routeFileIgnorePattern: "\\.functions\\.ts$",
       },
     }),
-    nitro({ preset: "node-server" }),
+    nitro({ preset: "node-server", serverDir: true }),
     viteReact(),
   ],
 }));
