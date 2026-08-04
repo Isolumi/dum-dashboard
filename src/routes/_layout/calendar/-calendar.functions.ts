@@ -1,10 +1,10 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn, createServerOnlyFn } from "@tanstack/react-start";
 import { getRequestHeader } from "@tanstack/react-start/server";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
-import { getCfEnv } from "#/lib/cf-env";
 import type { Database } from "#/lib/database.types";
+import { requireServerEnv } from "#/lib/runtime-env";
 import { decryptSecret, encryptSecret } from "#/lib/secret-vault";
 import { getOwnerUser, noStore } from "#/lib/server-auth";
 import { getSupabaseAdmin } from "#/lib/supabase-admin";
@@ -50,19 +50,6 @@ export class GoogleTokenRefreshError extends Error {
     super(message);
     this.name = "GoogleTokenRefreshError";
   }
-}
-
-function getRuntimeEnv(name: string): string {
-  const fromWorker = getCfEnv()[name];
-  if (fromWorker) return fromWorker;
-  if (typeof process !== "undefined") return process.env[name] ?? "";
-  return "";
-}
-
-function requireRuntimeEnv(name: string): string {
-  const value = getRuntimeEnv(name);
-  if (!value) throw new Error(`Missing server-only ${name} secret`);
-  return value;
 }
 
 function bytesToBase64Url(bytes: Uint8Array): string {
@@ -175,7 +162,7 @@ async function exchangeGoogleAuthorizationCode({
   return json as GoogleTokenResponse;
 }
 
-function getRequestOrigin(): string {
+const getRequestOrigin = createServerOnlyFn((): string => {
   const origin = getRequestHeader("origin");
   if (origin) return origin;
 
@@ -183,7 +170,7 @@ function getRequestOrigin(): string {
   if (!host) throw new Error("Could not determine request origin");
   const proto = getRequestHeader("x-forwarded-proto") ?? "https";
   return `${proto}://${host}`;
-}
+});
 
 async function getConnection(userId: string): Promise<CalendarConnectionRow | null> {
   const { data, error } = await getSupabaseAdmin()
@@ -213,7 +200,7 @@ export async function createCalendarOAuthRequest(): Promise<{ authorizationUrl: 
 
   return {
     authorizationUrl: buildGoogleCalendarAuthUrl({
-      clientId: requireRuntimeEnv("GOOGLE_CLIENT_ID"),
+      clientId: requireServerEnv("GOOGLE_CLIENT_ID"),
       redirectUri,
       state,
     }).toString(),
@@ -249,18 +236,15 @@ export const completeCalendarOAuth = createServerFn({ method: "POST" })
     const tokens = await exchangeGoogleAuthorizationCode({
       code: data.code,
       redirectUri: state.redirect_uri,
-      clientId: requireRuntimeEnv("GOOGLE_CLIENT_ID"),
-      clientSecret: requireRuntimeEnv("GOOGLE_CLIENT_SECRET"),
+      clientId: requireServerEnv("GOOGLE_CLIENT_ID"),
+      clientSecret: requireServerEnv("GOOGLE_CLIENT_SECRET"),
     });
 
     if (!tokens.refresh_token) {
       throw new Error("Google did not return a refresh token. Reconnect calendar access.");
     }
 
-    const encryptedRefreshToken = await encryptSecret(
-      tokens.refresh_token,
-      requireRuntimeEnv("GOOGLE_TOKEN_ENCRYPTION_KEY"),
-    );
+    const encryptedRefreshToken = await encryptSecret(tokens.refresh_token);
 
     const { error: upsertError } = await admin.from("calendar_connections").upsert({
       user_id: state.user_id,
@@ -284,14 +268,11 @@ export const getCalendarEvents = createServerFn({ method: "POST" })
     if (!connection) return { status: "disconnected", events: [] };
 
     try {
-      const refreshToken = await decryptSecret(
-        connection.encrypted_refresh_token,
-        requireRuntimeEnv("GOOGLE_TOKEN_ENCRYPTION_KEY"),
-      );
+      const refreshToken = await decryptSecret(connection.encrypted_refresh_token);
       const accessToken = await refreshGoogleAccessToken({
         refreshToken,
-        clientId: requireRuntimeEnv("GOOGLE_CLIENT_ID"),
-        clientSecret: requireRuntimeEnv("GOOGLE_CLIENT_SECRET"),
+        clientId: requireServerEnv("GOOGLE_CLIENT_ID"),
+        clientSecret: requireServerEnv("GOOGLE_CLIENT_SECRET"),
       });
       const events = await fetchCalendarEvents(
         accessToken,

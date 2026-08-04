@@ -7,10 +7,6 @@ vi.mock("@tanstack/react-start/server", () => ({
   setResponseHeader: vi.fn(),
 }));
 
-vi.mock("#/lib/cf-env", () => ({
-  getCfEnv: () => ({ GOOGLE_CLIENT_ID: "google-client-id" }),
-}));
-
 vi.mock("#/lib/server-auth", () => ({
   getOwnerUser: vi.fn(() => ({ id: "owner-user-id" })),
   noStore: vi.fn(),
@@ -31,6 +27,7 @@ const { getSupabaseAdmin } = await import("#/lib/supabase-admin");
 
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
+  vi.stubEnv("GOOGLE_CLIENT_ID", "google-client-id");
   vi.clearAllMocks();
   vi.mocked(getSupabaseAdmin).mockReturnValue({
     from: vi.fn(() => ({ insert: vi.fn().mockResolvedValue({ error: null }) })),
@@ -39,6 +36,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 function mockResponse(status: number, body?: unknown): Response {

@@ -1,3 +1,5 @@
+import { requireServerEnv } from "./runtime-env";
+
 const VERSION = "v1";
 const IV_BYTES = 12;
 
@@ -21,8 +23,8 @@ async function importAesKey(secret: string): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", keyMaterial, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 
-export async function encryptSecret(plaintext: string, runtimeSecret: string): Promise<string> {
-  if (!runtimeSecret) throw new Error("Missing runtime encryption secret");
+export async function encryptSecret(plaintext: string): Promise<string> {
+  const runtimeSecret = requireServerEnv("GOOGLE_TOKEN_ENCRYPTION_KEY");
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const key = await importAesKey(runtimeSecret);
   const ciphertext = new Uint8Array(
@@ -31,8 +33,8 @@ export async function encryptSecret(plaintext: string, runtimeSecret: string): P
   return `${VERSION}.${encodeBase64Url(iv)}.${encodeBase64Url(ciphertext)}`;
 }
 
-export async function decryptSecret(sealed: string, runtimeSecret: string): Promise<string> {
-  if (!runtimeSecret) throw new Error("Missing runtime encryption secret");
+export async function decryptSecret(sealed: string): Promise<string> {
+  const runtimeSecret = requireServerEnv("GOOGLE_TOKEN_ENCRYPTION_KEY");
   const [version, iv, ciphertext] = sealed.split(".");
   if (version !== VERSION || !iv || !ciphertext) {
     throw new Error("Stored secret has an unsupported format");
