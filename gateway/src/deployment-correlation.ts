@@ -6,9 +6,14 @@ import type {
   PipelineStage,
   PodContainerImageEvidence,
 } from "../../shared/homelab/contracts";
-import type { ArgoApplicationState } from "./providers/argocd";
-import type { WorkflowRun } from "./providers/github";
-import { readDenseArray, readOwnDataProperties } from "./runtime-validation";
+import { parseArgoApplicationState, type ArgoApplicationState } from "./providers/argocd";
+import { parseWorkflowRun, type WorkflowRun } from "./providers/github";
+import {
+  readDenseArray,
+  readOwnDataProperties,
+  readOwnDataRecord,
+  RUNTIME_COLLECTION_LIMITS,
+} from "./runtime-validation";
 
 const DEPLOYMENT_NAMESPACE = "yootoob-mp3";
 const ARGO_APPLICATION = "yootoob-mp3-dumachine";
@@ -25,7 +30,7 @@ const TARGETS = [
     repository: "ghcr.io/isolumi/yootoob-mp3-frontend",
   },
 ] as const;
-type DeploymentTargetName = (typeof TARGETS)[number]["name"];
+export type DeploymentTargetName = (typeof TARGETS)[number]["name"];
 
 export interface KubernetesDeploymentEvidence {
   workloads: Array<{
@@ -84,8 +89,12 @@ function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
-function parseDenseArray<T>(value: unknown, parse: (entry: unknown) => T | null): T[] | null {
-  const entries = readDenseArray(value);
+function parseDenseArray<T>(
+  value: unknown,
+  maxLength: number,
+  parse: (entry: unknown) => T | null,
+): T[] | null {
+  const entries = readDenseArray(value, maxLength);
   if (!entries) return null;
 
   const parsed: T[] = [];
@@ -158,256 +167,95 @@ function parseWorkloadEvidence(
   };
 }
 
-function parsePodEvidence(value: unknown): KubernetesDeploymentEvidence["pods"][number] | null {
-  const properties = readOwnDataProperties(value, [
-    "name",
-    "namespace",
-    "status",
-    "ready",
-    "containerImages",
-  ]);
-  if (
-    !properties ||
-    typeof properties.name !== "string" ||
-    typeof properties.namespace !== "string" ||
-    !isHealthStatus(properties.status) ||
-    typeof properties.ready !== "boolean"
-  ) {
-    return null;
-  }
-  const containerImages = parseDenseArray(
-    properties.containerImages,
-    parsePodContainerImageEvidence,
-  );
-  if (!containerImages) return null;
-
-  return {
-    name: properties.name,
-    namespace: properties.namespace,
-    status: properties.status,
-    ready: properties.ready,
-    containerImages,
-  };
+interface ParsedPodEvidence {
+  data: KubernetesDeploymentEvidence["pods"][number] | null;
+  invalidContainerTarget: DeploymentTargetName | null;
 }
 
-function findInvalidContainerTargets(value: unknown): DeploymentTargetName[] {
-  const properties = readOwnDataProperties(value, ["pods"]);
-  if (!properties) return [];
-  const pods = readDenseArray(properties.pods);
-  if (!pods) return [];
+function targetForPod(name: unknown, namespace: unknown): DeploymentTargetName | null {
+  if (typeof name !== "string" || namespace !== DEPLOYMENT_NAMESPACE) return null;
+  return (
+    TARGETS.find((target) => name === target.name || name.startsWith(`${target.name}-`))?.name ??
+    null
+  );
+}
 
-  const invalidTargets = new Set<DeploymentTargetName>();
-  for (const pod of pods) {
-    const podProperties = readOwnDataProperties(pod, ["name", "namespace"]);
-    if (
-      !podProperties ||
-      typeof podProperties.name !== "string" ||
-      podProperties.namespace !== DEPLOYMENT_NAMESPACE
-    ) {
-      continue;
-    }
-
-    const podName = podProperties.name;
-    const target = TARGETS.find(({ name }) => podName === name || podName.startsWith(`${name}-`));
-    const containerProperties = readOwnDataProperties(pod, ["containerImages"]);
-    if (
-      target &&
-      (!containerProperties ||
-        parseDenseArray(containerProperties.containerImages, parsePodContainerImageEvidence) ===
-          null)
-    ) {
-      invalidTargets.add(target.name);
-    }
+function parsePodEvidence(value: unknown): ParsedPodEvidence {
+  const properties = readOwnDataRecord(value);
+  if (!properties) return { data: null, invalidContainerTarget: null };
+  const name = properties.get("name");
+  const namespace = properties.get("namespace");
+  if (
+    !properties.has("name") ||
+    !properties.has("namespace") ||
+    !properties.has("status") ||
+    !properties.has("ready") ||
+    typeof name !== "string" ||
+    typeof namespace !== "string" ||
+    !isHealthStatus(properties.get("status")) ||
+    typeof properties.get("ready") !== "boolean"
+  ) {
+    return { data: null, invalidContainerTarget: null };
+  }
+  const containerImages = properties.has("containerImages")
+    ? parseDenseArray(
+        properties.get("containerImages"),
+        RUNTIME_COLLECTION_LIMITS.podContainerImages,
+        parsePodContainerImageEvidence,
+      )
+    : null;
+  if (!containerImages) {
+    return {
+      data: null,
+      invalidContainerTarget: targetForPod(name, namespace),
+    };
   }
 
-  return [...invalidTargets];
+  return {
+    data: {
+      name,
+      namespace,
+      status: properties.get("status") as HealthStatus,
+      ready: properties.get("ready") as boolean,
+      containerImages,
+    },
+    invalidContainerTarget: null,
+  };
 }
 
 function normalizeKubernetesEvidence(value: unknown): NormalizedKubernetesEvidence {
-  const invalidContainerTargets = findInvalidContainerTargets(value);
-  if (value === null) return { evidence: null, invalid: false, invalidContainerTargets };
+  if (value === null) return { evidence: null, invalid: false, invalidContainerTargets: [] };
   const properties = readOwnDataProperties(value, ["workloads", "pods"]);
-  if (!properties) return { evidence: null, invalid: true, invalidContainerTargets };
+  if (!properties) return { evidence: null, invalid: true, invalidContainerTargets: [] };
 
-  const workloads = parseDenseArray(properties.workloads, parseWorkloadEvidence);
-  const pods = parseDenseArray(properties.pods, parsePodEvidence);
-  if (!workloads || !pods) {
-    return { evidence: null, invalid: true, invalidContainerTargets };
+  const workloads = parseDenseArray(
+    properties.workloads,
+    RUNTIME_COLLECTION_LIMITS.workloads,
+    parseWorkloadEvidence,
+  );
+  const podEntries = readDenseArray(properties.pods, RUNTIME_COLLECTION_LIMITS.pods);
+  const pods: KubernetesDeploymentEvidence["pods"] = [];
+  const invalidContainerTargets = new Set<DeploymentTargetName>();
+  let podsValid = podEntries !== null;
+  for (const entry of podEntries ?? []) {
+    const parsed = parsePodEvidence(entry);
+    if (parsed.invalidContainerTarget) invalidContainerTargets.add(parsed.invalidContainerTarget);
+    if (parsed.data) pods.push(parsed.data);
+    else podsValid = false;
   }
 
-  return { evidence: { workloads, pods }, invalid: false, invalidContainerTargets };
-}
-
-function parseWorkflowRun(value: unknown): WorkflowRun | null {
-  if (value === null) return null;
-  const properties = readOwnDataProperties(value, [
-    "repository",
-    "branch",
-    "name",
-    "status",
-    "conclusion",
-    "commit",
-    "startedAt",
-    "completedAt",
-    "durationMs",
-    "url",
-  ]);
-  const commit = properties
-    ? readOwnDataProperties(properties.commit, ["sha", "message", "author", "committedAt", "url"])
-    : null;
-  if (
-    !properties ||
-    !commit ||
-    typeof properties.repository !== "string" ||
-    typeof properties.branch !== "string" ||
-    typeof properties.name !== "string" ||
-    typeof properties.status !== "string" ||
-    !isNullableString(properties.conclusion) ||
-    typeof properties.startedAt !== "string" ||
-    !isNullableString(properties.completedAt) ||
-    (properties.durationMs !== null &&
-      (typeof properties.durationMs !== "number" || !Number.isFinite(properties.durationMs))) ||
-    typeof properties.url !== "string" ||
-    typeof commit.sha !== "string" ||
-    typeof commit.message !== "string" ||
-    typeof commit.author !== "string" ||
-    typeof commit.committedAt !== "string" ||
-    typeof commit.url !== "string"
-  ) {
-    return null;
+  if (!workloads || !podsValid) {
+    return {
+      evidence: null,
+      invalid: true,
+      invalidContainerTargets: [...invalidContainerTargets],
+    };
   }
 
   return {
-    repository: properties.repository,
-    branch: properties.branch,
-    name: properties.name,
-    status: properties.status,
-    conclusion: properties.conclusion,
-    commit: {
-      sha: commit.sha,
-      message: commit.message,
-      author: commit.author,
-      committedAt: commit.committedAt,
-      url: commit.url,
-    },
-    startedAt: properties.startedAt,
-    completedAt: properties.completedAt,
-    durationMs: properties.durationMs,
-    url: properties.url,
-  };
-}
-
-function parseArgoApplicationState(value: unknown): ArgoApplicationState | null {
-  if (value === null) return null;
-  const properties = readOwnDataProperties(value, [
-    "name",
-    "namespace",
-    "sync",
-    "health",
-    "operation",
-    "resources",
-    "images",
-  ]);
-  if (
-    !properties ||
-    typeof properties.name !== "string" ||
-    typeof properties.namespace !== "string"
-  ) {
-    return null;
-  }
-
-  const sync = readOwnDataProperties(properties.sync, ["status", "revision"]);
-  const health = readOwnDataProperties(properties.health, [
-    "status",
-    "message",
-    "lastTransitionAt",
-  ]);
-  const operation = readOwnDataProperties(properties.operation, [
-    "phase",
-    "message",
-    "revision",
-    "startedAt",
-    "finishedAt",
-  ]);
-  if (
-    !sync ||
-    typeof sync.status !== "string" ||
-    typeof sync.revision !== "string" ||
-    !health ||
-    typeof health.status !== "string" ||
-    !isNullableString(health.message) ||
-    !isNullableString(health.lastTransitionAt) ||
-    !operation ||
-    typeof operation.phase !== "string" ||
-    !isNullableString(operation.message) ||
-    !isNullableString(operation.revision) ||
-    !isNullableString(operation.startedAt) ||
-    !isNullableString(operation.finishedAt)
-  ) {
-    return null;
-  }
-
-  const resources = parseDenseArray<ArgoApplicationState["resources"][number]>(
-    properties.resources,
-    (resource) => {
-      const fields = readOwnDataProperties(resource, [
-        "group",
-        "version",
-        "kind",
-        "namespace",
-        "name",
-        "syncStatus",
-        "healthStatus",
-        "healthMessage",
-      ]);
-      if (
-        !fields ||
-        typeof fields.group !== "string" ||
-        typeof fields.version !== "string" ||
-        typeof fields.kind !== "string" ||
-        typeof fields.namespace !== "string" ||
-        typeof fields.name !== "string" ||
-        typeof fields.syncStatus !== "string" ||
-        !isNullableString(fields.healthStatus) ||
-        !isNullableString(fields.healthMessage)
-      ) {
-        return null;
-      }
-      return {
-        group: fields.group,
-        version: fields.version,
-        kind: fields.kind,
-        namespace: fields.namespace,
-        name: fields.name,
-        syncStatus: fields.syncStatus,
-        healthStatus: fields.healthStatus,
-        healthMessage: fields.healthMessage,
-      };
-    },
-  );
-  const images = parseDenseArray(properties.images, (image) =>
-    typeof image === "string" ? image : null,
-  );
-  if (!resources || !images) return null;
-
-  return {
-    name: properties.name,
-    namespace: properties.namespace,
-    sync: { status: sync.status, revision: sync.revision },
-    health: {
-      status: health.status,
-      message: health.message,
-      lastTransitionAt: health.lastTransitionAt,
-    },
-    operation: {
-      phase: operation.phase,
-      message: operation.message,
-      revision: operation.revision,
-      startedAt: operation.startedAt,
-      finishedAt: operation.finishedAt,
-    },
-    resources,
-    images,
+    evidence: { workloads, pods },
+    invalid: false,
+    invalidContainerTargets: [...invalidContainerTargets],
   };
 }
 
@@ -745,10 +593,10 @@ function argoStage(application: ArgoApplicationState | null, observedAt: string)
   };
 }
 
-export function correlateDeployment(value: DeploymentCorrelationInput): DeploymentState {
-  const normalized = normalizeDeploymentCorrelationInput(value);
-  const input = normalized.input;
-  const normalizedKubernetes = normalized.kubernetes;
+function correlateNormalizedDeployment(
+  input: DeploymentCorrelationInput,
+  normalizedKubernetes: NormalizedKubernetesEvidence,
+): DeploymentState {
   const correlated = TARGETS.map((target) => workloadState(input, target));
   const workloads = correlated.map(({ state }) => state);
   const issues = correlated.flatMap(({ issues: workloadIssues }) => workloadIssues);
@@ -842,4 +690,20 @@ export function correlateDeployment(value: DeploymentCorrelationInput): Deployme
     workloads,
     issues,
   };
+}
+
+export function correlateValidatedDeployment(
+  input: DeploymentCorrelationInput,
+  invalidContainerTargets: readonly DeploymentTargetName[] = [],
+): DeploymentState {
+  return correlateNormalizedDeployment(input, {
+    evidence: input.kubernetes,
+    invalid: false,
+    invalidContainerTargets: [...invalidContainerTargets],
+  });
+}
+
+export function correlateDeployment(value: DeploymentCorrelationInput): DeploymentState {
+  const normalized = normalizeDeploymentCorrelationInput(value);
+  return correlateNormalizedDeployment(normalized.input, normalized.kubernetes);
 }

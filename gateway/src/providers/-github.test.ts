@@ -1,7 +1,7 @@
 import { Response, type RequestInit } from "node-fetch";
 import { describe, expect, it, vi } from "vitest";
 import fixture from "./fixtures/github.json";
-import { GitHubProvider } from "./github";
+import { GitHubProvider, parseWorkflowRun } from "./github";
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -82,6 +82,80 @@ describe("GitHubProvider", () => {
       ).rejects.toThrow(/^GitHub response invalid$/);
     },
   );
+
+  it("rejects workflow_runs at max plus one before reading commit metadata", async () => {
+    const fetchApi = vi.fn(async () =>
+      jsonResponse({
+        ...fixture.workflowRuns,
+        workflow_runs: [
+          fixture.workflowRuns.workflow_runs[0],
+          fixture.workflowRuns.workflow_runs[0],
+        ],
+      }),
+    );
+    const provider = new GitHubProvider({ token: "read-only-secret", fetchApi });
+
+    await expect(provider.getLatestWorkflow("Isolumi/youtube-mp3", "development")).rejects.toThrow(
+      /^GitHub response invalid$/,
+    );
+    expect(fetchApi).toHaveBeenCalledOnce();
+  });
+
+  it("parses a null-prototype WorkflowRun into one fresh normalized copy", async () => {
+    const fetchApi = vi.fn(async (url: string) =>
+      jsonResponse(url.includes("/actions/") ? fixture.workflowRuns : fixture.commit),
+    );
+    const normalized = await new GitHubProvider({
+      token: "read-only-secret",
+      fetchApi,
+    }).collect(new AbortController().signal);
+    const value = Object.assign(Object.create(null), normalized, {
+      commit: Object.assign(Object.create(null), normalized.commit),
+    });
+
+    const parsed = parseWorkflowRun(value);
+
+    expect(parsed).toEqual(normalized);
+    expect(parsed).not.toBe(value);
+    expect(parsed?.commit).not.toBe(value.commit);
+  });
+
+  it("preserves null defaults when optional GitHub fields are absent", async () => {
+    const workflowRuns = structuredClone(fixture.workflowRuns);
+    const run = workflowRuns.workflow_runs[0] as unknown as Record<string, unknown>;
+    delete run.conclusion;
+    delete run.updated_at;
+    const commit = structuredClone(fixture.commit);
+    delete (commit as unknown as Record<string, unknown>).author;
+    const fetchApi = vi.fn(async (url: string) =>
+      jsonResponse(url.includes("/actions/") ? workflowRuns : commit),
+    );
+    const provider = new GitHubProvider({ token: "read-only-secret", fetchApi });
+
+    await expect(provider.collect(new AbortController().signal)).resolves.toMatchObject({
+      conclusion: null,
+      completedAt: null,
+      durationMs: null,
+      commit: { author: "Isolumi" },
+    });
+  });
+
+  it("rejects a present transparent proxy in optional GitHub author evidence", async () => {
+    const commit = structuredClone(fixture.commit);
+    commit.author = new Proxy(commit.author, {});
+    const fetchApi = vi.fn(
+      async (url: string) =>
+        ({
+          ok: true,
+          json: async () => (url.includes("/actions/") ? fixture.workflowRuns : commit),
+        }) as unknown as Response,
+    );
+    const provider = new GitHubProvider({ token: "read-only-secret", fetchApi });
+
+    await expect(provider.collect(new AbortController().signal)).rejects.toThrow(
+      /^GitHub response invalid$/,
+    );
+  });
 
   it("uses the configured repository and contains missing credentials or upstream secrets", async () => {
     const missing = new GitHubProvider({ environment: {} });

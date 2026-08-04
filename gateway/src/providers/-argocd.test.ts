@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import fixture from "./fixtures/argocd.json";
-import { ArgoProvider } from "./argocd";
+import { ArgoProvider, parseArgoApplicationState } from "./argocd";
 
 describe("ArgoProvider", () => {
   it("reads and maps the Application custom resource from the argocd namespace", async () => {
@@ -88,4 +88,108 @@ describe("ArgoProvider", () => {
       /^Argo CD request failed$/,
     );
   });
+
+  it.each(["resources", "images"] as const)(
+    "rejects Argo %s at max plus one",
+    async (collection) => {
+      const payload = structuredClone(fixture);
+      if (collection === "resources") {
+        payload.status.resources = Array.from({ length: 257 }, () =>
+          structuredClone(fixture.status.resources[0]!),
+        );
+      } else {
+        payload.status.summary.images = Array.from(
+          { length: 65 },
+          () => fixture.status.summary.images[0]!,
+        );
+      }
+      const provider = new ArgoProvider({
+        customObjectsApi: { getNamespacedCustomObject: vi.fn(async () => payload) },
+      });
+
+      await expect(provider.getApplication("yootoob-mp3-dumachine")).rejects.toThrow(
+        /^Argo CD response invalid$/,
+      );
+    },
+  );
+
+  it("parses null-prototype Argo state into one fresh normalized copy", async () => {
+    const provider = new ArgoProvider({
+      customObjectsApi: {
+        getNamespacedCustomObject: vi.fn(async () => structuredClone(fixture)),
+      },
+    });
+    const normalized = await provider.getApplication("yootoob-mp3-dumachine");
+    const value = Object.assign(Object.create(null), normalized, {
+      sync: Object.assign(Object.create(null), normalized.sync),
+      health: Object.assign(Object.create(null), normalized.health),
+      operation: Object.assign(Object.create(null), normalized.operation),
+      resources: normalized.resources.map((resource) =>
+        Object.assign(Object.create(null), resource),
+      ),
+      images: [...normalized.images],
+    });
+
+    const parsed = parseArgoApplicationState(value);
+
+    expect(parsed).toEqual(normalized);
+    expect(parsed).not.toBe(value);
+    expect(parsed?.sync).not.toBe(value.sync);
+    expect(parsed?.resources[0]).not.toBe(value.resources[0]);
+  });
+
+  it("preserves null and empty defaults for absent optional Argo status fields", async () => {
+    const payload = structuredClone(fixture);
+    const status = payload.status as unknown as Record<string, unknown> & {
+      health: Record<string, unknown>;
+      operationState: Record<string, unknown>;
+    };
+    delete status.health.message;
+    delete status.health.lastTransitionTime;
+    delete status.operationState.message;
+    delete status.operationState.startedAt;
+    delete status.operationState.finishedAt;
+    delete status.operationState.syncResult;
+    delete status.resources;
+    delete status.summary;
+    const provider = new ArgoProvider({
+      customObjectsApi: { getNamespacedCustomObject: vi.fn(async () => payload) },
+    });
+
+    await expect(provider.getApplication("yootoob-mp3-dumachine")).resolves.toMatchObject({
+      health: { message: null, lastTransitionAt: null },
+      operation: {
+        message: null,
+        revision: null,
+        startedAt: null,
+        finishedAt: null,
+      },
+      resources: [],
+      images: [],
+    });
+  });
+
+  it.each(["summary", "syncResult", "resource health"] as const)(
+    "rejects a present transparent proxy in optional Argo %s evidence",
+    async (field) => {
+      const payload = structuredClone(fixture);
+      if (field === "summary") {
+        payload.status.summary = new Proxy(payload.status.summary, {});
+      } else if (field === "syncResult") {
+        payload.status.operationState.syncResult = new Proxy(
+          payload.status.operationState.syncResult,
+          {},
+        );
+      } else {
+        payload.status.resources[0]!.health = new Proxy(payload.status.resources[0]!.health, {});
+      }
+      const provider = new ArgoProvider({
+        customObjectsApi: { getNamespacedCustomObject: vi.fn(async () => payload) },
+      });
+
+      await expect(provider.getApplication("yootoob-mp3-dumachine")).rejects.toThrow(
+        /^Argo CD response invalid$/,
+      );
+    },
+  );
 });

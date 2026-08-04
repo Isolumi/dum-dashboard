@@ -16,12 +16,23 @@ import {
   type HealthEvaluation,
 } from "../../shared/homelab/health-rules";
 import type { Provider } from "./providers/provider";
-import { correlateDeployment } from "./deployment-correlation";
-import { isArgoApplicationState } from "./providers/argocd";
-import { isWorkflowRun } from "./providers/github";
-import { readDenseArray, readOwnDataProperties } from "./runtime-validation";
+import { correlateValidatedDeployment, type DeploymentTargetName } from "./deployment-correlation";
+import { parseArgoApplicationState } from "./providers/argocd";
+import { parseWorkflowRun } from "./providers/github";
+import {
+  readDenseArray,
+  readOwnDataProperties,
+  readOwnDataRecord,
+  RUNTIME_COLLECTION_LIMITS,
+} from "./runtime-validation";
 
 export type Now = () => Date;
+
+const DEPLOYMENT_NAMESPACE = "yootoob-mp3";
+const DEPLOYMENT_TARGETS: readonly DeploymentTargetName[] = [
+  "yootoob-mp3-api",
+  "yootoob-mp3-frontend",
+];
 
 export type SourceResult<T = unknown> =
   | {
@@ -73,8 +84,12 @@ function isResourceName(value: unknown): value is ResourceName {
   return ["cpu", "memory", "disk"].includes(value as ResourceName);
 }
 
-function parseDenseArray<T>(value: unknown, parse: (entry: unknown) => T | null): T[] | null {
-  const entries = readDenseArray(value);
+function parseDenseArray<T>(
+  value: unknown,
+  maxLength: number,
+  parse: (entry: unknown) => T | null,
+): T[] | null {
+  const entries = readDenseArray(value, maxLength);
   if (!entries) return null;
 
   const parsed: T[] = [];
@@ -104,6 +119,7 @@ function parseResourceMetrics(value: unknown): ResourceMetrics | null {
 
   const current = parseDenseArray<ResourceMetrics["current"][number]>(
     properties.current,
+    RUNTIME_COLLECTION_LIMITS.currentResourceMetrics,
     (metric) => {
       const fields = readOwnDataProperties(metric, ["resource", "usagePercent", "observedAt"]);
       if (
@@ -121,16 +137,34 @@ function parseResourceMetrics(value: unknown): ResourceMetrics | null {
       };
     },
   );
-  const history = parseDenseArray<ResourceHistory>(properties.history, (series) => {
-    const fields = readOwnDataProperties(series, ["resource", "points"]);
-    if (!fields || !isResourceName(fields.resource)) return null;
-    const points = parseDenseArray(fields.points, parseMetricPoint);
-    return points ? { resource: fields.resource, points } : null;
-  });
+  const history = parseDenseArray<ResourceHistory>(
+    properties.history,
+    RUNTIME_COLLECTION_LIMITS.resourceHistory,
+    (series) => {
+      const fields = readOwnDataProperties(series, ["resource", "points"]);
+      if (!fields || !isResourceName(fields.resource)) return null;
+      const points = parseDenseArray(
+        fields.points,
+        RUNTIME_COLLECTION_LIMITS.metricPoints,
+        parseMetricPoint,
+      );
+      return points ? { resource: fields.resource, points } : null;
+    },
+  );
   return current && history ? { current, history } : null;
 }
 
-function parseClusterData(value: unknown): ClusterData | null {
+function deploymentTargetForPod(name: unknown, namespace: unknown): DeploymentTargetName | null {
+  if (typeof name !== "string" || namespace !== DEPLOYMENT_NAMESPACE) return null;
+  return (
+    DEPLOYMENT_TARGETS.find((target) => name === target || name.startsWith(`${target}-`)) ?? null
+  );
+}
+
+function parseClusterData(
+  value: unknown,
+  invalidContainerTargets?: Set<DeploymentTargetName>,
+): ClusterData | null {
   const properties = readOwnDataProperties(value, [
     "nodes",
     "namespaces",
@@ -141,23 +175,32 @@ function parseClusterData(value: unknown): ClusterData | null {
   ]);
   if (!properties) return null;
 
-  const nodes = parseDenseArray<ClusterData["nodes"][number]>(properties.nodes, (node) => {
-    const fields = readOwnDataProperties(node, ["name", "ready", "status", "conditions"]);
-    if (
-      !fields ||
-      !isString(fields.name) ||
-      typeof fields.ready !== "boolean" ||
-      !isHealthStatus(fields.status)
-    ) {
-      return null;
-    }
-    const conditions = parseDenseArray(fields.conditions, parseString);
-    return conditions
-      ? { name: fields.name, ready: fields.ready, status: fields.status, conditions }
-      : null;
-  });
+  const nodes = parseDenseArray<ClusterData["nodes"][number]>(
+    properties.nodes,
+    RUNTIME_COLLECTION_LIMITS.nodes,
+    (node) => {
+      const fields = readOwnDataProperties(node, ["name", "ready", "status", "conditions"]);
+      if (
+        !fields ||
+        !isString(fields.name) ||
+        typeof fields.ready !== "boolean" ||
+        !isHealthStatus(fields.status)
+      ) {
+        return null;
+      }
+      const conditions = parseDenseArray(
+        fields.conditions,
+        RUNTIME_COLLECTION_LIMITS.nodeConditions,
+        parseString,
+      );
+      return conditions
+        ? { name: fields.name, ready: fields.ready, status: fields.status, conditions }
+        : null;
+    },
+  );
   const namespaces = parseDenseArray<ClusterData["namespaces"][number]>(
     properties.namespaces,
+    RUNTIME_COLLECTION_LIMITS.namespaces,
     (namespace) => {
       const fields = readOwnDataProperties(namespace, [
         "name",
@@ -184,6 +227,7 @@ function parseClusterData(value: unknown): ClusterData | null {
   );
   const workloads = parseDenseArray<ClusterData["workloads"][number]>(
     properties.workloads,
+    RUNTIME_COLLECTION_LIMITS.workloads,
     (workload) => {
       const fields = readOwnDataProperties(workload, [
         "kind",
@@ -220,109 +264,126 @@ function parseClusterData(value: unknown): ClusterData | null {
       };
     },
   );
-  const pods = parseDenseArray<ClusterData["pods"][number]>(properties.pods, (pod) => {
-    const fields = readOwnDataProperties(pod, [
-      "name",
-      "namespace",
-      "status",
-      "ready",
-      "restartCount",
-      "node",
-      "image",
-      "imageTag",
-      "imageDigest",
-      "containerImages",
-      "createdAt",
-    ]);
-    if (
-      !fields ||
-      !isString(fields.name) ||
-      !isString(fields.namespace) ||
-      !isHealthStatus(fields.status) ||
-      typeof fields.ready !== "boolean" ||
-      !isFiniteNumber(fields.restartCount) ||
-      !isNullableString(fields.node) ||
-      !isNullableString(fields.image) ||
-      !isNullableString(fields.imageTag) ||
-      !isNullableString(fields.imageDigest) ||
-      !isString(fields.createdAt)
-    ) {
-      return null;
-    }
-    const containerImages = parseDenseArray(fields.containerImages, (container) => {
-      const image = readOwnDataProperties(container, [
-        "name",
-        "repository",
-        "reference",
-        "tag",
-        "digest",
+  const pods = parseDenseArray<ClusterData["pods"][number]>(
+    properties.pods,
+    RUNTIME_COLLECTION_LIMITS.pods,
+    (pod) => {
+      const fields = readOwnDataRecord(pod);
+      const name = fields?.get("name");
+      const namespace = fields?.get("namespace");
+      if (
+        !fields ||
+        !fields.has("name") ||
+        !fields.has("namespace") ||
+        !fields.has("status") ||
+        !fields.has("ready") ||
+        !fields.has("restartCount") ||
+        !fields.has("node") ||
+        !fields.has("image") ||
+        !fields.has("imageTag") ||
+        !fields.has("imageDigest") ||
+        !fields.has("createdAt") ||
+        !isString(name) ||
+        !isString(namespace) ||
+        !isHealthStatus(fields.get("status")) ||
+        typeof fields.get("ready") !== "boolean" ||
+        !isFiniteNumber(fields.get("restartCount")) ||
+        !isNullableString(fields.get("node")) ||
+        !isNullableString(fields.get("image")) ||
+        !isNullableString(fields.get("imageTag")) ||
+        !isNullableString(fields.get("imageDigest")) ||
+        !isString(fields.get("createdAt"))
+      ) {
+        return null;
+      }
+      const containerImages = fields.has("containerImages")
+        ? parseDenseArray(
+            fields.get("containerImages"),
+            RUNTIME_COLLECTION_LIMITS.podContainerImages,
+            (container) => {
+              const image = readOwnDataProperties(container, [
+                "name",
+                "repository",
+                "reference",
+                "tag",
+                "digest",
+              ]);
+              if (
+                !image ||
+                !isString(image.name) ||
+                !isNullableString(image.repository) ||
+                !isNullableString(image.reference) ||
+                !isNullableString(image.tag) ||
+                !isNullableString(image.digest)
+              ) {
+                return null;
+              }
+              return {
+                name: image.name,
+                repository: image.repository,
+                reference: image.reference,
+                tag: image.tag,
+                digest: image.digest,
+              };
+            },
+          )
+        : null;
+      if (!containerImages) {
+        const target = deploymentTargetForPod(name, namespace);
+        if (target) invalidContainerTargets?.add(target);
+        return null;
+      }
+      return {
+        name,
+        namespace,
+        status: fields.get("status") as HealthStatus,
+        ready: fields.get("ready") as boolean,
+        restartCount: fields.get("restartCount") as number,
+        node: fields.get("node") as string | null,
+        image: fields.get("image") as string | null,
+        imageTag: fields.get("imageTag") as string | null,
+        imageDigest: fields.get("imageDigest") as string | null,
+        containerImages,
+        createdAt: fields.get("createdAt") as string,
+      };
+    },
+  );
+  const events = parseDenseArray<ClusterData["events"][number]>(
+    properties.events,
+    RUNTIME_COLLECTION_LIMITS.events,
+    (event) => {
+      const fields = readOwnDataProperties(event, [
+        "id",
+        "namespace",
+        "resource",
+        "status",
+        "reason",
+        "message",
+        "observedAt",
       ]);
       if (
-        !image ||
-        !isString(image.name) ||
-        !isNullableString(image.repository) ||
-        !isNullableString(image.reference) ||
-        !isNullableString(image.tag) ||
-        !isNullableString(image.digest)
+        !fields ||
+        !isString(fields.id) ||
+        !isString(fields.namespace) ||
+        !isString(fields.resource) ||
+        !isHealthStatus(fields.status) ||
+        !isString(fields.reason) ||
+        !isString(fields.message) ||
+        !isString(fields.observedAt)
       ) {
         return null;
       }
       return {
-        name: image.name,
-        repository: image.repository,
-        reference: image.reference,
-        tag: image.tag,
-        digest: image.digest,
+        id: fields.id,
+        namespace: fields.namespace,
+        resource: fields.resource,
+        status: fields.status,
+        reason: fields.reason,
+        message: fields.message,
+        observedAt: fields.observedAt,
       };
-    });
-    return containerImages
-      ? {
-          name: fields.name,
-          namespace: fields.namespace,
-          status: fields.status,
-          ready: fields.ready,
-          restartCount: fields.restartCount,
-          node: fields.node,
-          image: fields.image,
-          imageTag: fields.imageTag,
-          imageDigest: fields.imageDigest,
-          containerImages,
-          createdAt: fields.createdAt,
-        }
-      : null;
-  });
-  const events = parseDenseArray<ClusterData["events"][number]>(properties.events, (event) => {
-    const fields = readOwnDataProperties(event, [
-      "id",
-      "namespace",
-      "resource",
-      "status",
-      "reason",
-      "message",
-      "observedAt",
-    ]);
-    if (
-      !fields ||
-      !isString(fields.id) ||
-      !isString(fields.namespace) ||
-      !isString(fields.resource) ||
-      !isHealthStatus(fields.status) ||
-      !isString(fields.reason) ||
-      !isString(fields.message) ||
-      !isString(fields.observedAt)
-    ) {
-      return null;
-    }
-    return {
-      id: fields.id,
-      namespace: fields.namespace,
-      resource: fields.resource,
-      status: fields.status,
-      reason: fields.reason,
-      message: fields.message,
-      observedAt: fields.observedAt,
-    };
-  });
+    },
+  );
   const resources = parseResourceMetrics(properties.resources);
 
   return nodes && namespaces && workloads && pods && events && resources
@@ -542,28 +603,51 @@ export async function collectDeploymentSnapshot(
   now: Now = () => new Date(),
 ): Promise<DeploymentSnapshot> {
   const collected = await collectProviders(providers, timeoutMs, now);
-  const results: SourceResult<unknown>[] = collected.map((result) => {
-    const invalidGitHub = result.ok && result.source === "github" && !isWorkflowRun(result.data);
-    const invalidArgo =
-      result.ok && result.source === "argocd" && !isArgoApplicationState(result.data);
-    const clusterData =
-      result.ok && result.source === "kubernetes" ? parseClusterData(result.data) : null;
-    const invalidKubernetes = result.ok && result.source === "kubernetes" && !clusterData;
-    if (clusterData) return { ...result, data: clusterData };
-    if (!invalidGitHub && !invalidArgo && !invalidKubernetes) return result;
+  let workflow: ReturnType<typeof parseWorkflowRun> = null;
+  let application: ReturnType<typeof parseArgoApplicationState> = null;
+  let clusterData: ClusterData | null = null;
+  const invalidContainerTargets = new Set<DeploymentTargetName>();
+  const results: SourceResult<unknown>[] = [];
+  for (const result of collected) {
+    if (!result.ok) {
+      results.push(result);
+      continue;
+    }
+
+    if (result.source === "github") {
+      const parsed = parseWorkflowRun(result.data);
+      if (parsed) {
+        workflow ??= parsed;
+        results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+        continue;
+      }
+    } else if (result.source === "argocd") {
+      const parsed = parseArgoApplicationState(result.data);
+      if (parsed) {
+        application ??= parsed;
+        results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+        continue;
+      }
+    } else if (result.source === "kubernetes") {
+      const parsed = parseClusterData(result.data, invalidContainerTargets);
+      if (parsed) {
+        clusterData ??= parsed;
+        results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+        continue;
+      }
+    } else {
+      results.push(result);
+      continue;
+    }
 
     const error = sourceUnavailableMessage(result.source);
-    return {
+    results.push({
       source: result.source,
       ok: false,
       error,
       state: { ...result.state, status: "unknown", stale: true, error },
-    };
-  });
-  const workflow = results.find((result) => result.ok && result.source === "github");
-  const application = results.find((result) => result.ok && result.source === "argocd");
-  const cluster = results.find((result) => result.ok && result.source === "kubernetes");
-  const clusterData = cluster?.ok ? parseClusterData(cluster.data) : null;
+    });
+  }
   const successful = results.some((result) => result.ok);
   const observedAt = timestamp(now);
 
@@ -578,24 +662,20 @@ export async function collectDeploymentSnapshot(
     };
   }
 
-  const state = correlateDeployment({
-    workflow: workflow?.ok && isWorkflowRun(workflow.data) ? workflow.data : null,
-    application:
-      application?.ok && isArgoApplicationState(application.data) ? application.data : null,
-    kubernetes: clusterData
-      ? {
-          workloads: clusterData.workloads,
-          pods: clusterData.pods.map((pod) => ({
-            name: pod.name,
-            namespace: pod.namespace,
-            status: pod.status,
-            ready: pod.ready,
-            containerImages: pod.containerImages,
-          })),
-        }
-      : null,
-    observedAt,
-  });
+  const state = correlateValidatedDeployment(
+    {
+      workflow,
+      application,
+      kubernetes: clusterData
+        ? {
+            workloads: clusterData.workloads,
+            pods: clusterData.pods,
+          }
+        : null,
+      observedAt,
+    },
+    [...invalidContainerTargets],
+  );
   const hasFailures = results.some((result) => !result.ok);
 
   return {

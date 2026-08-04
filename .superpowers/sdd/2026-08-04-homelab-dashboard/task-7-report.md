@@ -403,3 +403,76 @@ The first gateway/shared regression run exposed one existing Prometheus integrat
 - No live GitHub, Argo CD, or Kubernetes endpoint was contacted; injected provider boundaries and production-shaped fixtures remain the verification mechanism.
 - No reviewer subagent capability was available in this environment, so the final review gate was performed directly against the complete scoped diff and all requested regressions.
 - The application build retains its pre-existing non-fatal generated-CSS and dependency bundler warnings. Full-project TypeScript retains only the two pre-existing unrelated diagnostics listed above.
+
+## Fix Round 5 (2026-08-04)
+
+### Status
+
+DONE — all three remaining Important findings are addressed with descriptor-safe GitHub/Argo boundary parsing, proxy-first shared runtime inspection, single-pass Kubernetes normalization, and explicit collection bounds.
+
+### Finding Resolution
+
+1. `/deployments` no longer trusts raw `WorkflowRun` or `ArgoApplicationState` values. The exported parsers reject proxies, accessors, inherited/custom-prototype records, sparse nested arrays, malformed canonical fields, and oversized collections, then return fresh normalized copies. A malformed successful provider result becomes the fixed source error (`GitHub unavailable` or `Argo CD unavailable`) with HTTP 200 Unknown/partial-source evidence; raw values, getter text, and stacks are not exposed.
+2. The shared inspector now uses `node:util` `types.isProxy` before array, prototype, key, or descriptor introspection. It examines every own string and symbol descriptor and rejects any accessor, including unknown extra accessors. Records require `Object.prototype` or a null prototype and intended own data fields. Arrays require `Array.prototype` or a null prototype, own data descriptors for every dense index, no unexpected keys/symbols, and no sparse slots. Kubernetes pod records are inspected once per untrusted source; later deployment correlation receives only the fresh validated copy plus fixed target-container diagnostics.
+3. Named limits are enforced before allocation or index iteration for GitHub workflow runs, Argo resources/images, Kubernetes nodes/conditions/namespaces/workloads/pods/container images/events, and resource metric collections/points. A sparse array with length `1_000_000_000` is rejected before `Array.from` is called. Max and max-plus-one controls cover the shared array inspector and representative route/provider collections.
+
+Existing missing-target Unknown semantics and present zero-replica Critical semantics remain unchanged. Valid plain and null-prototype controls remain accepted.
+
+### Strict TDD Evidence
+
+The first production edit followed the requested checkpoint tests in `gateway/src/-runtime-validation.test.ts`, `gateway/src/-snapshot.test.ts`, and `gateway/src/-app.test.ts`.
+
+Initial RED command:
+
+`bunx vitest run gateway/src/-runtime-validation.test.ts gateway/src/-snapshot.test.ts gateway/src/-app.test.ts`
+
+Initial RED result: exit 1; 3 files ran, with 10 failed and 26 passed. The failures showed transparent proxies and unknown accessors being accepted, max-plus-one and huge sparse arrays reaching unsafe paths, WorkflowRun/Argo getters returning HTTP 500, and otherwise-valid transparent workflow/Argo/cluster proxies being trusted.
+
+The single-pass pod and safe diagnostic regressions were then added before the correlation refactor:
+
+`bunx vitest run gateway/src/-deployment-correlation.test.ts gateway/src/-snapshot.test.ts`
+
+Second RED result: exit 1; 2 files ran, with 2 failed and 72 passed. A direct pod was inspected three times (21 descriptor reads instead of 7), and invalid target `containerImages` omitted the fixed `deployment-container-images-unavailable` diagnostic.
+
+Compatibility tests for present transparent proxies in optional GitHub author and Argo summary/sync-result/resource-health data were also added before their handling. The combined provider command exited 1 with 4 failed and 13 passed, then passed after the optional-record parsing fix.
+
+Final focused GREEN:
+
+`bunx vitest run gateway/src/-runtime-validation.test.ts gateway/src/providers/-github.test.ts gateway/src/providers/-argocd.test.ts gateway/src/-deployment-correlation.test.ts gateway/src/providers/-kubernetes.test.ts gateway/src/-snapshot.test.ts gateway/src/-runtime.test.ts gateway/src/-app.test.ts`
+
+Result: exit 0; 8 files and 163 tests passed.
+
+### Verification Evidence
+
+- Gateway/shared regressions: `bunx vitest run gateway shared` — exit 0; 10 files and 209 tests passed.
+- Full configured repository suite: `bun run test` — exit 0; 22 files and 290 tests passed.
+- Gateway build: `bun run build:gateway` — exit 0; 969 modules bundled into `gateway/dist/index.js`.
+- Application build: `bun run build` — exit 0; client, SSR, and Nitro production builds completed with only the existing generated-CSS and third-party bundler warnings.
+- Lint: `bun run lint` — exit 0; 0 warnings and 0 errors across 81 files.
+- Scoped formatting: `bunx oxfmt --check` over the 11 changed TypeScript source/test files — exit 0; all files match OXC formatting.
+- TypeScript: `bunx tsc --noEmit` exits 2 only for the two known unrelated diagnostics in `src/lib/secret-vault.ts:46` and `src/routes/_layout/todos/-PrioritySection.tsx:59`; no Task 7 diagnostic is present.
+- Diff validation: `git diff --check` — exit 0.
+
+### Files Changed in Fix Round 5
+
+- `.superpowers/sdd/2026-08-04-homelab-dashboard/task-7-report.md`
+- `gateway/src/runtime-validation.ts`
+- `gateway/src/providers/github.ts`
+- `gateway/src/providers/argocd.ts`
+- `gateway/src/deployment-correlation.ts`
+- `gateway/src/snapshot.ts`
+- `gateway/src/-runtime-validation.test.ts`
+- `gateway/src/providers/-github.test.ts`
+- `gateway/src/providers/-argocd.test.ts`
+- `gateway/src/-deployment-correlation.test.ts`
+- `gateway/src/-snapshot.test.ts`
+- `gateway/src/-app.test.ts`
+
+### Fix Round 5 Self-Review and Concerns
+
+- Every Task 7 runtime array parser has an explicit named limit, and all route/correlation work after validation operates on fresh bounded copies rather than hostile provider values.
+- Proxy detection precedes every potentially trapping array/prototype/key inspection. Descriptor reads are contained by fixed-fallback `try/catch`, and no accessor is invoked by the validation path.
+- Existing healthy, partial-source, malformed-source, missing-target Unknown, and zero-replica Critical behavior is covered by the focused and full regressions.
+- No shared contract, provider endpoint, mutation/exec API, credential, manifest, workflow configuration, fixture, or unrelated application source was changed. No live GitHub, Argo CD, or Kubernetes endpoint was contacted.
+- No independent reviewer subagent capability was available in this environment; the final review gate was performed directly against the complete scoped diff and all three findings.
+- Full-project TypeScript remains blocked only by the two pre-existing unrelated diagnostics listed above. The application build retains its pre-existing non-fatal generated-CSS and third-party dependency warnings.

@@ -1,5 +1,11 @@
 import fetch, { type RequestInit, type Response } from "node-fetch";
 import type { DeploymentCommitSummary } from "../../../shared/homelab/contracts";
+import {
+  readDenseArray,
+  readOwnDataProperties,
+  readOwnDataRecord,
+  RUNTIME_COLLECTION_LIMITS,
+} from "../runtime-validation";
 import type { Provider } from "./provider";
 
 const GITHUB_API_VERSION = "2022-11-28";
@@ -32,42 +38,76 @@ export interface GitHubProviderOptions {
   baseUrl?: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
-export function isWorkflowRun(value: unknown): value is WorkflowRun {
-  if (!isRecord(value) || !isRecord(value.commit)) return false;
-  const commit = value.commit;
+export function parseWorkflowRun(value: unknown): WorkflowRun | null {
+  const fields = readOwnDataProperties(value, [
+    "repository",
+    "branch",
+    "name",
+    "status",
+    "conclusion",
+    "commit",
+    "startedAt",
+    "completedAt",
+    "durationMs",
+    "url",
+  ]);
+  const commit = fields
+    ? readOwnDataProperties(fields.commit, ["sha", "message", "author", "committedAt", "url"])
+    : null;
   if (
-    value.repository !== DEFAULT_REPOSITORY ||
-    value.branch !== DEFAULT_BRANCH ||
-    !isString(value.name) ||
-    !isString(value.status) ||
-    (value.conclusion !== null && !isString(value.conclusion)) ||
-    !isString(value.startedAt) ||
-    (value.completedAt !== null && !isString(value.completedAt)) ||
-    (value.durationMs !== null &&
-      (typeof value.durationMs !== "number" || !Number.isFinite(value.durationMs))) ||
-    !isString(value.url) ||
-    !COMMIT_SHA.test(isString(commit.sha) ? commit.sha : "") ||
+    !fields ||
+    !commit ||
+    fields.repository !== DEFAULT_REPOSITORY ||
+    fields.branch !== DEFAULT_BRANCH ||
+    !isString(fields.name) ||
+    !isString(fields.status) ||
+    (fields.conclusion !== null && !isString(fields.conclusion)) ||
+    !isString(fields.startedAt) ||
+    (fields.completedAt !== null && !isString(fields.completedAt)) ||
+    (fields.durationMs !== null &&
+      (typeof fields.durationMs !== "number" || !Number.isFinite(fields.durationMs))) ||
+    !isString(fields.url) ||
+    !isString(commit.sha) ||
+    !COMMIT_SHA.test(commit.sha) ||
     !isString(commit.message) ||
     !isString(commit.author) ||
     !isString(commit.committedAt) ||
     !isString(commit.url)
   ) {
-    return false;
+    return null;
   }
 
-  return (
-    new RegExp("^https://github\\.com/Isolumi/youtube-mp3/actions/runs/[1-9][0-9]*$").test(
-      value.url,
-    ) && commit.url === `https://github.com/Isolumi/youtube-mp3/commit/${commit.sha}`
-  );
+  if (
+    !new RegExp("^https://github\\.com/Isolumi/youtube-mp3/actions/runs/[1-9][0-9]*$").test(
+      fields.url,
+    ) ||
+    commit.url !== `https://github.com/Isolumi/youtube-mp3/commit/${commit.sha}`
+  ) {
+    return null;
+  }
+
+  return {
+    repository: fields.repository,
+    branch: fields.branch,
+    name: fields.name,
+    status: fields.status,
+    conclusion: fields.conclusion,
+    commit: {
+      sha: commit.sha,
+      message: commit.message,
+      author: commit.author,
+      committedAt: commit.committedAt,
+      url: commit.url,
+    },
+    startedAt: fields.startedAt,
+    completedAt: fields.completedAt,
+    durationMs: fields.durationMs,
+    url: fields.url,
+  };
 }
 
 function requiredString(value: unknown): string {
@@ -162,40 +202,59 @@ export class GitHubProvider implements Provider<WorkflowRun> {
     const runsPayload = await this.request(`${runsUrl.pathname}${runsUrl.search}`, signal);
 
     try {
-      if (!isRecord(runsPayload) || !Array.isArray(runsPayload.workflow_runs)) {
-        throw new Error("invalid workflow response");
+      const runsFields = readOwnDataProperties(runsPayload, ["workflow_runs"]);
+      const runs = runsFields
+        ? readDenseArray(runsFields.workflow_runs, RUNTIME_COLLECTION_LIMITS.githubWorkflowRuns)
+        : null;
+      const run = runs?.[0];
+      const runFields = readOwnDataRecord(run);
+      if (
+        !runFields?.has("id") ||
+        !runFields.has("name") ||
+        !runFields.has("head_sha") ||
+        !runFields.has("status") ||
+        !runFields.has("run_started_at")
+      ) {
+        throw new Error("missing workflow run");
       }
-      const run = runsPayload.workflow_runs[0];
-      if (!isRecord(run)) throw new Error("missing workflow run");
 
-      const sha = commitSha(run.head_sha);
-      const id = runId(run.id);
+      const sha = commitSha(runFields.get("head_sha"));
+      const id = runId(runFields.get("id"));
       const commitPayload = await this.request(
         `repos/${path}/commits/${encodeURIComponent(sha)}`,
         signal,
       );
-      if (!isRecord(commitPayload) || !isRecord(commitPayload.commit)) {
+      const commitPayloadFields = readOwnDataRecord(commitPayload);
+      const commitFields = commitPayloadFields?.has("commit")
+        ? readOwnDataProperties(commitPayloadFields.get("commit"), ["message", "author"])
+        : null;
+      const commitAuthor = commitFields
+        ? readOwnDataProperties(commitFields.author, ["name", "date"])
+        : null;
+      let user: { login: unknown } | null = null;
+      if (commitPayloadFields?.has("author") && commitPayloadFields.get("author") !== null) {
+        user = readOwnDataProperties(commitPayloadFields.get("author"), ["login"]);
+        if (!user) throw new Error("invalid commit author");
+      }
+      if (!commitPayloadFields?.has("sha") || !commitFields || !commitAuthor) {
         throw new Error("invalid commit response");
       }
-      const commit = commitPayload.commit;
-      if (commitSha(commitPayload.sha) !== sha) throw new Error("commit SHA mismatch");
-      const commitAuthor = isRecord(commit.author) ? commit.author : undefined;
-      const user = isRecord(commitPayload.author) ? commitPayload.author : undefined;
-      const startedAt = requiredString(run.run_started_at);
-      const completedAt = optionalString(run.updated_at);
+      if (commitSha(commitPayloadFields.get("sha")) !== sha) throw new Error("commit SHA mismatch");
+      const startedAt = requiredString(runFields.get("run_started_at"));
+      const completedAt = optionalString(runFields.get("updated_at"));
 
       return {
         repository,
         branch,
-        name: requiredString(run.name),
-        status: requiredString(run.status),
-        conclusion: optionalString(run.conclusion),
+        name: requiredString(runFields.get("name")),
+        status: requiredString(runFields.get("status")),
+        conclusion: optionalString(runFields.get("conclusion")),
         commit: {
           sha,
-          message: requiredString(commit.message),
+          message: requiredString(commitFields.message),
           author:
-            (typeof user?.login === "string" && user.login) || requiredString(commitAuthor?.name),
-          committedAt: requiredString(commitAuthor?.date),
+            (typeof user?.login === "string" && user.login) || requiredString(commitAuthor.name),
+          committedAt: requiredString(commitAuthor.date),
           url: githubUrl(owner, name, "commit", sha),
         },
         startedAt,

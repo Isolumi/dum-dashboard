@@ -227,6 +227,87 @@ describe("collectDeploymentSnapshot", () => {
     });
   });
 
+  it.each([
+    { name: "at the node limit", count: 64, expectedStatus: "healthy" },
+    { name: "at node limit plus one", count: 65, expectedStatus: "unknown" },
+  ])("bounds the node collection $name", async ({ count, expectedStatus }) => {
+    const cluster = validCluster();
+    cluster.nodes = Array.from({ length: count }, (_, index) => ({
+      name: `node-${index}`,
+      ready: true,
+      status: "healthy",
+      conditions: [],
+    }));
+
+    const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now);
+
+    expect(snapshot.sources[2]).toMatchObject({
+      source: "kubernetes",
+      status: expectedStatus,
+      stale: expectedStatus === "unknown",
+    });
+  });
+
+  it.each([
+    {
+      name: "namespaces",
+      mutate: (cluster: ClusterData) => {
+        cluster.namespaces = Array.from({ length: 257 }, (_, index) => ({
+          name: `namespace-${index}`,
+          status: "healthy",
+          workloadCount: 0,
+          podCount: 0,
+        }));
+      },
+    },
+    {
+      name: "workloads",
+      mutate: (cluster: ClusterData) => {
+        cluster.workloads = Array.from({ length: 513 }, (_, index) => ({
+          ...cluster.workloads[0]!,
+          name: `workload-${index}`,
+        }));
+      },
+    },
+    {
+      name: "pods",
+      mutate: (cluster: ClusterData) => {
+        cluster.pods = Array.from({ length: 1_025 }, (_, index) => ({
+          ...cluster.pods[0]!,
+          name: `pod-${index}`,
+        }));
+      },
+    },
+    {
+      name: "containerImages",
+      mutate: (cluster: ClusterData) => {
+        cluster.pods[0]!.containerImages = Array.from({ length: 33 }, (_, index) => ({
+          ...cluster.pods[0]!.containerImages[0]!,
+          name: `container-${index}`,
+        }));
+      },
+    },
+    {
+      name: "events",
+      mutate: (cluster: ClusterData) => {
+        cluster.events = Array.from({ length: 2_049 }, (_, index) => ({
+          id: `event-${index}`,
+          namespace: "yootoob-mp3",
+          resource: `Pod/pod-${index}`,
+          status: "warning",
+          reason: "Warning",
+          message: "bounded warning",
+          observedAt: "2026-08-04T00:00:00.000Z",
+        }));
+      },
+    },
+  ])("rejects the $name collection at max plus one", async ({ mutate }) => {
+    const cluster = validCluster();
+    mutate(cluster);
+
+    await expectInvalidClusterResult(cluster);
+  });
+
   it("keeps valid zero-replica ClusterData Critical instead of rejecting it", async () => {
     const cluster = validCluster();
     cluster.workloads[1] = {
@@ -636,5 +717,29 @@ describe("collectDeploymentSnapshot", () => {
     );
     expect(JSON.stringify(snapshot)).not.toContain("credential=private");
     expect(JSON.stringify(snapshot)).not.toContain("/secret/provider.ts");
+  });
+
+  it("retains only a safe target diagnostic when containerImages is unavailable", async () => {
+    const cluster = validCluster();
+    delete (cluster.pods[0] as Partial<(typeof cluster.pods)[number]>).containerImages;
+
+    const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now);
+
+    expect(snapshot.sources[2]).toMatchObject({
+      source: "kubernetes",
+      status: "unknown",
+      stale: true,
+      error: "Kubernetes unavailable",
+    });
+    expect(snapshot.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: "deployment-container-images-unavailable",
+          status: "unknown",
+          source: "kubernetes",
+          resource: "Deployment/yootoob-mp3-api",
+        }),
+      ]),
+    );
   });
 });

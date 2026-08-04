@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import argoFixture from "./providers/fixtures/argocd.json";
 import githubFixture from "./providers/fixtures/github.json";
 import { correlateDeployment } from "./deployment-correlation";
@@ -640,6 +640,23 @@ describe("correlateDeployment", () => {
 
     expect(getterCalls).toBe(0);
     expectInvalidKubernetesEvidence(result!, secret);
+  });
+
+  it("inspects each raw Kubernetes pod record exactly once", () => {
+    const evidence = kubernetes();
+    const pod = evidence.pods[0]!;
+    const expectedDescriptorReads = Reflect.ownKeys(pod).length;
+    const descriptorReads = vi.spyOn(Object, "getOwnPropertyDescriptor");
+    let actualDescriptorReads = 0;
+
+    try {
+      correlate({ kubernetes: evidence });
+      actualDescriptorReads = descriptorReads.mock.calls.filter(([value]) => value === pod).length;
+    } finally {
+      descriptorReads.mockRestore();
+    }
+
+    expect(actualDescriptorReads).toBe(expectedDescriptorReads);
   });
 
   it("does not invoke a throwing top-level correlation accessor", () => {

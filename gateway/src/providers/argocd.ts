@@ -9,6 +9,12 @@ import {
 } from "@kubernetes/client-node";
 import type { Provider } from "./provider";
 import { loadKubernetesConfig } from "./kubernetes";
+import {
+  readDenseArray,
+  readOwnDataProperties,
+  readOwnDataRecord,
+  RUNTIME_COLLECTION_LIMITS,
+} from "../runtime-validation";
 
 const ARGO_NAMESPACE = "argocd";
 const ARGO_APPLICATION = "yootoob-mp3-dumachine";
@@ -59,51 +65,134 @@ export interface ArgoProviderOptions {
   customObjectsApi?: CustomObjectsReadApi;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isOptionalString(value: unknown): value is string | null {
   return value === null || (typeof value === "string" && value.length > 0);
 }
 
-export function isArgoApplicationState(value: unknown): value is ArgoApplicationState {
+function parseDenseArray<T>(
+  value: unknown,
+  maxLength: number,
+  parse: (entry: unknown) => T | null,
+): T[] | null {
+  const entries = readDenseArray(value, maxLength);
+  if (!entries) return null;
+
+  const parsed: T[] = [];
+  for (const entry of entries) {
+    const result = parse(entry);
+    if (result === null) return null;
+    parsed.push(result);
+  }
+  return parsed;
+}
+
+export function parseArgoApplicationState(value: unknown): ArgoApplicationState | null {
+  const fields = readOwnDataProperties(value, [
+    "name",
+    "namespace",
+    "sync",
+    "health",
+    "operation",
+    "resources",
+    "images",
+  ]);
+  const sync = fields ? readOwnDataProperties(fields.sync, ["status", "revision"]) : null;
+  const health = fields
+    ? readOwnDataProperties(fields.health, ["status", "message", "lastTransitionAt"])
+    : null;
+  const operation = fields
+    ? readOwnDataProperties(fields.operation, [
+        "phase",
+        "message",
+        "revision",
+        "startedAt",
+        "finishedAt",
+      ])
+    : null;
   if (
-    !isRecord(value) ||
-    value.name !== ARGO_APPLICATION ||
-    value.namespace !== ARGO_NAMESPACE ||
-    !isRecord(value.sync) ||
-    typeof value.sync.status !== "string" ||
-    typeof value.sync.revision !== "string" ||
-    !isRecord(value.health) ||
-    typeof value.health.status !== "string" ||
-    !isOptionalString(value.health.message) ||
-    !isOptionalString(value.health.lastTransitionAt) ||
-    !isRecord(value.operation) ||
-    typeof value.operation.phase !== "string" ||
-    !isOptionalString(value.operation.message) ||
-    !isOptionalString(value.operation.revision) ||
-    !isOptionalString(value.operation.startedAt) ||
-    !isOptionalString(value.operation.finishedAt) ||
-    !Array.isArray(value.resources) ||
-    !Array.isArray(value.images) ||
-    value.images.some((image) => typeof image !== "string" || image.length === 0)
+    !fields ||
+    fields.name !== ARGO_APPLICATION ||
+    fields.namespace !== ARGO_NAMESPACE ||
+    !sync ||
+    typeof sync.status !== "string" ||
+    typeof sync.revision !== "string" ||
+    !health ||
+    typeof health.status !== "string" ||
+    !isOptionalString(health.message) ||
+    !isOptionalString(health.lastTransitionAt) ||
+    !operation ||
+    typeof operation.phase !== "string" ||
+    !isOptionalString(operation.message) ||
+    !isOptionalString(operation.revision) ||
+    !isOptionalString(operation.startedAt) ||
+    !isOptionalString(operation.finishedAt)
   ) {
-    return false;
+    return null;
   }
 
-  return value.resources.every(
-    (resource) =>
-      isRecord(resource) &&
-      typeof resource.group === "string" &&
-      typeof resource.version === "string" &&
-      typeof resource.kind === "string" &&
-      typeof resource.namespace === "string" &&
-      typeof resource.name === "string" &&
-      typeof resource.syncStatus === "string" &&
-      isOptionalString(resource.healthStatus) &&
-      isOptionalString(resource.healthMessage),
+  const resources = parseDenseArray<ArgoResourceState>(
+    fields.resources,
+    RUNTIME_COLLECTION_LIMITS.argoResources,
+    (resource) => {
+      const resourceFields = readOwnDataProperties(resource, [
+        "group",
+        "version",
+        "kind",
+        "namespace",
+        "name",
+        "syncStatus",
+        "healthStatus",
+        "healthMessage",
+      ]);
+      if (
+        !resourceFields ||
+        typeof resourceFields.group !== "string" ||
+        typeof resourceFields.version !== "string" ||
+        typeof resourceFields.kind !== "string" ||
+        typeof resourceFields.namespace !== "string" ||
+        typeof resourceFields.name !== "string" ||
+        typeof resourceFields.syncStatus !== "string" ||
+        !isOptionalString(resourceFields.healthStatus) ||
+        !isOptionalString(resourceFields.healthMessage)
+      ) {
+        return null;
+      }
+      return {
+        group: resourceFields.group,
+        version: resourceFields.version,
+        kind: resourceFields.kind,
+        namespace: resourceFields.namespace,
+        name: resourceFields.name,
+        syncStatus: resourceFields.syncStatus,
+        healthStatus: resourceFields.healthStatus,
+        healthMessage: resourceFields.healthMessage,
+      };
+    },
   );
+  const images = parseDenseArray(fields.images, RUNTIME_COLLECTION_LIMITS.argoImages, (image) =>
+    typeof image === "string" && image.length > 0 ? image : null,
+  );
+  if (!resources || !images) return null;
+
+  return {
+    name: fields.name,
+    namespace: fields.namespace,
+    sync: { status: sync.status, revision: sync.revision },
+    health: {
+      status: health.status,
+      message: health.message,
+      lastTransitionAt: health.lastTransitionAt,
+    },
+    operation: {
+      phase: operation.phase,
+      message: operation.message,
+      revision: operation.revision,
+      startedAt: operation.startedAt,
+      finishedAt: operation.finishedAt,
+    },
+    resources,
+    images,
+  };
 }
 
 function requiredString(value: unknown): string {
@@ -113,6 +202,18 @@ function requiredString(value: unknown): string {
 
 function optionalString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function optionalDataRecord(
+  record: ReadonlyMap<PropertyKey, unknown>,
+  key: string,
+): ReadonlyMap<PropertyKey, unknown> | null {
+  if (!record.has(key)) return null;
+  const value = record.get(key);
+  if (value === null || value === undefined) return null;
+  const parsed = readOwnDataRecord(value);
+  if (!parsed) throw new Error("invalid optional record");
+  return parsed;
 }
 
 function requestOptions(signal: AbortSignal): ConfigurationOptions {
@@ -129,50 +230,67 @@ function requestOptions(signal: AbortSignal): ConfigurationOptions {
 }
 
 function mapApplication(payload: unknown): ArgoApplicationState {
-  if (!isRecord(payload) || !isRecord(payload.metadata) || !isRecord(payload.status)) {
+  const payloadFields = readOwnDataProperties(payload, ["metadata", "status"]);
+  const metadata = payloadFields
+    ? readOwnDataProperties(payloadFields.metadata, ["name", "namespace"])
+    : null;
+  const status = payloadFields ? readOwnDataRecord(payloadFields.status) : null;
+  if (!metadata || !status) {
     throw new Error("invalid application");
   }
-  const status = payload.status;
-  if (!isRecord(status.sync) || !isRecord(status.health) || !isRecord(status.operationState)) {
+  const sync = readOwnDataProperties(status.get("sync"), ["status", "revision"]);
+  const health = readOwnDataRecord(status.get("health"));
+  const operationState = readOwnDataRecord(status.get("operationState"));
+  if (!sync || !health?.has("status") || !operationState?.has("phase")) {
     throw new Error("invalid application status");
   }
-  const operationState = status.operationState;
-  const syncResult = isRecord(operationState.syncResult) ? operationState.syncResult : undefined;
-  const resources = Array.isArray(status.resources) ? status.resources : [];
-  const summary = isRecord(status.summary) ? status.summary : undefined;
-  const images = Array.isArray(summary?.images) ? summary.images.map(requiredString) : [];
+  const syncResult = optionalDataRecord(operationState, "syncResult");
+  if (syncResult && !syncResult.has("revision")) throw new Error("invalid sync result");
+  const resourcesValue = status.has("resources") ? status.get("resources") : [];
+  const resources = readDenseArray(resourcesValue, RUNTIME_COLLECTION_LIMITS.argoResources);
+  const summary = optionalDataRecord(status, "summary");
+  const imagesValue = summary?.has("images") ? summary.get("images") : [];
+  const imageEntries = readDenseArray(imagesValue, RUNTIME_COLLECTION_LIMITS.argoImages);
+  if (!resources || !imageEntries) throw new Error("invalid application collections");
+  const images = imageEntries.map(requiredString);
+
+  const phase = operationState.get("phase");
+  const operationMessage = operationState.get("message");
+  const startedAt = operationState.get("startedAt");
+  const finishedAt = operationState.get("finishedAt");
 
   return {
-    name: requiredString(payload.metadata.name),
-    namespace: requiredString(payload.metadata.namespace),
+    name: requiredString(metadata.name),
+    namespace: requiredString(metadata.namespace),
     sync: {
-      status: requiredString(status.sync.status),
-      revision: requiredString(status.sync.revision),
+      status: requiredString(sync.status),
+      revision: requiredString(sync.revision),
     },
     health: {
-      status: requiredString(status.health.status),
-      message: optionalString(status.health.message),
-      lastTransitionAt: optionalString(status.health.lastTransitionTime),
+      status: requiredString(health.get("status")),
+      message: optionalString(health.get("message")),
+      lastTransitionAt: optionalString(health.get("lastTransitionTime")),
     },
     operation: {
-      phase: requiredString(operationState.phase),
-      message: optionalString(operationState.message),
-      revision: optionalString(syncResult?.revision),
-      startedAt: optionalString(operationState.startedAt),
-      finishedAt: optionalString(operationState.finishedAt),
+      phase: requiredString(phase),
+      message: optionalString(operationMessage),
+      revision: optionalString(syncResult?.get("revision")),
+      startedAt: optionalString(startedAt),
+      finishedAt: optionalString(finishedAt),
     },
     resources: resources.map((resource) => {
-      if (!isRecord(resource)) throw new Error("invalid application resource");
-      const health = isRecord(resource.health) ? resource.health : undefined;
+      const fields = readOwnDataRecord(resource);
+      if (!fields) throw new Error("invalid application resource");
+      const resourceHealth = optionalDataRecord(fields, "health");
       return {
-        group: optionalString(resource.group) ?? "",
-        version: optionalString(resource.version) ?? "",
-        kind: requiredString(resource.kind),
-        namespace: optionalString(resource.namespace) ?? "default",
-        name: requiredString(resource.name),
-        syncStatus: requiredString(resource.status),
-        healthStatus: optionalString(health?.status),
-        healthMessage: optionalString(health?.message),
+        group: optionalString(fields.get("group")) ?? "",
+        version: optionalString(fields.get("version")) ?? "",
+        kind: requiredString(fields.get("kind")),
+        namespace: optionalString(fields.get("namespace")) ?? "default",
+        name: requiredString(fields.get("name")),
+        syncStatus: requiredString(fields.get("status")),
+        healthStatus: optionalString(resourceHealth?.get("status")),
+        healthMessage: optionalString(resourceHealth?.get("message")),
       };
     }),
     images,
