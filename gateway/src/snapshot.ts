@@ -56,20 +56,124 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || isString(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isHealthStatus(value: unknown): value is HealthStatus {
+  return ["healthy", "warning", "critical", "unknown"].includes(value as HealthStatus);
+}
+
+function isResourceName(value: unknown): value is ResourceName {
+  return ["cpu", "memory", "disk"].includes(value as ResourceName);
+}
+
+function isResourceMetrics(value: unknown): value is ResourceMetrics {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.current) &&
+    value.current.every(
+      (metric) =>
+        isRecord(metric) &&
+        isResourceName(metric.resource) &&
+        isFiniteNumber(metric.usagePercent) &&
+        isString(metric.observedAt),
+    ) &&
+    Array.isArray(value.history) &&
+    value.history.every(
+      (history) =>
+        isRecord(history) &&
+        isResourceName(history.resource) &&
+        Array.isArray(history.points) &&
+        history.points.every(
+          (point) => isRecord(point) && isString(point.timestamp) && isFiniteNumber(point.value),
+        ),
+    )
+  );
+}
+
 function isClusterData(value: unknown): value is ClusterData {
   return (
     isRecord(value) &&
     Array.isArray(value.nodes) &&
+    value.nodes.every(
+      (node) =>
+        isRecord(node) &&
+        isString(node.name) &&
+        typeof node.ready === "boolean" &&
+        isHealthStatus(node.status) &&
+        Array.isArray(node.conditions) &&
+        node.conditions.every(isString),
+    ) &&
     Array.isArray(value.namespaces) &&
+    value.namespaces.every(
+      (namespace) =>
+        isRecord(namespace) &&
+        isString(namespace.name) &&
+        isHealthStatus(namespace.status) &&
+        isFiniteNumber(namespace.workloadCount) &&
+        isFiniteNumber(namespace.podCount),
+    ) &&
     Array.isArray(value.workloads) &&
+    value.workloads.every(
+      (workload) =>
+        isRecord(workload) &&
+        isString(workload.kind) &&
+        isString(workload.name) &&
+        isString(workload.namespace) &&
+        isHealthStatus(workload.status) &&
+        isFiniteNumber(workload.desiredReplicas) &&
+        isFiniteNumber(workload.availableReplicas) &&
+        isNullableString(workload.failureReason) &&
+        typeof workload.restartIncrease15m === "boolean",
+    ) &&
     Array.isArray(value.pods) &&
+    value.pods.every(
+      (pod) =>
+        isRecord(pod) &&
+        isString(pod.name) &&
+        isString(pod.namespace) &&
+        isHealthStatus(pod.status) &&
+        typeof pod.ready === "boolean" &&
+        isFiniteNumber(pod.restartCount) &&
+        isNullableString(pod.node) &&
+        isNullableString(pod.image) &&
+        isNullableString(pod.imageTag) &&
+        isNullableString(pod.imageDigest) &&
+        Array.isArray(pod.containerImages) &&
+        pod.containerImages.every(
+          (container) =>
+            isRecord(container) &&
+            isString(container.name) &&
+            isNullableString(container.repository) &&
+            isNullableString(container.reference) &&
+            isNullableString(container.tag) &&
+            isNullableString(container.digest),
+        ) &&
+        isString(pod.createdAt),
+    ) &&
     Array.isArray(value.events) &&
-    isRecord(value.resources)
+    value.events.every(
+      (event) =>
+        isRecord(event) &&
+        isString(event.id) &&
+        isString(event.namespace) &&
+        isString(event.resource) &&
+        isHealthStatus(event.status) &&
+        isString(event.reason) &&
+        isString(event.message) &&
+        isString(event.observedAt),
+    ) &&
+    isResourceMetrics(value.resources)
   );
-}
-
-function isResourceMetrics(value: unknown): value is ResourceMetrics {
-  return isRecord(value) && Array.isArray(value.current) && Array.isArray(value.history);
 }
 
 const RESOURCE_NAMES: readonly ResourceName[] = ["cpu", "memory", "disk"];
@@ -276,7 +380,9 @@ export async function collectDeploymentSnapshot(
     const invalidGitHub = result.ok && result.source === "github" && !isWorkflowRun(result.data);
     const invalidArgo =
       result.ok && result.source === "argocd" && !isArgoApplicationState(result.data);
-    if (!invalidGitHub && !invalidArgo) return result;
+    const invalidKubernetes =
+      result.ok && result.source === "kubernetes" && !isClusterData(result.data);
+    if (!invalidGitHub && !invalidArgo && !invalidKubernetes) return result;
 
     const error = sourceUnavailableMessage(result.source);
     return {

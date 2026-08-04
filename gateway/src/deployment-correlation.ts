@@ -56,6 +56,35 @@ interface ImageParts {
   digest: string | null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function isPodContainerImageEvidence(value: unknown): value is PodContainerImageEvidence {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    isNullableString(value.repository) &&
+    isNullableString(value.reference) &&
+    isNullableString(value.tag) &&
+    isNullableString(value.digest)
+  );
+}
+
+function runtimeContainerImages(
+  pod: KubernetesDeploymentEvidence["pods"][number],
+): PodContainerImageEvidence[] | null {
+  const value: unknown = pod.containerImages;
+  if (!Array.isArray(value) || !value.every(isPodContainerImageEvidence)) {
+    return null;
+  }
+  return value;
+}
+
 function worstStatus(statuses: readonly HealthStatus[]): HealthStatus {
   for (const status of ["critical", "warning", "unknown", "healthy"] as const) {
     if (statuses.includes(status)) return status;
@@ -116,8 +145,10 @@ function workloadState(
         (pod.name === target.name || pod.name.startsWith(`${target.name}-`)),
     ) ?? [];
   const expected = expectedImage(input.application, target.repository);
-  const targetContainers = pods.flatMap((pod) =>
-    pod.containerImages.filter((container) => container.repository === target.repository),
+  const podContainerImages = pods.map(runtimeContainerImages);
+  const invalidContainerImagePods = podContainerImages.filter((images) => images === null).length;
+  const targetContainers = podContainerImages.flatMap(
+    (images) => images?.filter((container) => container.repository === target.repository) ?? [],
   );
   const liveImages = unique(targetContainers.map((container) => container.reference));
   const liveTags = unique(targetContainers.map((container) => container.tag));
@@ -203,10 +234,31 @@ function workloadState(
       ),
     );
   } else if (pods.length > 0) {
+    if (invalidContainerImagePods > 0) {
+      issues.push(
+        issue(
+          "deployment-container-images-unavailable",
+          "unknown",
+          `Container image evidence is unavailable for ${target.name}.`,
+          "kubernetes",
+          resource,
+          input.observedAt,
+          {
+            repository: target.repository,
+            podCount: pods.length,
+            invalidPodCount: invalidContainerImagePods,
+          },
+        ),
+      );
+    }
     const missingTag =
-      targetContainers.length === 0 || targetContainers.some((container) => !container.tag);
+      invalidContainerImagePods > 0 ||
+      targetContainers.length === 0 ||
+      targetContainers.some((container) => !container.tag);
     const missingDigest =
-      targetContainers.length === 0 || targetContainers.some((container) => !container.digest);
+      invalidContainerImagePods > 0 ||
+      targetContainers.length === 0 ||
+      targetContainers.some((container) => !container.digest);
     if (missingTag) {
       issues.push(
         issue(
@@ -236,6 +288,7 @@ function workloadState(
   }
 
   const comparableTags =
+    invalidContainerImagePods === 0 &&
     expected.tag !== null &&
     liveTags.length > 0 &&
     targetContainers.every((container) => container.tag !== null);
@@ -255,6 +308,7 @@ function workloadState(
   }
 
   const comparableDigests =
+    invalidContainerImagePods === 0 &&
     expected.digest !== null &&
     liveDigests.length > 0 &&
     targetContainers.every((container) => container.digest !== null);

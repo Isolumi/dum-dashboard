@@ -342,6 +342,53 @@ describe("correlateDeployment", () => {
     },
   );
 
+  it.each([
+    { name: "missing", containerImages: undefined },
+    { name: "non-array", containerImages: { legacyImage: `${API_REPOSITORY}:${SOURCE_SHA}` } },
+    { name: "an invalid entry", containerImages: [{ name: "api", repository: 42 }] },
+  ])(
+    "is Unknown when pod containerImages is $name at the defensive boundary",
+    ({ containerImages }) => {
+      const valid = kubernetes();
+      const apiPod = valid.pods[0]!;
+      const malformedApiPod = { ...apiPod, containerImages };
+      if (containerImages === undefined) {
+        delete (malformedApiPod as { containerImages?: unknown }).containerImages;
+      }
+
+      const result = correlate({
+        kubernetes: {
+          ...valid,
+          pods: [malformedApiPod, ...valid.pods.slice(1)],
+        } as unknown as ReturnType<typeof kubernetes>,
+      });
+
+      expect(result.status).toBe("unknown");
+      expect(result.workloads[0]).toMatchObject({
+        name: "yootoob-mp3-api",
+        status: "unknown",
+        tagMatches: null,
+        digestMatches: null,
+      });
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            ruleId: "deployment-container-images-unavailable",
+            status: "unknown",
+            source: "kubernetes",
+            resource: "Deployment/yootoob-mp3-api",
+          }),
+        ]),
+      );
+      expect(result.issues).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ ruleId: "deployment-image-tag-mismatch" }),
+          expect.objectContaining({ ruleId: "deployment-image-digest-mismatch" }),
+        ]),
+      );
+    },
+  );
+
   it("is Critical when either expected deployment has zero available replicas", () => {
     const result = correlate({ kubernetes: kubernetes({ frontendAvailable: 0 }) });
 

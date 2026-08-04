@@ -275,4 +275,116 @@ describe("collectDeploymentSnapshot", () => {
       expect.objectContaining({ source: "kubernetes", status: "healthy", stale: false }),
     ]);
   });
+
+  it.each([
+    { name: "missing containerImages", containerImages: undefined },
+    { name: "a malformed containerImages entry", containerImages: [{ name: "api" }] },
+  ])("downgrades mixed legacy Kubernetes pods with $name", async ({ containerImages }) => {
+    const sourceSha = "1829d6ba3b55e66a2134ae64161b9e48ad39a197";
+    const workflow = {
+      repository: "Isolumi/youtube-mp3",
+      branch: "development",
+      name: "Build and publish images",
+      status: "completed",
+      conclusion: "success",
+      commit: {
+        sha: sourceSha,
+        message: "Build production images",
+        author: "Isolumi",
+        committedAt: "2026-08-04T11:58:00Z",
+        url: `https://github.com/Isolumi/youtube-mp3/commit/${sourceSha}`,
+      },
+      startedAt: "2026-08-04T11:58:00Z",
+      completedAt: "2026-08-04T12:00:30Z",
+      durationMs: 150_000,
+      url: "https://github.com/Isolumi/youtube-mp3/actions/runs/987654321",
+    };
+    const legacyPod = {
+      name: "yootoob-mp3-api-legacy",
+      namespace: "yootoob-mp3",
+      status: "healthy",
+      ready: true,
+      restartCount: 0,
+      node: "dumachine",
+      image: `ghcr.io/isolumi/yootoob-mp3-api@sha256:${"a".repeat(64)}`,
+      imageTag: `ghcr.io/isolumi/yootoob-mp3-api:${sourceSha}`,
+      imageDigest: `sha256:${"a".repeat(64)}`,
+      createdAt: "2026-08-04T11:59:00Z",
+      rawPayload: "credential=private stack=/secret/provider.ts:42",
+      ...(containerImages === undefined ? {} : { containerImages }),
+    };
+    const malformedCluster = {
+      nodes: [],
+      namespaces: [],
+      events: [],
+      resources: { current: [], history: [] },
+      workloads: [
+        {
+          kind: "Deployment",
+          name: "yootoob-mp3-api",
+          namespace: "yootoob-mp3",
+          status: "healthy",
+          desiredReplicas: 1,
+          availableReplicas: 1,
+          failureReason: null,
+          restartIncrease15m: false,
+        },
+      ],
+      pods: [
+        legacyPod,
+        {
+          name: "yootoob-mp3-frontend-current",
+          namespace: "yootoob-mp3",
+          status: "healthy",
+          ready: true,
+          restartCount: 0,
+          node: "dumachine",
+          image: null,
+          imageTag: null,
+          imageDigest: null,
+          containerImages: [],
+          createdAt: "2026-08-04T11:59:00Z",
+        },
+      ],
+    };
+    const providers: Provider<unknown>[] = [
+      { source: "github", collect: async () => workflow },
+      { source: "kubernetes", collect: async () => malformedCluster },
+    ];
+
+    const snapshot = await collectDeploymentSnapshot(providers, 1_000, now);
+
+    expect(snapshot).toMatchObject({
+      status: "unknown",
+      stale: true,
+      data: {
+        applications: [
+          {
+            workflow: { status: "healthy" },
+            rollout: { status: "unknown" },
+          },
+        ],
+      },
+      sources: [
+        { source: "github", status: "healthy", stale: false },
+        {
+          source: "kubernetes",
+          status: "unknown",
+          stale: true,
+          error: "Kubernetes unavailable",
+        },
+      ],
+    });
+    expect(snapshot.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: "deployment-workload-unavailable",
+          status: "unknown",
+          source: "kubernetes",
+        }),
+      ]),
+    );
+    expect(JSON.stringify(snapshot)).not.toContain("credential=private");
+    expect(JSON.stringify(snapshot)).not.toContain("/secret/provider.ts");
+  });
 });

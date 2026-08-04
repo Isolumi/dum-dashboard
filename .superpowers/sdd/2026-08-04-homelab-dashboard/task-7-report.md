@@ -214,3 +214,64 @@ The literal `bun test` command was also attempted, but Bun interpreted it as its
 - No test performs a live network request.
 - No independent reviewer subagent was available in this environment, so the final review gate was performed directly against the complete diff and all seven findings.
 - Live GitHub/Argo/Kubernetes endpoints were intentionally not contacted; production-shaped fixtures and injected read-only boundaries remain the verification mechanism.
+
+## Fix Round 2 (2026-08-04)
+
+### Status
+
+DONE — the remaining Important finding from review of commit `1855321` is addressed with deep Kubernetes result validation, defensive correlation handling, and route-level regression coverage.
+
+### Finding Resolution
+
+- `ClusterData` is now validated field-by-field before a successful Kubernetes provider result is trusted by deployment snapshot composition. Nodes, namespaces, workloads, pods, events, resource metrics/history, every pod `containerImages` array, and every container image evidence field must match the shared contract.
+- A malformed or legacy Kubernetes payload is converted to the existing fixed `Kubernetes unavailable` source failure with Unknown/stale partial-source semantics. Raw provider data, credentials, paths, and stack details are not retained in the deployment response.
+- Correlation independently validates each selected pod's `containerImages` at runtime. Missing arrays, non-array legacy values, and malformed entries create `deployment-container-images-unavailable` Unknown evidence instead of throwing.
+- Tag and digest comparisons are suppressed whenever selected pod container evidence is malformed, so incomplete data cannot create a mismatch or false Healthy result. Existing Critical zero-replica precedence remains unchanged.
+- The `/deployments` regression exercises the real Hono route with a malformed successful Kubernetes result and proves it returns HTTP 200 with a partial Unknown snapshot and fixed source error.
+- Existing valid Kubernetes inventory, pod detail, health, GitHub, Argo, runtime, and Round 1 behavior remains unchanged.
+
+### Strict TDD Evidence
+
+Only the three focused test files were edited before production code:
+
+- `gateway/src/-deployment-correlation.test.ts`
+- `gateway/src/-snapshot.test.ts`
+- `gateway/src/-app.test.ts`
+
+Initial RED command:
+
+`bunx vitest run gateway/src/-deployment-correlation.test.ts gateway/src/-snapshot.test.ts gateway/src/-app.test.ts`
+
+RED result: exit 1; 3 files ran, with 4 failed and 21 passed. Direct correlation failed on both absent and non-array `containerImages`; snapshot collection threw the same `.filter` error; and `/deployments` returned HTTP 500 while emitting the correlation stack. These failures reproduced the reviewed trust-boundary defect.
+
+The regression matrix was then expanded to include malformed `containerImages` entries and mixed legacy/current pod shapes. Final GREEN for the same command: exit 0; 3 files and 27 tests passed.
+
+### Verification Evidence
+
+- Focused Task 7: `bunx vitest run gateway/src/providers/-github.test.ts gateway/src/providers/-argocd.test.ts gateway/src/-deployment-correlation.test.ts gateway/src/providers/-kubernetes.test.ts gateway/src/-snapshot.test.ts gateway/src/-runtime.test.ts gateway/src/-app.test.ts` — exit 0; 7 files and 71 tests passed.
+- Gateway/shared regressions: `bunx vitest run gateway/src shared/homelab` — exit 0; 9 files and 117 tests passed.
+- Full repository suite: `bun run test` — exit 0; 21 files and 198 tests passed.
+- Gateway build: `bun run build:gateway` — exit 0; 968 modules bundled.
+- Application build: `bun run build` — exit 0; client, SSR, and Nitro builds completed with only the existing generated-CSS and third-party bundler warnings.
+- Lint: `bun run lint` — exit 0; 0 warnings and 0 errors across 79 files.
+- Scoped formatting: `bunx oxfmt` and `bunx oxfmt --check` over the five changed TypeScript source/test files — exit 0.
+- TypeScript: `bunx tsc --noEmit` exits 2 only for the two known unrelated diagnostics in `src/lib/secret-vault.ts:46` and `src/routes/_layout/todos/-PrioritySection.tsx:59`; no Task 7 diagnostic is present.
+- Diff validation: `git diff --check` — exit 0.
+
+### Files Changed in Fix Round 2
+
+- `.superpowers/sdd/2026-08-04-homelab-dashboard/task-7-report.md`
+- `gateway/src/snapshot.ts`
+- `gateway/src/deployment-correlation.ts`
+- `gateway/src/-snapshot.test.ts`
+- `gateway/src/-deployment-correlation.test.ts`
+- `gateway/src/-app.test.ts`
+
+### Fix Round 2 Self-Review and Concerns
+
+- Deep validation occurs before correlation and does not expose a generic cast or partially trusted pod shape.
+- The correlation fallback is independent of snapshot validation so direct callers also receive explicit Unknown evidence.
+- No mutation/exec API, credential, network call, Kubernetes manifest, shared contract change, or unrelated application file was added or modified.
+- Valid Kubernetes mapper output is covered by the unchanged provider tests and the complete gateway/shared/full regression suites.
+- No reviewer subagent capability was available in this environment; the final review gate was performed directly against the complete diff and the remaining finding.
+- Live GitHub, Argo, and Kubernetes endpoints were intentionally not contacted.
