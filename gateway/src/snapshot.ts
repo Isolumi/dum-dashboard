@@ -222,6 +222,7 @@ export async function collectSnapshot(
   const clusterData = successfulClusterData(results);
   const resources = successfulResourceMetrics(results);
   const mergedCluster = clusterData && resources ? { ...clusterData, resources } : undefined;
+  const resourcesForHealth = resources ?? clusterData?.resources;
   const successfulData = results.flatMap((result) => {
     if (!result.ok) return [];
     if (mergedCluster && result.data === resources) return [];
@@ -229,7 +230,7 @@ export async function collectSnapshot(
     return [result.data];
   });
   const hasFailures = results.some((result) => !result.ok);
-  const resourceEvaluations = resources ? evaluateResourceMetrics(resources) : [];
+  const resourceEvaluations = resourcesForHealth ? evaluateResourceMetrics(resourcesForHealth) : [];
   const resourceRollup = rollUpStatus(resourceEvaluations);
   const status: HealthStatus =
     resourceRollup.status === "critical" || resourceRollup.status === "warning"
@@ -243,7 +244,7 @@ export async function collectSnapshot(
       (evaluation): evaluation is HealthEvaluation & { status: Exclude<HealthStatus, "healthy"> } =>
         evaluation.status !== "healthy",
     )
-    .map((evaluation) => healthIssue(evaluation, resources!, observedAt));
+    .map((evaluation) => healthIssue(evaluation, resourcesForHealth!, observedAt));
 
   return {
     data: successfulData.length > 0 ? successfulData : null,

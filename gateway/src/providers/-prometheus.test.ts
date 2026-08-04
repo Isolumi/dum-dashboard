@@ -266,6 +266,45 @@ describe("PrometheusProvider", () => {
     expect(second[0]!.points).not.toBe(first[0]!.points);
   });
 
+  it("lets one caller abort without cancelling a shared in-flight range request", async () => {
+    let resolveUpstream!: (response: Response) => void;
+    let upstreamSignal: AbortSignal | undefined;
+    const fetchApi = vi.fn((_url: string, options: RequestInit) => {
+      upstreamSignal = options.signal ?? undefined;
+      return new Promise<Response>((resolve, reject) => {
+        resolveUpstream = resolve;
+        upstreamSignal?.addEventListener("abort", () => reject(new Error("upstream aborted")), {
+          once: true,
+        });
+      });
+    });
+    const provider = new PrometheusProvider({
+      baseUrl: "http://prometheus.test",
+      fetchApi,
+      now: () => NOW,
+    });
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const firstRemoveListener = vi.spyOn(firstController.signal, "removeEventListener");
+    const secondRemoveListener = vi.spyOn(secondController.signal, "removeEventListener");
+    const args = ["up", "2026-08-04T11:55:00.000Z", "2026-08-04T12:00:00.000Z", "300s"] as const;
+
+    const firstRequest = provider.queryRange(...args, firstController.signal);
+    const secondRequest = provider.queryRange(...args, secondController.signal);
+    const firstRejection = expect(firstRequest).rejects.toThrow("Prometheus request aborted");
+    firstController.abort();
+    await Promise.resolve();
+
+    expect(upstreamSignal?.aborted).toBe(false);
+    resolveUpstream(jsonResponse(fixture.matrix));
+
+    await firstRejection;
+    await expect(secondRequest).resolves.toHaveLength(1);
+    expect(fetchApi).toHaveBeenCalledTimes(1);
+    expect(firstRemoveListener).toHaveBeenCalledWith("abort", expect.any(Function));
+    expect(secondRemoveListener).toHaveBeenCalledWith("abort", expect.any(Function));
+  });
+
   it("removes a rejected in-flight range request so the next call retries", async () => {
     let rejectFirst = true;
     const fetchApi = vi.fn(async (_url: string, _options: RequestInit) => {
@@ -398,6 +437,31 @@ describe("PrometheusProvider", () => {
 });
 
 describe("Prometheus cluster snapshot integration", () => {
+  it("keeps resource health Unknown when the Prometheus provider is omitted", async () => {
+    const snapshot = await collectSnapshot(
+      [
+        {
+          source: "kubernetes",
+          collect: async () => structuredClone(emptyCluster),
+        },
+      ],
+      1_000,
+      () => new Date(NOW),
+    );
+
+    expect(snapshot.status).toBe("unknown");
+    expect(snapshot.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ruleId: "cpu-usage-unknown", status: "unknown" }),
+        expect.objectContaining({ ruleId: "memory-usage-unknown", status: "unknown" }),
+        expect.objectContaining({ ruleId: "disk-usage-unknown", status: "unknown" }),
+      ]),
+    );
+    expect(snapshot.sources).toEqual([
+      expect.objectContaining({ source: "kubernetes", status: "healthy" }),
+    ]);
+  });
+
   it("adds resources to ClusterData and evaluates sustained CPU/memory plus disk", async () => {
     const snapshot = await collectClusterSnapshot({
       current: [

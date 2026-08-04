@@ -118,6 +118,28 @@ function cloneMetricSeries(series: readonly MetricSeries[]): MetricSeries[] {
   }));
 }
 
+function waitForCaller<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return operation;
+  if (signal.aborted) return Promise.reject(new Error("Prometheus request aborted"));
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const finish = (complete: () => void) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", abort);
+      complete();
+    };
+    const abort = () => finish(() => reject(new Error("Prometheus request aborted")));
+
+    signal.addEventListener("abort", abort, { once: true });
+    operation.then(
+      (value) => finish(() => resolve(value)),
+      (error: unknown) => finish(() => reject(error)),
+    );
+  });
+}
+
 export class PrometheusProvider implements Provider<ResourceMetrics> {
   readonly source = "prometheus" as const;
 
@@ -206,13 +228,17 @@ export class PrometheusProvider implements Provider<ResourceMetrics> {
       if (entry.expiresAt <= now) this.rangeCache.delete(key);
     }
     const cached = this.rangeCache.get(cacheKey);
-    if (cached) return cloneMetricSeries(cached.value);
+    if (cached) {
+      const value = await waitForCaller(Promise.resolve(cached.value), signal);
+      return cloneMetricSeries(value);
+    }
 
     const existingRequest = this.rangeInFlight.get(cacheKey);
-    if (existingRequest) return cloneMetricSeries(await existingRequest);
+    if (existingRequest) return cloneMetricSeries(await waitForCaller(existingRequest, signal));
 
-    const request = (async () => {
-      const payload = await this.request("query_range", parameters, signal);
+    let sharedRequest!: Promise<MetricSeries[]>;
+    sharedRequest = (async () => {
+      const payload = await this.request("query_range", parameters);
       let value: MetricSeries[];
       try {
         value = parseMatrix(payload);
@@ -225,13 +251,13 @@ export class PrometheusProvider implements Provider<ResourceMetrics> {
         value: cachedValue,
       });
       return cachedValue;
-    })();
-    this.rangeInFlight.set(cacheKey, request);
-    try {
-      return cloneMetricSeries(await request);
-    } finally {
-      if (this.rangeInFlight.get(cacheKey) === request) this.rangeInFlight.delete(cacheKey);
-    }
+    })().finally(() => {
+      if (this.rangeInFlight.get(cacheKey) === sharedRequest) {
+        this.rangeInFlight.delete(cacheKey);
+      }
+    });
+    this.rangeInFlight.set(cacheKey, sharedRequest);
+    return cloneMetricSeries(await waitForCaller(sharedRequest, signal));
   }
 
   queryRange(
@@ -239,8 +265,9 @@ export class PrometheusProvider implements Provider<ResourceMetrics> {
     start: string | number | Date,
     end: string | number | Date,
     step: string | number,
+    signal?: AbortSignal,
   ): Promise<MetricSeries[]> {
-    return this.queryRangeWithSignal(query, start, end, step);
+    return this.queryRangeWithSignal(query, start, end, step, signal);
   }
 
   private async resourceHistory(
