@@ -29,7 +29,12 @@ export default mergeConfig(
             ],
             test: {
               name: "unit",
-              include: ["src/**/-*.test.ts", "tests/**/-*.test.ts", "shared/**/-*.test.ts"],
+              include: [
+                "src/**/-*.test.ts",
+                "tests/**/-*.test.ts",
+                "shared/**/-*.test.ts",
+                "gateway/src/**/-*.test.ts",
+              ],
               environment: "node",
               env: {
                 VITE_SUPABASE_URL: "http://localhost",
