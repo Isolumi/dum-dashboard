@@ -422,6 +422,7 @@ export async function collectDeploymentSnapshot(
             pods: cluster.data.pods.map((pod) => ({
               name: pod.name,
               namespace: pod.namespace,
+              status: pod.status,
               ready: pod.ready,
               containerImages: pod.containerImages,
             })),

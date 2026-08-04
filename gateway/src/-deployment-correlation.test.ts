@@ -125,6 +125,7 @@ function kubernetes(options?: {
         kind: "Deployment",
         name: "yootoob-mp3-api",
         namespace: "yootoob-mp3",
+        status: "healthy" as const,
         desiredReplicas: 1,
         availableReplicas: apiAvailable,
       },
@@ -132,6 +133,7 @@ function kubernetes(options?: {
         kind: "Deployment",
         name: "yootoob-mp3-frontend",
         namespace: "yootoob-mp3",
+        status: "healthy" as const,
         desiredReplicas: 1,
         availableReplicas: frontendAvailable,
       },
@@ -143,6 +145,7 @@ function kubernetes(options?: {
             {
               name: "yootoob-mp3-api-abc",
               namespace: "yootoob-mp3",
+              status: "healthy" as const,
               ready: apiAvailable > 0,
               imageTag: options?.apiSidecarFirst ? null : apiImage.reference,
               imageDigest: options?.apiSidecarFirst ? null : apiImage.digest,
@@ -152,6 +155,7 @@ function kubernetes(options?: {
       {
         name: "yootoob-mp3-frontend-abc",
         namespace: "yootoob-mp3",
+        status: "healthy" as const,
         ready: frontendAvailable > 0,
         imageTag: frontendImage.reference,
         imageDigest: frontendImage.digest,
@@ -172,6 +176,12 @@ function correlate(overrides?: {
     kubernetes: overrides?.kubernetes ?? kubernetes(),
     observedAt: "2026-08-04T12:02:00Z",
   });
+}
+
+type MutableKubernetesEvidence = { workloads: unknown; pods: unknown };
+
+function firstRecord(value: unknown): Record<string, unknown> {
+  return (value as Array<Record<string, unknown>>)[0]!;
 }
 
 describe("correlateDeployment", () => {
@@ -343,11 +353,184 @@ describe("correlateDeployment", () => {
   );
 
   it.each([
+    { name: "valid control", mutate: null, expectedStatus: "healthy" },
+    {
+      name: "null workloads",
+      mutate: (evidence: MutableKubernetesEvidence) => (evidence.workloads = null),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "non-array workloads",
+      mutate: (evidence: MutableKubernetesEvidence) => (evidence.workloads = {}),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "null pods",
+      mutate: (evidence: MutableKubernetesEvidence) => (evidence.pods = null),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "non-array pods",
+      mutate: (evidence: MutableKubernetesEvidence) => (evidence.pods = {}),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "malformed workload record",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        ((evidence.workloads as unknown[])[0] = null),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "malformed workload kind",
+      mutate: (evidence: MutableKubernetesEvidence) => (firstRecord(evidence.workloads).kind = 42),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "malformed workload name",
+      mutate: (evidence: MutableKubernetesEvidence) => (firstRecord(evidence.workloads).name = 42),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "malformed workload namespace",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.workloads).namespace = null),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "malformed workload status",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.workloads).status = 42),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "malformed pod record",
+      mutate: (evidence: MutableKubernetesEvidence) => ((evidence.pods as unknown[])[0] = null),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "malformed pod name",
+      mutate: (evidence: MutableKubernetesEvidence) => (firstRecord(evidence.pods).name = 42),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "malformed pod namespace",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.pods).namespace = null),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "malformed pod status",
+      mutate: (evidence: MutableKubernetesEvidence) => (firstRecord(evidence.pods).status = 42),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "NaN desired replicas",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.workloads).desiredReplicas = Number.NaN),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "string desired replicas",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.workloads).desiredReplicas = "1"),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "negative desired replicas",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.workloads).desiredReplicas = -1),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "NaN available replicas",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.workloads).availableReplicas = Number.NaN),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "string available replicas",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.workloads).availableReplicas = "1"),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "negative available replicas",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.workloads).availableReplicas = -1),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "null container images",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.pods).containerImages = null),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "non-array container images",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.pods).containerImages = { legacy: true }),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "malformed nested image",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(firstRecord(evidence.pods).containerImages).repository = 42),
+      expectedStatus: "unknown",
+    },
+  ])("is runtime-total for $name", ({ mutate, expectedStatus }) => {
+    const kubernetesEvidence = structuredClone(
+      kubernetes(),
+    ) as unknown as MutableKubernetesEvidence;
+    mutate?.(kubernetesEvidence);
+    let result: ReturnType<typeof correlateDeployment> | undefined;
+
+    expect(() => {
+      result = correlateDeployment({
+        workflow: workflow(),
+        application: application(),
+        kubernetes: kubernetesEvidence as unknown as ReturnType<typeof kubernetes>,
+        observedAt: "2026-08-04T12:02:00Z",
+      });
+    }).not.toThrow();
+
+    expect(result?.status).toBe(expectedStatus);
+    if (expectedStatus === "healthy") {
+      expect(result?.issues).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ ruleId: "deployment-kubernetes-evidence-invalid" }),
+        ]),
+      );
+      return;
+    }
+
+    expect(result).toMatchObject({
+      status: "unknown",
+      rollout: { status: "unknown" },
+      workloads: [
+        { status: "unknown", desiredReplicas: 0, availableReplicas: 0 },
+        { status: "unknown", desiredReplicas: 0, availableReplicas: 0 },
+      ],
+    });
+    expect(result?.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: "deployment-kubernetes-evidence-invalid",
+          status: "unknown",
+          reason: "Kubernetes deployment evidence is invalid.",
+          source: "kubernetes",
+          resource: "yootoob-mp3",
+        }),
+      ]),
+    );
+    expect(result?.issues.some(({ status }) => status === "critical")).toBe(false);
+  });
+
+  it.each([
     { name: "missing", containerImages: undefined },
     { name: "non-array", containerImages: { legacyImage: `${API_REPOSITORY}:${SOURCE_SHA}` } },
     { name: "an invalid entry", containerImages: [{ name: "api", repository: 42 }] },
   ])(
-    "is Unknown when pod containerImages is $name at the defensive boundary",
+    "preserves Round 2 Unknown evidence when pod containerImages is $name",
     ({ containerImages }) => {
       const valid = kubernetes();
       const apiPod = valid.pods[0]!;

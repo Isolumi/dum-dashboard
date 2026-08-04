@@ -275,3 +275,63 @@ The regression matrix was then expanded to include malformed `containerImages` e
 - Valid Kubernetes mapper output is covered by the unchanged provider tests and the complete gateway/shared/full regression suites.
 - No reviewer subagent capability was available in this environment; the final review gate was performed directly against the complete diff and the remaining finding.
 - Live GitHub, Argo, and Kubernetes endpoints were intentionally not contacted.
+
+## Fix Round 3 (2026-08-04)
+
+### Status
+
+DONE — the remaining runtime-totality finding from review of commit `75ef18b` is addressed at the direct public `correlateDeployment` boundary with strict tests-first evidence.
+
+### Finding Resolution
+
+- `correlateDeployment` now treats its Kubernetes argument as untrusted runtime data before any correlation dereference. The complete evidence object is accepted only when `workloads` and `pods` are arrays and every nested record passes the runtime guards.
+- Workload guards require string `kind`, `name`, and `namespace`, a recognized health `status`, and finite non-negative integer `desiredReplicas` and `availableReplicas` values.
+- Pod guards require string `name` and `namespace`, a recognized health `status`, boolean `ready`, an array of `containerImages`, and valid `{ name, repository, reference, tag, digest }` types for every nested entry.
+- Any malformed Kubernetes shape is normalized to unavailable evidence before `find`, `filter`, `startsWith`, replica comparison, or image correlation can run. Both deployment workloads and the rollout become explicit Unknown evidence with zeroed safe replica summaries; the application receives the fixed `deployment-kubernetes-evidence-invalid` issue and reason `Kubernetes deployment evidence is invalid.`
+- Safe pod identity is inspected separately only to preserve the Round 2 `deployment-container-images-unavailable` issue for a known API/frontend target. No malformed nested value or raw provider payload is copied into the result.
+- Valid typed inputs retain the existing behavior. The valid control remains Healthy, and a valid workload with zero available replicas remains Critical.
+- Snapshot integration now passes pod health status into the direct correlation contract. Existing route-side deep provider validation and partial-source handling remain unchanged.
+
+### Strict TDD Evidence
+
+The compact table-driven direct correlator regression was added before implementation. It covers a valid control and malformed variants for null/non-array workload and pod collections; malformed workload records, kind, name, namespace, and status; malformed pod records, name, namespace, and status; `NaN`, string, and negative desired/available replicas; null/non-array `containerImages`; and malformed nested image evidence.
+
+Initial RED command:
+
+`bunx vitest run gateway/src/-deployment-correlation.test.ts`
+
+Initial RED result: exit 1; 35 tests ran, with 22 failed and 13 passed. The failures reproduced throws from array and string operations, false Healthy states from malformed kinds/statuses and coerced replicas, and false Critical/Warning states from malformed names and negative replicas.
+
+After the application-level guard was green, the preserved Round 2 per-target image evidence was restored tests-first. The same command produced the compatibility RED: exit 1; 38 tests ran, with 3 failed and 35 passed because malformed `containerImages` no longer emitted `deployment-container-images-unavailable`.
+
+Final GREEN for the direct correlator: exit 0; 1 file and 38 tests passed.
+
+### Verification Evidence
+
+- Focused Task 7: `bunx vitest run gateway/src/providers/-github.test.ts gateway/src/providers/-argocd.test.ts gateway/src/-deployment-correlation.test.ts gateway/src/providers/-kubernetes.test.ts gateway/src/-snapshot.test.ts gateway/src/-runtime.test.ts gateway/src/-app.test.ts` — exit 0; 7 files and 94 tests passed.
+- Gateway/shared regressions: `bunx vitest run gateway shared` — exit 0; 9 files and 140 tests passed.
+- Full configured repository suite: `bun run test` — exit 0; 21 files and 221 tests passed.
+- Gateway build: `bun run build:gateway` — exit 0; 968 modules bundled into `gateway/dist/index.js`.
+- Application build: `bun run build` — exit 0; client, SSR, and Nitro builds completed with only the existing generated-CSS and third-party bundler warnings.
+- Lint: `bun run lint` — exit 0; 0 warnings and 0 errors across 79 files.
+- Scoped formatting: `bunx oxfmt --write` followed by `bunx oxfmt --check` over the three changed TypeScript source/test files — exit 0.
+- TypeScript: `bunx tsc --noEmit` exits 2 only for the two known unrelated diagnostics in `src/lib/secret-vault.ts:46` and `src/routes/_layout/todos/-PrioritySection.tsx:59`; no Task 7 diagnostic is present.
+- Diff validation: `git diff --check` — exit 0.
+
+The literal `bun test` command was also attempted, but Bun interpreted it as its native runner rather than the repository's Vitest script. Its jsdom and Vitest-helper incompatibilities produced unrelated runner-only failures. The authoritative configured suite is `bun run test`, which passed all 221 tests.
+
+### Files Changed in Fix Round 3
+
+- `.superpowers/sdd/2026-08-04-homelab-dashboard/task-7-report.md`
+- `gateway/src/deployment-correlation.ts`
+- `gateway/src/-deployment-correlation.test.ts`
+- `gateway/src/snapshot.ts`
+
+### Fix Round 3 Self-Review and Concerns
+
+- The public correlator no longer trusts its TypeScript annotation at runtime for any Kubernetes field it dereferences.
+- Malformed evidence cannot generate a tag/digest mismatch, false Healthy state, or false replica Critical/Warning state. The fixed Unknown application issue is always present for malformed Kubernetes input.
+- Existing valid image correlation, sidecar handling, GitHub/Argo evidence separation, zero-replica Critical behavior, nullable issue source semantics, read-only provider APIs, optional startup, and token secrecy remain covered by the focused and full regressions.
+- No live network request, mutation/exec API, credential, Kubernetes manifest, shared contract, fixture, or unrelated application file was added or changed.
+- No reviewer subagent capability was available in this environment; the final review gate was performed directly against the complete diff and the Round 3 finding.
+- Full-project TypeScript remains blocked only by the two approved unrelated errors listed above. The application build continues to emit existing non-fatal generated-CSS and third-party bundler warnings.

@@ -23,18 +23,21 @@ const TARGETS = [
     repository: "ghcr.io/isolumi/yootoob-mp3-frontend",
   },
 ] as const;
+type DeploymentTargetName = (typeof TARGETS)[number]["name"];
 
 export interface KubernetesDeploymentEvidence {
   workloads: Array<{
     kind: string;
     name: string;
     namespace: string;
+    status: HealthStatus;
     desiredReplicas: number;
     availableReplicas: number;
   }>;
   pods: Array<{
     name: string;
     namespace: string;
+    status: HealthStatus;
     ready: boolean;
     containerImages: PodContainerImageEvidence[];
   }>;
@@ -56,12 +59,26 @@ interface ImageParts {
   digest: string | null;
 }
 
+interface NormalizedKubernetesEvidence {
+  evidence: KubernetesDeploymentEvidence | null;
+  invalid: boolean;
+  invalidContainerTargets: DeploymentTargetName[];
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
+}
+
+function isHealthStatus(value: unknown): value is HealthStatus {
+  return ["healthy", "warning", "critical", "unknown"].includes(value as HealthStatus);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
 function isPodContainerImageEvidence(value: unknown): value is PodContainerImageEvidence {
@@ -75,14 +92,72 @@ function isPodContainerImageEvidence(value: unknown): value is PodContainerImage
   );
 }
 
-function runtimeContainerImages(
-  pod: KubernetesDeploymentEvidence["pods"][number],
-): PodContainerImageEvidence[] | null {
-  const value: unknown = pod.containerImages;
-  if (!Array.isArray(value) || !value.every(isPodContainerImageEvidence)) {
-    return null;
+function isWorkloadEvidence(
+  value: unknown,
+): value is KubernetesDeploymentEvidence["workloads"][number] {
+  return (
+    isRecord(value) &&
+    typeof value.kind === "string" &&
+    typeof value.name === "string" &&
+    typeof value.namespace === "string" &&
+    isHealthStatus(value.status) &&
+    isNonNegativeInteger(value.desiredReplicas) &&
+    isNonNegativeInteger(value.availableReplicas)
+  );
+}
+
+function isPodEvidence(value: unknown): value is KubernetesDeploymentEvidence["pods"][number] {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    typeof value.namespace === "string" &&
+    isHealthStatus(value.status) &&
+    typeof value.ready === "boolean" &&
+    Array.isArray(value.containerImages) &&
+    value.containerImages.every(isPodContainerImageEvidence)
+  );
+}
+
+function findInvalidContainerTargets(value: unknown): DeploymentTargetName[] {
+  if (!isRecord(value) || !Array.isArray(value.pods)) return [];
+
+  const invalidTargets = new Set<DeploymentTargetName>();
+  for (const pod of value.pods) {
+    if (!isRecord(pod) || typeof pod.name !== "string" || pod.namespace !== DEPLOYMENT_NAMESPACE) {
+      continue;
+    }
+
+    const podName = pod.name;
+    const target = TARGETS.find(({ name }) => podName === name || podName.startsWith(`${name}-`));
+    if (
+      target &&
+      (!Array.isArray(pod.containerImages) ||
+        !pod.containerImages.every(isPodContainerImageEvidence))
+    ) {
+      invalidTargets.add(target.name);
+    }
   }
-  return value;
+
+  return [...invalidTargets];
+}
+
+function normalizeKubernetesEvidence(value: unknown): NormalizedKubernetesEvidence {
+  const invalidContainerTargets = findInvalidContainerTargets(value);
+  if (value === null) return { evidence: null, invalid: false, invalidContainerTargets };
+  if (!isRecord(value)) return { evidence: null, invalid: true, invalidContainerTargets };
+
+  const workloads = value.workloads;
+  const pods = value.pods;
+  if (
+    !Array.isArray(workloads) ||
+    !workloads.every(isWorkloadEvidence) ||
+    !Array.isArray(pods) ||
+    !pods.every(isPodEvidence)
+  ) {
+    return { evidence: null, invalid: true, invalidContainerTargets };
+  }
+
+  return { evidence: { workloads, pods }, invalid: false, invalidContainerTargets };
 }
 
 function worstStatus(statuses: readonly HealthStatus[]): HealthStatus {
@@ -145,10 +220,8 @@ function workloadState(
         (pod.name === target.name || pod.name.startsWith(`${target.name}-`)),
     ) ?? [];
   const expected = expectedImage(input.application, target.repository);
-  const podContainerImages = pods.map(runtimeContainerImages);
-  const invalidContainerImagePods = podContainerImages.filter((images) => images === null).length;
-  const targetContainers = podContainerImages.flatMap(
-    (images) => images?.filter((container) => container.repository === target.repository) ?? [],
+  const targetContainers = pods.flatMap((pod) =>
+    pod.containerImages.filter((container) => container.repository === target.repository),
   );
   const liveImages = unique(targetContainers.map((container) => container.reference));
   const liveTags = unique(targetContainers.map((container) => container.tag));
@@ -234,31 +307,10 @@ function workloadState(
       ),
     );
   } else if (pods.length > 0) {
-    if (invalidContainerImagePods > 0) {
-      issues.push(
-        issue(
-          "deployment-container-images-unavailable",
-          "unknown",
-          `Container image evidence is unavailable for ${target.name}.`,
-          "kubernetes",
-          resource,
-          input.observedAt,
-          {
-            repository: target.repository,
-            podCount: pods.length,
-            invalidPodCount: invalidContainerImagePods,
-          },
-        ),
-      );
-    }
     const missingTag =
-      invalidContainerImagePods > 0 ||
-      targetContainers.length === 0 ||
-      targetContainers.some((container) => !container.tag);
+      targetContainers.length === 0 || targetContainers.some((container) => !container.tag);
     const missingDigest =
-      invalidContainerImagePods > 0 ||
-      targetContainers.length === 0 ||
-      targetContainers.some((container) => !container.digest);
+      targetContainers.length === 0 || targetContainers.some((container) => !container.digest);
     if (missingTag) {
       issues.push(
         issue(
@@ -288,7 +340,6 @@ function workloadState(
   }
 
   const comparableTags =
-    invalidContainerImagePods === 0 &&
     expected.tag !== null &&
     liveTags.length > 0 &&
     targetContainers.every((container) => container.tag !== null);
@@ -308,7 +359,6 @@ function workloadState(
   }
 
   const comparableDigests =
-    invalidContainerImagePods === 0 &&
     expected.digest !== null &&
     liveDigests.length > 0 &&
     targetContainers.every((container) => container.digest !== null);
@@ -411,11 +461,45 @@ function argoStage(application: ArgoApplicationState | null, observedAt: string)
 }
 
 export function correlateDeployment(input: DeploymentCorrelationInput): DeploymentState {
-  const correlated = TARGETS.map((target) => workloadState(input, target));
+  const normalizedKubernetes = normalizeKubernetesEvidence(input.kubernetes);
+  const normalizedInput: DeploymentCorrelationInput = {
+    ...input,
+    kubernetes: normalizedKubernetes.evidence,
+  };
+  const correlated = TARGETS.map((target) => workloadState(normalizedInput, target));
   const workloads = correlated.map(({ state }) => state);
   const issues = correlated.flatMap(({ issues: workloadIssues }) => workloadIssues);
   const workflow = workflowStage(input.workflow, input.observedAt);
   const argo = argoStage(input.application, input.observedAt);
+
+  if (normalizedKubernetes.invalid) {
+    issues.push(
+      issue(
+        "deployment-kubernetes-evidence-invalid",
+        "unknown",
+        "Kubernetes deployment evidence is invalid.",
+        "kubernetes",
+        DEPLOYMENT_NAMESPACE,
+        input.observedAt,
+        { valid: false },
+      ),
+    );
+  }
+
+  for (const targetName of normalizedKubernetes.invalidContainerTargets) {
+    const target = TARGETS.find(({ name }) => name === targetName)!;
+    issues.push(
+      issue(
+        "deployment-container-images-unavailable",
+        "unknown",
+        `Container image evidence is unavailable for ${target.name}.`,
+        "kubernetes",
+        `Deployment/${target.name}`,
+        input.observedAt,
+        { repository: target.repository, valid: false },
+      ),
+    );
+  }
 
   if (workflow.status !== "healthy") {
     issues.push(
