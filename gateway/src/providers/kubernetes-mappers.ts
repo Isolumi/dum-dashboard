@@ -56,6 +56,13 @@ function imageReference(value: string | undefined): string | null {
   return value.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
 }
 
+function imageDigest(value: string | undefined): string | null {
+  const reference = imageReference(value);
+  if (!reference) return null;
+  const digestSeparator = reference.indexOf("@");
+  return digestSeparator >= 0 ? reference.slice(digestSeparator + 1) : null;
+}
+
 function podReady(pod: V1Pod): boolean {
   return (
     pod.status?.conditions?.some(
@@ -162,6 +169,12 @@ function mapPod(pod: V1Pod): PodSummary {
     ),
     node: pod.spec?.nodeName ?? null,
     image,
+    imageTag:
+      pod.spec?.containers.map((container) => container.image).find(Boolean) ??
+      containerStatuses.map((container) => container.image).find(Boolean) ??
+      null,
+    imageDigest:
+      containerStatuses.map((container) => imageDigest(container.imageID)).find(Boolean) ?? null,
     createdAt: timestamp(pod.metadata?.creationTimestamp),
   };
 }

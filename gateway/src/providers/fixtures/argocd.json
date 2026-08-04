@@ -1,0 +1,60 @@
+{
+  "apiVersion": "argoproj.io/v1alpha1",
+  "kind": "Application",
+  "metadata": {
+    "name": "yootoob-mp3-dumachine",
+    "namespace": "argocd"
+  },
+  "status": {
+    "sync": {
+      "status": "Synced",
+      "revision": "0123456789abcdef0123456789abcdef01234567"
+    },
+    "health": {
+      "status": "Healthy",
+      "message": "Application is healthy",
+      "lastTransitionTime": "2026-08-04T12:01:00Z"
+    },
+    "operationState": {
+      "phase": "Succeeded",
+      "message": "successfully synced",
+      "startedAt": "2026-08-04T12:00:00Z",
+      "finishedAt": "2026-08-04T12:01:00Z",
+      "syncResult": {
+        "revision": "0123456789abcdef0123456789abcdef01234567"
+      }
+    },
+    "resources": [
+      {
+        "group": "apps",
+        "version": "v1",
+        "kind": "Deployment",
+        "namespace": "yootoob-mp3",
+        "name": "yootoob-mp3-api",
+        "status": "Synced",
+        "health": {
+          "status": "Healthy",
+          "message": "Deployment has minimum availability"
+        }
+      },
+      {
+        "group": "apps",
+        "version": "v1",
+        "kind": "Deployment",
+        "namespace": "yootoob-mp3",
+        "name": "yootoob-mp3-frontend",
+        "status": "Synced",
+        "health": {
+          "status": "Healthy",
+          "message": "Deployment has minimum availability"
+        }
+      }
+    ],
+    "summary": {
+      "images": [
+        "ghcr.io/isolumi/youtube-mp3-api:sha-0123456@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "ghcr.io/isolumi/youtube-mp3-frontend:sha-0123456@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ]
+    }
+  }
+}

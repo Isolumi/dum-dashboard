@@ -3,7 +3,7 @@ import { streamSSE } from "hono/streaming";
 import { getGatewayConfig } from "./config";
 import type { KubernetesReader, PodLogStream } from "./providers/kubernetes";
 import type { Provider } from "./providers/provider";
-import { collectSnapshot, type Now } from "./snapshot";
+import { collectDeploymentSnapshot, collectSnapshot, type Now } from "./snapshot";
 
 type SnapshotRoute = "overview" | "cluster" | "deployments" | "services";
 
@@ -36,9 +36,13 @@ export function createGateway(dependencies: GatewayDependencies = {}): Hono {
       route === "cluster" && dependencies.kubernetesProvider && !dependencies.providers?.cluster
         ? [dependencies.kubernetesProvider]
         : (dependencies.providers?.[route] ?? []);
-    app.get(`/${route}`, async (context) =>
-      context.json(await collectSnapshot(providers, timeoutMs, now)),
-    );
+    app.get(`/${route}`, async (context) => {
+      const snapshot =
+        route === "deployments"
+          ? await collectDeploymentSnapshot(providers, timeoutMs, now)
+          : await collectSnapshot(providers, timeoutMs, now);
+      return context.json(snapshot);
+    });
   }
 
   app.get("/pods/:namespace/:pod", async (context) => {

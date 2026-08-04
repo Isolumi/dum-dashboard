@@ -1,0 +1,32 @@
+{
+  "workflowRuns": {
+    "total_count": 1,
+    "workflow_runs": [
+      {
+        "id": 987654321,
+        "name": "Build images",
+        "head_branch": "main",
+        "head_sha": "0123456789abcdef0123456789abcdef01234567",
+        "status": "completed",
+        "conclusion": "success",
+        "run_started_at": "2026-08-04T11:58:00Z",
+        "updated_at": "2026-08-04T12:00:30Z",
+        "html_url": "https://github.com/Isolumi/youtube-mp3/actions/runs/987654321"
+      }
+    ]
+  },
+  "commit": {
+    "sha": "0123456789abcdef0123456789abcdef01234567",
+    "html_url": "https://github.com/Isolumi/youtube-mp3/commit/0123456789abcdef0123456789abcdef01234567",
+    "commit": {
+      "message": "Deploy API and frontend",
+      "author": {
+        "name": "Isolumi",
+        "date": "2026-08-04T11:57:00Z"
+      }
+    },
+    "author": {
+      "login": "Isolumi"
+    }
+  }
+}

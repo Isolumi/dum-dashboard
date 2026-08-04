@@ -25,6 +25,11 @@ describe("production gateway dependencies", () => {
       "prometheus",
     ]);
     expect(dependencies.providers.cluster[0]).toBe(dependencies.kubernetesProvider);
+    expect(dependencies.providers.deployments.map(({ source }) => source)).toEqual([
+      "github",
+      "argocd",
+      "kubernetes",
+    ]);
   });
 
   it("starts with Kubernetes only when PROMETHEUS_URL is absent", async () => {
@@ -35,6 +40,11 @@ describe("production gateway dependencies", () => {
 
     expect(dependencies.providers.cluster.map(({ source }) => source)).toEqual(["kubernetes"]);
     expect(dependencies.providers.cluster[0]).toBe(dependencies.kubernetesProvider);
+    expect(dependencies.providers.deployments.map(({ source }) => source)).toEqual([
+      "github",
+      "argocd",
+      "kubernetes",
+    ]);
 
     const gateway = createGateway(dependencies);
     const healthResponse = await gateway.request("/healthz");

@@ -1,5 +1,6 @@
 import type {
   ClusterData,
+  DeploymentSnapshot,
   HealthIssue,
   HealthStatus,
   ResourceHistory,
@@ -15,6 +16,9 @@ import {
   type HealthEvaluation,
 } from "../../shared/homelab/health-rules";
 import type { Provider } from "./providers/provider";
+import { correlateDeployment } from "./deployment-correlation";
+import type { ArgoApplicationState } from "./providers/argocd";
+import type { WorkflowRun } from "./providers/github";
 
 export type Now = () => Date;
 
@@ -258,6 +262,66 @@ export async function collectSnapshot(
     observedAt,
     stale: hasFailures || results.length === 0,
     issues,
+    sources: results.map((result) => result.state),
+  };
+}
+
+export async function collectDeploymentSnapshot(
+  providers: readonly Provider<unknown>[],
+  timeoutMs: number,
+  now: Now = () => new Date(),
+): Promise<DeploymentSnapshot> {
+  const results = await collectProviders(providers, timeoutMs, now);
+  const workflow = results.find((result) => result.ok && result.source === "github");
+  const application = results.find((result) => result.ok && result.source === "argocd");
+  const cluster = results.find(
+    (result) => result.ok && result.source === "kubernetes" && isClusterData(result.data),
+  );
+  const successful = results.some((result) => result.ok);
+  const observedAt = timestamp(now);
+
+  if (!successful) {
+    return {
+      data: null,
+      status: "unknown",
+      observedAt,
+      stale: true,
+      issues: [],
+      sources: results.map((result) => result.state),
+    };
+  }
+
+  const state = correlateDeployment({
+    workflow: workflow?.ok ? (workflow.data as WorkflowRun) : null,
+    application: application?.ok ? (application.data as ArgoApplicationState) : null,
+    kubernetes:
+      cluster?.ok && isClusterData(cluster.data)
+        ? {
+            workloads: cluster.data.workloads,
+            pods: cluster.data.pods.map((pod) => ({
+              name: pod.name,
+              namespace: pod.namespace,
+              ready: pod.ready,
+              imageTag: pod.imageTag,
+              imageDigest: pod.imageDigest,
+            })),
+          }
+        : null,
+    observedAt,
+  });
+  const hasFailures = results.some((result) => !result.ok);
+
+  return {
+    data: { applications: [state] },
+    status:
+      state.status === "critical" || state.status === "warning"
+        ? state.status
+        : hasFailures
+          ? "unknown"
+          : state.status,
+    observedAt,
+    stale: hasFailures || state.status === "unknown",
+    issues: state.issues,
     sources: results.map((result) => result.state),
   };
 }

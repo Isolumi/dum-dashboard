@@ -81,6 +81,10 @@ describe("Kubernetes mappers", () => {
     expect(cluster.events.map(({ id }) => id)).toEqual(["event-new", "event-old"]);
     expect(cluster.events.every(({ status }) => status === "warning")).toBe(true);
     expect(cluster.pods[0].image).toBe("ghcr.io/isolumi/gateway@sha256:0123456789abcdef");
+    expect(cluster.pods[0]).toMatchObject({
+      imageTag: "ghcr.io/isolumi/gateway:main",
+      imageDigest: "sha256:0123456789abcdef",
+    });
     expect(cluster.resources).toEqual({ current: [], history: [] });
   });
 

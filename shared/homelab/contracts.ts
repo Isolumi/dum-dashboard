@@ -138,6 +138,8 @@ export interface PodSummary {
   restartCount: number;
   node: string | null;
   image: string | null;
+  imageTag: string | null;
+  imageDigest: string | null;
   createdAt: string;
 }
 
@@ -199,16 +201,39 @@ export interface PipelineStage {
   url: string | null;
 }
 
+export interface DeploymentCommitSummary {
+  sha: string;
+  message: string;
+  author: string;
+  committedAt: string;
+  url: string;
+}
+
+export interface DeploymentWorkloadSummary {
+  name: string;
+  namespace: string;
+  status: HealthStatus;
+  desiredReplicas: number;
+  availableReplicas: number;
+  expectedImage: string | null;
+  liveImage: string | null;
+  liveDigests: string[];
+  tagMatches: boolean | null;
+  digestMatches: boolean | null;
+}
+
 export interface ApplicationPipelineSummary {
   application: string;
   namespace: string;
+  repository: string;
+  branch: string;
   status: HealthStatus;
-  commit: string | null;
-  expectedImage: string | null;
-  liveImage: string | null;
+  commit: DeploymentCommitSummary | null;
   workflow: PipelineStage;
   argo: PipelineStage;
   rollout: PipelineStage;
+  workloads: DeploymentWorkloadSummary[];
+  issues: HealthIssue[];
 }
 
 export interface DeploymentData {
