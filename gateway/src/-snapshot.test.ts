@@ -96,10 +96,13 @@ function validCluster(): ClusterData {
   };
 }
 
-function deploymentProviders(cluster: unknown): Provider<unknown>[] {
+function deploymentProviders(
+  cluster: unknown,
+  application: ArgoApplicationState = validApplication(),
+): Provider<unknown>[] {
   return [
     { source: "github", collect: async () => validWorkflow() },
-    { source: "argocd", collect: async () => validApplication() },
+    { source: "argocd", collect: async () => application },
     { source: "kubernetes", collect: async () => cluster },
   ];
 }
@@ -225,6 +228,23 @@ describe("collectDeploymentSnapshot", () => {
         { source: "kubernetes", status: "healthy", stale: false },
       ],
     });
+  });
+
+  it("downgrades a successful Argo source with a whitespace-only revision", async () => {
+    const application = validApplication();
+    application.sync.revision = "   ";
+
+    const snapshot = await collectDeploymentSnapshot(
+      deploymentProviders(validCluster(), application),
+      1_000,
+      now,
+    );
+
+    expect(snapshot.status).toBe("unknown");
+    expect(snapshot.sources).toContainEqual(
+      expect.objectContaining({ source: "argocd", status: "unknown" }),
+    );
+    expect(snapshot.data?.applications[0]?.argoRevision ?? null).toBeNull();
   });
 
   it.each([

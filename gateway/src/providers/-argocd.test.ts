@@ -138,6 +138,91 @@ describe("ArgoProvider", () => {
     expect(parsed?.resources[0]).not.toBe(value.resources[0]);
   });
 
+  it("rejects blank required strings in normalized Argo application evidence", async () => {
+    const provider = new ArgoProvider({
+      customObjectsApi: {
+        getNamespacedCustomObject: vi.fn(async () => structuredClone(fixture)),
+      },
+    });
+    const validApplication = await provider.getApplication("yootoob-mp3-dumachine");
+    const requiredPaths = [
+      ["sync", "status"],
+      ["sync", "revision"],
+      ["health", "status"],
+      ["operation", "phase"],
+    ] as const;
+
+    for (const path of requiredPaths) {
+      for (const invalid of ["", "   "]) {
+        const value = structuredClone(validApplication);
+        value[path[0]][path[1]] = invalid;
+
+        expect(parseArgoApplicationState(value)).toBeNull();
+      }
+    }
+
+    for (const path of ["kind", "name", "syncStatus"] as const) {
+      for (const invalid of ["", "   "]) {
+        const value = structuredClone(validApplication);
+        value.resources[0]![path] = invalid;
+
+        expect(parseArgoApplicationState(value)).toBeNull();
+      }
+    }
+  });
+
+  it.each([
+    {
+      name: "sync revision",
+      mutate: (payload: typeof fixture) => {
+        payload.status.sync.revision = " \t\n";
+      },
+    },
+    {
+      name: "health status",
+      mutate: (payload: typeof fixture) => {
+        payload.status.health.status = " \t\n";
+      },
+    },
+    {
+      name: "operation phase",
+      mutate: (payload: typeof fixture) => {
+        payload.status.operationState.phase = " \t\n";
+      },
+    },
+    {
+      name: "resource kind",
+      mutate: (payload: typeof fixture) => {
+        payload.status.resources[0]!.kind = " \t\n";
+      },
+    },
+    {
+      name: "resource name",
+      mutate: (payload: typeof fixture) => {
+        payload.status.resources[0]!.name = " \t\n";
+      },
+    },
+    {
+      name: "resource sync status",
+      mutate: (payload: typeof fixture) => {
+        payload.status.resources[0]!.status = " \t\n";
+      },
+    },
+  ])(
+    "rejects whitespace-only custom-resource $name with a fixed safe error",
+    async ({ mutate }) => {
+      const payload = structuredClone(fixture);
+      mutate(payload);
+      const provider = new ArgoProvider({
+        customObjectsApi: { getNamespacedCustomObject: vi.fn(async () => payload) },
+      });
+
+      await expect(provider.getApplication("yootoob-mp3-dumachine")).rejects.toThrow(
+        /^Argo CD response invalid$/,
+      );
+    },
+  );
+
   it("preserves null and empty defaults for absent optional Argo status fields", async () => {
     const payload = structuredClone(fixture);
     const status = payload.status as unknown as Record<string, unknown> & {

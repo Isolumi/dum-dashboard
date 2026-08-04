@@ -404,6 +404,31 @@ describe("gateway routes", () => {
     });
   });
 
+  it("returns fixed Unknown Argo evidence for a whitespace-only revision", async () => {
+    const whitespaceMarker = "\t \n";
+    const malformed = validArgoSource();
+    malformed.sync.revision = whitespaceMarker;
+    const response = await hostileDeploymentApp("argocd", malformed).request("/deployments");
+    const body = await response.text();
+    const snapshot = JSON.parse(body);
+
+    expect(response.status).toBe(200);
+    expect(body).not.toContain(JSON.stringify(whitespaceMarker));
+    expect(body).not.toContain("invalid source payload");
+    expect(snapshot).toMatchObject({
+      status: "unknown",
+      stale: true,
+      sources: expect.arrayContaining([
+        expect.objectContaining({
+          source: "argocd",
+          status: "unknown",
+          stale: true,
+          error: "Argo CD unavailable",
+        }),
+      ]),
+    });
+  });
+
   it.each([
     {
       name: "Argo resources at the limit",

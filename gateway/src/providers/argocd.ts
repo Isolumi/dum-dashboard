@@ -69,6 +69,10 @@ function isOptionalString(value: unknown): value is string | null {
   return value === null || (typeof value === "string" && value.length > 0);
 }
 
+function isRequiredString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function parseDenseArray<T>(
   value: unknown,
   maxLength: number,
@@ -114,14 +118,14 @@ export function parseArgoApplicationState(value: unknown): ArgoApplicationState 
     fields.name !== ARGO_APPLICATION ||
     fields.namespace !== ARGO_NAMESPACE ||
     !sync ||
-    typeof sync.status !== "string" ||
-    typeof sync.revision !== "string" ||
+    !isRequiredString(sync.status) ||
+    !isRequiredString(sync.revision) ||
     !health ||
-    typeof health.status !== "string" ||
+    !isRequiredString(health.status) ||
     !isOptionalString(health.message) ||
     !isOptionalString(health.lastTransitionAt) ||
     !operation ||
-    typeof operation.phase !== "string" ||
+    !isRequiredString(operation.phase) ||
     !isOptionalString(operation.message) ||
     !isOptionalString(operation.revision) ||
     !isOptionalString(operation.startedAt) ||
@@ -148,10 +152,10 @@ export function parseArgoApplicationState(value: unknown): ArgoApplicationState 
         !resourceFields ||
         typeof resourceFields.group !== "string" ||
         typeof resourceFields.version !== "string" ||
-        typeof resourceFields.kind !== "string" ||
+        !isRequiredString(resourceFields.kind) ||
         typeof resourceFields.namespace !== "string" ||
-        typeof resourceFields.name !== "string" ||
-        typeof resourceFields.syncStatus !== "string" ||
+        !isRequiredString(resourceFields.name) ||
+        !isRequiredString(resourceFields.syncStatus) ||
         !isOptionalString(resourceFields.healthStatus) ||
         !isOptionalString(resourceFields.healthMessage)
       ) {
@@ -170,7 +174,7 @@ export function parseArgoApplicationState(value: unknown): ArgoApplicationState 
     },
   );
   const images = parseDenseArray(fields.images, RUNTIME_COLLECTION_LIMITS.argoImages, (image) =>
-    typeof image === "string" && image.length > 0 ? image : null,
+    isRequiredString(image) ? image : null,
   );
   if (!resources || !images) return null;
 
@@ -196,7 +200,7 @@ export function parseArgoApplicationState(value: unknown): ArgoApplicationState 
 }
 
 function requiredString(value: unknown): string {
-  if (typeof value !== "string" || value.length === 0) throw new Error("invalid value");
+  if (!isRequiredString(value)) throw new Error("invalid value");
   return value;
 }
 
