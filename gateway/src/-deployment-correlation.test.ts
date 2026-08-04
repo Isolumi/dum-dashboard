@@ -184,6 +184,40 @@ function firstRecord(value: unknown): Record<string, unknown> {
   return (value as Array<Record<string, unknown>>)[0]!;
 }
 
+function withLeadingHole<T>(values: readonly T[]): T[] {
+  const sparse: T[] = [];
+  sparse.length = values.length + 1;
+  for (let index = 0; index < values.length; index += 1) sparse[index + 1] = values[index]!;
+  return sparse;
+}
+
+function expectInvalidKubernetesEvidence(
+  result: ReturnType<typeof correlateDeployment>,
+  secret?: string,
+) {
+  expect(result).toMatchObject({
+    status: "unknown",
+    rollout: { status: "unknown" },
+    workloads: [
+      { status: "unknown", desiredReplicas: 0, availableReplicas: 0 },
+      { status: "unknown", desiredReplicas: 0, availableReplicas: 0 },
+    ],
+  });
+  expect(result.issues).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        ruleId: "deployment-kubernetes-evidence-invalid",
+        status: "unknown",
+        reason: "Kubernetes deployment evidence is invalid.",
+        source: "kubernetes",
+        resource: "yootoob-mp3",
+      }),
+    ]),
+  );
+  expect(result.issues.some(({ status }) => status === "critical")).toBe(false);
+  if (secret) expect(JSON.stringify(result)).not.toContain(secret);
+}
+
 describe("correlateDeployment", () => {
   it("is Healthy when source SHA, desired image tags, live tags/digests, Argo, and replicas match", () => {
     const result = correlate({
@@ -351,6 +385,64 @@ describe("correlateDeployment", () => {
       );
     },
   );
+
+  it.each([
+    {
+      name: "empty workload and pod arrays",
+      evidence: () => ({ workloads: [], pods: [] }),
+      missingTargets: ["yootoob-mp3-api", "yootoob-mp3-frontend"],
+    },
+    {
+      name: "unrelated workloads only",
+      evidence: () => ({
+        workloads: [
+          {
+            kind: "Deployment",
+            name: "unrelated-service",
+            namespace: "yootoob-mp3",
+            status: "healthy" as const,
+            desiredReplicas: 1,
+            availableReplicas: 1,
+          },
+        ],
+        pods: [],
+      }),
+      missingTargets: ["yootoob-mp3-api", "yootoob-mp3-frontend"],
+    },
+    {
+      name: "a target workload absent while its pod is present",
+      evidence: () => {
+        const valid = kubernetes();
+        return { ...valid, workloads: valid.workloads.slice(1) };
+      },
+      missingTargets: ["yootoob-mp3-api"],
+    },
+  ])("reports explicit Unknown missing evidence for $name", ({ evidence, missingTargets }) => {
+    const result = correlate({ kubernetes: evidence() as ReturnType<typeof kubernetes> });
+
+    expect(result.status).toBe("unknown");
+    for (const targetName of missingTargets) {
+      expect(result.workloads.find(({ name }) => name === targetName)).toMatchObject({
+        status: "unknown",
+        desiredReplicas: null,
+        availableReplicas: null,
+      });
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            ruleId: "deployment-workload-unavailable",
+            status: "unknown",
+            resource: `Deployment/${targetName}`,
+            evidence: { desiredReplicas: null, availableReplicas: null },
+          }),
+        ]),
+      );
+    }
+    expect(result.issues).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ ruleId: "deployment-unavailable" })]),
+    );
+    expect(result.issues.some(({ status }) => status === "critical")).toBe(false);
+  });
 
   it.each([
     { name: "valid control", mutate: null, expectedStatus: "healthy" },
@@ -525,6 +617,195 @@ describe("correlateDeployment", () => {
     expect(result?.issues.some(({ status }) => status === "critical")).toBe(false);
   });
 
+  it("does not invoke a throwing Kubernetes evidence accessor", () => {
+    const secret = "getter-secret-stack";
+    let getterCalls = 0;
+    const hostile = Object.defineProperty({ pods: kubernetes().pods }, "workloads", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        throw new Error(secret);
+      },
+    });
+    let result: ReturnType<typeof correlateDeployment> | undefined;
+
+    expect(() => {
+      result = correlateDeployment({
+        workflow: workflow(),
+        application: application(),
+        kubernetes: hostile as unknown as ReturnType<typeof kubernetes>,
+        observedAt: "2026-08-04T12:02:00Z",
+      });
+    }).not.toThrow();
+
+    expect(getterCalls).toBe(0);
+    expectInvalidKubernetesEvidence(result!, secret);
+  });
+
+  it("does not invoke a throwing top-level correlation accessor", () => {
+    const secret = "top-level-getter-secret";
+    let getterCalls = 0;
+    const hostile = Object.defineProperties(
+      {},
+      {
+        workflow: { enumerable: true, value: workflow() },
+        application: { enumerable: true, value: application() },
+        kubernetes: {
+          enumerable: true,
+          get() {
+            getterCalls += 1;
+            throw new Error(secret);
+          },
+        },
+        observedAt: { enumerable: true, value: "2026-08-04T12:02:00Z" },
+      },
+    );
+    let result: ReturnType<typeof correlateDeployment> | undefined;
+
+    expect(() => {
+      result = correlateDeployment(hostile as Parameters<typeof correlateDeployment>[0]);
+    }).not.toThrow();
+
+    expect(getterCalls).toBe(0);
+    expectInvalidKubernetesEvidence(result!, secret);
+  });
+
+  it.each([
+    {
+      name: "workflow accessor",
+      input: () => {
+        const secret = "nested-source-getter-secret";
+        let getterCalls = 0;
+        const value = Object.defineProperty({ ...workflow() }, "status", {
+          enumerable: true,
+          get() {
+            getterCalls += 1;
+            throw new Error(secret);
+          },
+        });
+        return { workflow: value, application: application(), getterCalls: () => getterCalls };
+      },
+      stage: "workflow" as const,
+    },
+    {
+      name: "Argo application accessor",
+      input: () => {
+        const secret = "nested-source-getter-secret";
+        let getterCalls = 0;
+        const value = Object.defineProperty({ ...application() }, "images", {
+          enumerable: true,
+          get() {
+            getterCalls += 1;
+            throw new Error(secret);
+          },
+        });
+        return { workflow: workflow(), application: value, getterCalls: () => getterCalls };
+      },
+      stage: "argo" as const,
+    },
+  ])("does not invoke a hostile $name", ({ input, stage }) => {
+    const hostile = input();
+    let result: ReturnType<typeof correlateDeployment> | undefined;
+
+    expect(() => {
+      result = correlateDeployment({
+        workflow: hostile.workflow,
+        application: hostile.application,
+        kubernetes: kubernetes(),
+        observedAt: "2026-08-04T12:02:00Z",
+      });
+    }).not.toThrow();
+
+    expect(hostile.getterCalls()).toBe(0);
+    expect(result?.status).toBe("unknown");
+    expect(result?.[stage].status).toBe("unknown");
+    expect(result?.issues.some(({ status }) => status === "critical")).toBe(false);
+    expect(JSON.stringify(result)).not.toContain("nested-source-getter-secret");
+  });
+
+  it.each([
+    {
+      name: "inherited-only collections",
+      evidence: () => Object.create(kubernetes()) as unknown,
+    },
+    {
+      name: "a custom object prototype",
+      evidence: () => Object.assign(Object.create({ custom: true }), kubernetes()) as unknown,
+    },
+    {
+      name: "a sparse workload array",
+      evidence: () => {
+        const valid = kubernetes();
+        return { ...valid, workloads: withLeadingHole(valid.workloads) };
+      },
+    },
+    {
+      name: "a sparse pod array",
+      evidence: () => {
+        const valid = kubernetes();
+        return { ...valid, pods: withLeadingHole(valid.pods) };
+      },
+    },
+    {
+      name: "a sparse container-image array",
+      evidence: () => {
+        const valid = kubernetes();
+        const apiPod = valid.pods[0]!;
+        return {
+          ...valid,
+          pods: [
+            { ...apiPod, containerImages: withLeadingHole(apiPod.containerImages) },
+            ...valid.pods.slice(1),
+          ],
+        };
+      },
+    },
+    {
+      name: "a proxy that throws during prototype introspection",
+      evidence: () =>
+        new Proxy(kubernetes(), {
+          getPrototypeOf() {
+            throw new Error("proxy-introspection-secret");
+          },
+        }),
+    },
+    {
+      name: "a proxy that throws during descriptor introspection",
+      evidence: () =>
+        new Proxy(kubernetes(), {
+          getOwnPropertyDescriptor() {
+            throw new Error("proxy-introspection-secret");
+          },
+        }),
+    },
+  ])("rejects $name as fixed Unknown Kubernetes evidence", ({ evidence }) => {
+    let result: ReturnType<typeof correlateDeployment> | undefined;
+
+    expect(() => {
+      result = correlateDeployment({
+        workflow: workflow(),
+        application: application(),
+        kubernetes: evidence() as ReturnType<typeof kubernetes>,
+        observedAt: "2026-08-04T12:02:00Z",
+      });
+    }).not.toThrow();
+
+    expectInvalidKubernetesEvidence(result!, "proxy-introspection-secret");
+  });
+
+  it("accepts valid null-prototype Kubernetes evidence without mutating it", () => {
+    const valid = kubernetes();
+    const evidence = Object.assign(Object.create(null), valid) as ReturnType<typeof kubernetes>;
+    const workloads = evidence.workloads;
+    const pods = evidence.pods;
+
+    const result = correlate({ kubernetes: evidence });
+
+    expect(result.status).toBe("healthy");
+    expect(evidence.workloads).toBe(workloads);
+    expect(evidence.pods).toBe(pods);
+  });
+
   it.each([
     { name: "missing", containerImages: undefined },
     { name: "non-array", containerImages: { legacyImage: `${API_REPOSITORY}:${SOURCE_SHA}` } },
@@ -579,7 +860,18 @@ describe("correlateDeployment", () => {
     expect(result.workloads[1]).toMatchObject({
       name: "yootoob-mp3-frontend",
       status: "critical",
+      desiredReplicas: 1,
       availableReplicas: 0,
     });
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: "deployment-unavailable",
+          status: "critical",
+          resource: "Deployment/yootoob-mp3-frontend",
+          evidence: { desiredReplicas: 1, availableReplicas: 0 },
+        }),
+      ]),
+    );
   });
 });

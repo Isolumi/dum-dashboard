@@ -222,8 +222,8 @@ export interface DeploymentWorkloadSummary {
   name: string;
   namespace: string;
   status: HealthStatus;
-  desiredReplicas: number;
-  availableReplicas: number;
+  desiredReplicas: number | null;
+  availableReplicas: number | null;
   expectedImage: string | null;
   liveImage: string | null;
   liveDigests: string[];

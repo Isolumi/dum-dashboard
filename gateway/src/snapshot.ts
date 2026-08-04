@@ -19,6 +19,7 @@ import type { Provider } from "./providers/provider";
 import { correlateDeployment } from "./deployment-correlation";
 import { isArgoApplicationState } from "./providers/argocd";
 import { isWorkflowRun } from "./providers/github";
+import { readDenseArray, readOwnDataProperties } from "./runtime-validation";
 
 export type Now = () => Date;
 
@@ -52,10 +53,6 @@ function timestamp(now: Now): string {
   return now().toISOString();
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isString(value: unknown): value is string {
   return typeof value === "string";
 }
@@ -76,104 +73,261 @@ function isResourceName(value: unknown): value is ResourceName {
   return ["cpu", "memory", "disk"].includes(value as ResourceName);
 }
 
-function isResourceMetrics(value: unknown): value is ResourceMetrics {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.current) &&
-    value.current.every(
-      (metric) =>
-        isRecord(metric) &&
-        isResourceName(metric.resource) &&
-        isFiniteNumber(metric.usagePercent) &&
-        isString(metric.observedAt),
-    ) &&
-    Array.isArray(value.history) &&
-    value.history.every(
-      (history) =>
-        isRecord(history) &&
-        isResourceName(history.resource) &&
-        Array.isArray(history.points) &&
-        history.points.every(
-          (point) => isRecord(point) && isString(point.timestamp) && isFiniteNumber(point.value),
-        ),
-    )
-  );
+function parseDenseArray<T>(value: unknown, parse: (entry: unknown) => T | null): T[] | null {
+  const entries = readDenseArray(value);
+  if (!entries) return null;
+
+  const parsed: T[] = [];
+  for (const entry of entries) {
+    const result = parse(entry);
+    if (result === null) return null;
+    parsed.push(result);
+  }
+  return parsed;
 }
 
-function isClusterData(value: unknown): value is ClusterData {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.nodes) &&
-    value.nodes.every(
-      (node) =>
-        isRecord(node) &&
-        isString(node.name) &&
-        typeof node.ready === "boolean" &&
-        isHealthStatus(node.status) &&
-        Array.isArray(node.conditions) &&
-        node.conditions.every(isString),
-    ) &&
-    Array.isArray(value.namespaces) &&
-    value.namespaces.every(
-      (namespace) =>
-        isRecord(namespace) &&
-        isString(namespace.name) &&
-        isHealthStatus(namespace.status) &&
-        isFiniteNumber(namespace.workloadCount) &&
-        isFiniteNumber(namespace.podCount),
-    ) &&
-    Array.isArray(value.workloads) &&
-    value.workloads.every(
-      (workload) =>
-        isRecord(workload) &&
-        isString(workload.kind) &&
-        isString(workload.name) &&
-        isString(workload.namespace) &&
-        isHealthStatus(workload.status) &&
-        isFiniteNumber(workload.desiredReplicas) &&
-        isFiniteNumber(workload.availableReplicas) &&
-        isNullableString(workload.failureReason) &&
-        typeof workload.restartIncrease15m === "boolean",
-    ) &&
-    Array.isArray(value.pods) &&
-    value.pods.every(
-      (pod) =>
-        isRecord(pod) &&
-        isString(pod.name) &&
-        isString(pod.namespace) &&
-        isHealthStatus(pod.status) &&
-        typeof pod.ready === "boolean" &&
-        isFiniteNumber(pod.restartCount) &&
-        isNullableString(pod.node) &&
-        isNullableString(pod.image) &&
-        isNullableString(pod.imageTag) &&
-        isNullableString(pod.imageDigest) &&
-        Array.isArray(pod.containerImages) &&
-        pod.containerImages.every(
-          (container) =>
-            isRecord(container) &&
-            isString(container.name) &&
-            isNullableString(container.repository) &&
-            isNullableString(container.reference) &&
-            isNullableString(container.tag) &&
-            isNullableString(container.digest),
-        ) &&
-        isString(pod.createdAt),
-    ) &&
-    Array.isArray(value.events) &&
-    value.events.every(
-      (event) =>
-        isRecord(event) &&
-        isString(event.id) &&
-        isString(event.namespace) &&
-        isString(event.resource) &&
-        isHealthStatus(event.status) &&
-        isString(event.reason) &&
-        isString(event.message) &&
-        isString(event.observedAt),
-    ) &&
-    isResourceMetrics(value.resources)
+function parseString(value: unknown): string | null {
+  return isString(value) ? value : null;
+}
+
+function parseMetricPoint(value: unknown): ResourceHistory["points"][number] | null {
+  const properties = readOwnDataProperties(value, ["timestamp", "value"]);
+  if (!properties || !isString(properties.timestamp) || !isFiniteNumber(properties.value)) {
+    return null;
+  }
+  return { timestamp: properties.timestamp, value: properties.value };
+}
+
+function parseResourceMetrics(value: unknown): ResourceMetrics | null {
+  const properties = readOwnDataProperties(value, ["current", "history"]);
+  if (!properties) return null;
+
+  const current = parseDenseArray<ResourceMetrics["current"][number]>(
+    properties.current,
+    (metric) => {
+      const fields = readOwnDataProperties(metric, ["resource", "usagePercent", "observedAt"]);
+      if (
+        !fields ||
+        !isResourceName(fields.resource) ||
+        !isFiniteNumber(fields.usagePercent) ||
+        !isString(fields.observedAt)
+      ) {
+        return null;
+      }
+      return {
+        resource: fields.resource,
+        usagePercent: fields.usagePercent,
+        observedAt: fields.observedAt,
+      };
+    },
   );
+  const history = parseDenseArray<ResourceHistory>(properties.history, (series) => {
+    const fields = readOwnDataProperties(series, ["resource", "points"]);
+    if (!fields || !isResourceName(fields.resource)) return null;
+    const points = parseDenseArray(fields.points, parseMetricPoint);
+    return points ? { resource: fields.resource, points } : null;
+  });
+  return current && history ? { current, history } : null;
+}
+
+function parseClusterData(value: unknown): ClusterData | null {
+  const properties = readOwnDataProperties(value, [
+    "nodes",
+    "namespaces",
+    "workloads",
+    "pods",
+    "events",
+    "resources",
+  ]);
+  if (!properties) return null;
+
+  const nodes = parseDenseArray<ClusterData["nodes"][number]>(properties.nodes, (node) => {
+    const fields = readOwnDataProperties(node, ["name", "ready", "status", "conditions"]);
+    if (
+      !fields ||
+      !isString(fields.name) ||
+      typeof fields.ready !== "boolean" ||
+      !isHealthStatus(fields.status)
+    ) {
+      return null;
+    }
+    const conditions = parseDenseArray(fields.conditions, parseString);
+    return conditions
+      ? { name: fields.name, ready: fields.ready, status: fields.status, conditions }
+      : null;
+  });
+  const namespaces = parseDenseArray<ClusterData["namespaces"][number]>(
+    properties.namespaces,
+    (namespace) => {
+      const fields = readOwnDataProperties(namespace, [
+        "name",
+        "status",
+        "workloadCount",
+        "podCount",
+      ]);
+      if (
+        !fields ||
+        !isString(fields.name) ||
+        !isHealthStatus(fields.status) ||
+        !isFiniteNumber(fields.workloadCount) ||
+        !isFiniteNumber(fields.podCount)
+      ) {
+        return null;
+      }
+      return {
+        name: fields.name,
+        status: fields.status,
+        workloadCount: fields.workloadCount,
+        podCount: fields.podCount,
+      };
+    },
+  );
+  const workloads = parseDenseArray<ClusterData["workloads"][number]>(
+    properties.workloads,
+    (workload) => {
+      const fields = readOwnDataProperties(workload, [
+        "kind",
+        "name",
+        "namespace",
+        "status",
+        "desiredReplicas",
+        "availableReplicas",
+        "failureReason",
+        "restartIncrease15m",
+      ]);
+      if (
+        !fields ||
+        !isString(fields.kind) ||
+        !isString(fields.name) ||
+        !isString(fields.namespace) ||
+        !isHealthStatus(fields.status) ||
+        !isFiniteNumber(fields.desiredReplicas) ||
+        !isFiniteNumber(fields.availableReplicas) ||
+        !isNullableString(fields.failureReason) ||
+        typeof fields.restartIncrease15m !== "boolean"
+      ) {
+        return null;
+      }
+      return {
+        kind: fields.kind,
+        name: fields.name,
+        namespace: fields.namespace,
+        status: fields.status,
+        desiredReplicas: fields.desiredReplicas,
+        availableReplicas: fields.availableReplicas,
+        failureReason: fields.failureReason,
+        restartIncrease15m: fields.restartIncrease15m,
+      };
+    },
+  );
+  const pods = parseDenseArray<ClusterData["pods"][number]>(properties.pods, (pod) => {
+    const fields = readOwnDataProperties(pod, [
+      "name",
+      "namespace",
+      "status",
+      "ready",
+      "restartCount",
+      "node",
+      "image",
+      "imageTag",
+      "imageDigest",
+      "containerImages",
+      "createdAt",
+    ]);
+    if (
+      !fields ||
+      !isString(fields.name) ||
+      !isString(fields.namespace) ||
+      !isHealthStatus(fields.status) ||
+      typeof fields.ready !== "boolean" ||
+      !isFiniteNumber(fields.restartCount) ||
+      !isNullableString(fields.node) ||
+      !isNullableString(fields.image) ||
+      !isNullableString(fields.imageTag) ||
+      !isNullableString(fields.imageDigest) ||
+      !isString(fields.createdAt)
+    ) {
+      return null;
+    }
+    const containerImages = parseDenseArray(fields.containerImages, (container) => {
+      const image = readOwnDataProperties(container, [
+        "name",
+        "repository",
+        "reference",
+        "tag",
+        "digest",
+      ]);
+      if (
+        !image ||
+        !isString(image.name) ||
+        !isNullableString(image.repository) ||
+        !isNullableString(image.reference) ||
+        !isNullableString(image.tag) ||
+        !isNullableString(image.digest)
+      ) {
+        return null;
+      }
+      return {
+        name: image.name,
+        repository: image.repository,
+        reference: image.reference,
+        tag: image.tag,
+        digest: image.digest,
+      };
+    });
+    return containerImages
+      ? {
+          name: fields.name,
+          namespace: fields.namespace,
+          status: fields.status,
+          ready: fields.ready,
+          restartCount: fields.restartCount,
+          node: fields.node,
+          image: fields.image,
+          imageTag: fields.imageTag,
+          imageDigest: fields.imageDigest,
+          containerImages,
+          createdAt: fields.createdAt,
+        }
+      : null;
+  });
+  const events = parseDenseArray<ClusterData["events"][number]>(properties.events, (event) => {
+    const fields = readOwnDataProperties(event, [
+      "id",
+      "namespace",
+      "resource",
+      "status",
+      "reason",
+      "message",
+      "observedAt",
+    ]);
+    if (
+      !fields ||
+      !isString(fields.id) ||
+      !isString(fields.namespace) ||
+      !isString(fields.resource) ||
+      !isHealthStatus(fields.status) ||
+      !isString(fields.reason) ||
+      !isString(fields.message) ||
+      !isString(fields.observedAt)
+    ) {
+      return null;
+    }
+    return {
+      id: fields.id,
+      namespace: fields.namespace,
+      resource: fields.resource,
+      status: fields.status,
+      reason: fields.reason,
+      message: fields.message,
+      observedAt: fields.observedAt,
+    };
+  });
+  const resources = parseResourceMetrics(properties.resources);
+
+  return nodes && namespaces && workloads && pods && events && resources
+    ? { nodes, namespaces, workloads, pods, events, resources }
+    : null;
 }
 
 const RESOURCE_NAMES: readonly ResourceName[] = ["cpu", "memory", "disk"];
@@ -250,19 +404,29 @@ function healthIssue(
   };
 }
 
-function successfulClusterData(results: readonly SourceResult<unknown>[]): ClusterData | undefined {
+interface ValidatedSourceData<T> {
+  sourceData: unknown;
+  data: T;
+}
+
+function successfulClusterData(
+  results: readonly SourceResult<unknown>[],
+): ValidatedSourceData<ClusterData> | undefined {
   for (const result of results) {
-    if (result.ok && isClusterData(result.data)) return result.data;
+    if (!result.ok) continue;
+    const cluster = parseClusterData(result.data);
+    if (cluster) return { sourceData: result.data, data: cluster };
   }
   return undefined;
 }
 
 function successfulResourceMetrics(
   results: readonly SourceResult<unknown>[],
-): ResourceMetrics | undefined {
+): ValidatedSourceData<ResourceMetrics> | undefined {
   for (const result of results) {
-    if (result.ok && result.source === "prometheus" && isResourceMetrics(result.data)) {
-      return result.data;
+    if (result.ok && result.source === "prometheus") {
+      const resources = parseResourceMetrics(result.data);
+      if (resources) return { sourceData: result.data, data: resources };
     }
   }
   return undefined;
@@ -328,8 +492,10 @@ export async function collectSnapshot(
   now: Now = () => new Date(),
 ): Promise<Snapshot<unknown[]>> {
   const results = await collectProviders(providers, timeoutMs, now);
-  const clusterData = successfulClusterData(results);
-  const resources = successfulResourceMetrics(results);
+  const clusterResult = successfulClusterData(results);
+  const resourceResult = successfulResourceMetrics(results);
+  const clusterData = clusterResult?.data;
+  const resources = resourceResult?.data;
   const mergedCluster = clusterData && resources ? { ...clusterData, resources } : undefined;
   const resourcesForHealth = resources ?? clusterData?.resources;
   const resourceIssueSource = results.some((result) => result.source === "prometheus")
@@ -337,8 +503,8 @@ export async function collectSnapshot(
     : null;
   const successfulData = results.flatMap((result) => {
     if (!result.ok) return [];
-    if (mergedCluster && result.data === resources) return [];
-    if (mergedCluster && result.data === clusterData) return [mergedCluster];
+    if (result.data === resourceResult?.sourceData) return mergedCluster ? [] : [resources!];
+    if (result.data === clusterResult?.sourceData) return [mergedCluster ?? clusterData!];
     return [result.data];
   });
   const hasFailures = results.some((result) => !result.ok);
@@ -380,8 +546,10 @@ export async function collectDeploymentSnapshot(
     const invalidGitHub = result.ok && result.source === "github" && !isWorkflowRun(result.data);
     const invalidArgo =
       result.ok && result.source === "argocd" && !isArgoApplicationState(result.data);
-    const invalidKubernetes =
-      result.ok && result.source === "kubernetes" && !isClusterData(result.data);
+    const clusterData =
+      result.ok && result.source === "kubernetes" ? parseClusterData(result.data) : null;
+    const invalidKubernetes = result.ok && result.source === "kubernetes" && !clusterData;
+    if (clusterData) return { ...result, data: clusterData };
     if (!invalidGitHub && !invalidArgo && !invalidKubernetes) return result;
 
     const error = sourceUnavailableMessage(result.source);
@@ -394,9 +562,8 @@ export async function collectDeploymentSnapshot(
   });
   const workflow = results.find((result) => result.ok && result.source === "github");
   const application = results.find((result) => result.ok && result.source === "argocd");
-  const cluster = results.find(
-    (result) => result.ok && result.source === "kubernetes" && isClusterData(result.data),
-  );
+  const cluster = results.find((result) => result.ok && result.source === "kubernetes");
+  const clusterData = cluster?.ok ? parseClusterData(cluster.data) : null;
   const successful = results.some((result) => result.ok);
   const observedAt = timestamp(now);
 
@@ -415,19 +582,18 @@ export async function collectDeploymentSnapshot(
     workflow: workflow?.ok && isWorkflowRun(workflow.data) ? workflow.data : null,
     application:
       application?.ok && isArgoApplicationState(application.data) ? application.data : null,
-    kubernetes:
-      cluster?.ok && isClusterData(cluster.data)
-        ? {
-            workloads: cluster.data.workloads,
-            pods: cluster.data.pods.map((pod) => ({
-              name: pod.name,
-              namespace: pod.namespace,
-              status: pod.status,
-              ready: pod.ready,
-              containerImages: pod.containerImages,
-            })),
-          }
-        : null,
+    kubernetes: clusterData
+      ? {
+          workloads: clusterData.workloads,
+          pods: clusterData.pods.map((pod) => ({
+            name: pod.name,
+            namespace: pod.namespace,
+            status: pod.status,
+            ready: pod.ready,
+            containerImages: pod.containerImages,
+          })),
+        }
+      : null,
     observedAt,
   });
   const hasFailures = results.some((result) => !result.ok);

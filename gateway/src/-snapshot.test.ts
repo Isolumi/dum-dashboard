@@ -1,10 +1,137 @@
 import { describe, expect, it } from "vitest";
 import type { ClusterData, DeploymentSnapshot } from "../../shared/homelab/contracts";
 import type { ArgoApplicationState } from "./providers/argocd";
+import type { WorkflowRun } from "./providers/github";
 import type { Provider } from "./providers/provider";
 import { collectDeploymentSnapshot, collectProviders } from "./snapshot";
 
 const now = () => new Date("2026-08-04T00:00:00.000Z");
+const SOURCE_SHA = "1829d6ba3b55e66a2134ae64161b9e48ad39a197";
+const API_REPOSITORY = "ghcr.io/isolumi/yootoob-mp3-api";
+const FRONTEND_REPOSITORY = "ghcr.io/isolumi/yootoob-mp3-frontend";
+
+function validWorkflow(): WorkflowRun {
+  return {
+    repository: "Isolumi/youtube-mp3",
+    branch: "development",
+    name: "Build and publish images",
+    status: "completed",
+    conclusion: "success",
+    commit: {
+      sha: SOURCE_SHA,
+      message: "Build production images",
+      author: "Isolumi",
+      committedAt: "2026-08-03T23:58:00.000Z",
+      url: `https://github.com/Isolumi/youtube-mp3/commit/${SOURCE_SHA}`,
+    },
+    startedAt: "2026-08-03T23:58:00.000Z",
+    completedAt: "2026-08-04T00:00:00.000Z",
+    durationMs: 120_000,
+    url: "https://github.com/Isolumi/youtube-mp3/actions/runs/987654321",
+  };
+}
+
+function validApplication(): ArgoApplicationState {
+  return {
+    name: "yootoob-mp3-dumachine",
+    namespace: "argocd",
+    sync: { status: "Synced", revision: "feedfacefeedfacefeedfacefeedfacefeedface" },
+    health: {
+      status: "Healthy",
+      message: "Application is healthy",
+      lastTransitionAt: "2026-08-04T00:00:00.000Z",
+    },
+    operation: {
+      phase: "Succeeded",
+      message: "successfully synced",
+      revision: "feedfacefeedfacefeedfacefeedfacefeedface",
+      startedAt: "2026-08-03T23:59:00.000Z",
+      finishedAt: "2026-08-04T00:00:00.000Z",
+    },
+    resources: [],
+    images: [`${API_REPOSITORY}:${SOURCE_SHA}`, `${FRONTEND_REPOSITORY}:${SOURCE_SHA}`],
+  };
+}
+
+function validCluster(): ClusterData {
+  const workload = (name: string) => ({
+    kind: "Deployment",
+    name,
+    namespace: "yootoob-mp3",
+    status: "healthy" as const,
+    desiredReplicas: 1,
+    availableReplicas: 1,
+    failureReason: null,
+    restartIncrease15m: false,
+  });
+  const pod = (name: "api" | "frontend", repository: string, digestCharacter: string) => ({
+    name: `yootoob-mp3-${name}-abc`,
+    namespace: "yootoob-mp3",
+    status: "healthy" as const,
+    ready: true,
+    restartCount: 0,
+    node: "dumachine",
+    image: `${repository}@sha256:${digestCharacter.repeat(64)}`,
+    imageTag: `${repository}:${SOURCE_SHA}`,
+    imageDigest: `sha256:${digestCharacter.repeat(64)}`,
+    containerImages: [
+      {
+        name,
+        repository,
+        reference: `${repository}:${SOURCE_SHA}`,
+        tag: SOURCE_SHA,
+        digest: `sha256:${digestCharacter.repeat(64)}`,
+      },
+    ],
+    createdAt: "2026-08-03T23:59:30.000Z",
+  });
+
+  return {
+    nodes: [],
+    namespaces: [],
+    workloads: [workload("yootoob-mp3-api"), workload("yootoob-mp3-frontend")],
+    pods: [pod("api", API_REPOSITORY, "a"), pod("frontend", FRONTEND_REPOSITORY, "b")],
+    events: [],
+    resources: { current: [], history: [] },
+  };
+}
+
+function deploymentProviders(cluster: unknown): Provider<unknown>[] {
+  return [
+    { source: "github", collect: async () => validWorkflow() },
+    { source: "argocd", collect: async () => validApplication() },
+    { source: "kubernetes", collect: async () => cluster },
+  ];
+}
+
+function withLeadingHole<T>(values: readonly T[]): T[] {
+  const sparse: T[] = [];
+  sparse.length = values.length + 1;
+  for (let index = 0; index < values.length; index += 1) sparse[index + 1] = values[index]!;
+  return sparse;
+}
+
+async function expectInvalidClusterResult(cluster: unknown, secret?: string) {
+  const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now);
+
+  expect(snapshot).toMatchObject({
+    status: "unknown",
+    stale: true,
+    data: { applications: [{ rollout: { status: "unknown" } }] },
+    sources: [
+      { source: "github", status: "healthy", stale: false },
+      { source: "argocd", status: "healthy", stale: false },
+      {
+        source: "kubernetes",
+        status: "unknown",
+        stale: true,
+        error: "Kubernetes unavailable",
+      },
+    ],
+  });
+  expect(snapshot.issues.some(({ status }) => status === "critical")).toBe(false);
+  if (secret) expect(JSON.stringify(snapshot)).not.toContain(secret);
+}
 
 describe("collectProviders", () => {
   it("returns successful provider data when another provider fails", async () => {
@@ -78,6 +205,129 @@ describe("collectProviders", () => {
 });
 
 describe("collectDeploymentSnapshot", () => {
+  it.each([
+    { name: "plain-object ClusterData", cluster: () => validCluster() },
+    {
+      name: "null-prototype ClusterData",
+      cluster: () => Object.assign(Object.create(null), validCluster()),
+    },
+  ])("accepts valid $name", async ({ cluster }) => {
+    const value = cluster();
+    const snapshot = await collectDeploymentSnapshot(deploymentProviders(value), 1_000, now);
+
+    expect(snapshot).toMatchObject({
+      status: "healthy",
+      stale: false,
+      data: { applications: [{ rollout: { status: "healthy" } }] },
+      sources: [
+        { source: "github", status: "healthy", stale: false },
+        { source: "argocd", status: "healthy", stale: false },
+        { source: "kubernetes", status: "healthy", stale: false },
+      ],
+    });
+  });
+
+  it("keeps valid zero-replica ClusterData Critical instead of rejecting it", async () => {
+    const cluster = validCluster();
+    cluster.workloads[1] = {
+      ...cluster.workloads[1]!,
+      status: "critical",
+      availableReplicas: 0,
+    };
+    cluster.pods[1] = { ...cluster.pods[1]!, status: "critical", ready: false };
+
+    const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now);
+
+    expect(snapshot.status).toBe("critical");
+    expect(snapshot.sources[2]).toMatchObject({
+      source: "kubernetes",
+      status: "healthy",
+      stale: false,
+    });
+    expect(snapshot.data?.applications[0]?.workloads[1]).toMatchObject({
+      name: "yootoob-mp3-frontend",
+      status: "critical",
+      desiredReplicas: 1,
+      availableReplicas: 0,
+    });
+  });
+
+  it("does not invoke a throwing ClusterData field accessor", async () => {
+    const secret = "cluster-getter-secret-stack";
+    const cluster = validCluster();
+    let getterCalls = 0;
+    Object.defineProperty(cluster.workloads[0]!, "name", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        throw new Error(secret);
+      },
+    });
+
+    await expectInvalidClusterResult(cluster, secret);
+
+    expect(getterCalls).toBe(0);
+  });
+
+  it.each([
+    {
+      name: "inherited-only ClusterData fields",
+      cluster: () => Object.create(validCluster()) as unknown,
+    },
+    {
+      name: "a custom ClusterData prototype",
+      cluster: () => Object.assign(Object.create({ custom: true }), validCluster()) as unknown,
+    },
+    {
+      name: "a sparse workload array",
+      cluster: () => {
+        const valid = validCluster();
+        return { ...valid, workloads: withLeadingHole(valid.workloads) };
+      },
+    },
+    {
+      name: "a sparse pod array",
+      cluster: () => {
+        const valid = validCluster();
+        return { ...valid, pods: withLeadingHole(valid.pods) };
+      },
+    },
+    {
+      name: "a sparse container-image array",
+      cluster: () => {
+        const valid = validCluster();
+        const apiPod = valid.pods[0]!;
+        return {
+          ...valid,
+          pods: [
+            { ...apiPod, containerImages: withLeadingHole(apiPod.containerImages) },
+            ...valid.pods.slice(1),
+          ],
+        };
+      },
+    },
+    {
+      name: "a proxy with a throwing getPrototypeOf trap",
+      cluster: () =>
+        new Proxy(validCluster(), {
+          getPrototypeOf() {
+            throw new Error("cluster-proxy-secret");
+          },
+        }),
+    },
+    {
+      name: "a proxy with a throwing property-descriptor trap",
+      cluster: () =>
+        new Proxy(validCluster(), {
+          getOwnPropertyDescriptor() {
+            throw new Error("cluster-proxy-secret");
+          },
+        }),
+    },
+  ])("downgrades $name to fixed partial-source evidence", async ({ cluster }) => {
+    await expectInvalidClusterResult(cluster(), "cluster-proxy-secret");
+  });
+
   it("preserves Argo and Kubernetes deployment evidence when GitHub is unavailable", async () => {
     const application: ArgoApplicationState = {
       name: "yootoob-mp3-dumachine",

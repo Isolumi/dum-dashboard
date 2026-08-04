@@ -8,11 +8,13 @@ import type {
 } from "../../shared/homelab/contracts";
 import type { ArgoApplicationState } from "./providers/argocd";
 import type { WorkflowRun } from "./providers/github";
+import { readDenseArray, readOwnDataProperties } from "./runtime-validation";
 
 const DEPLOYMENT_NAMESPACE = "yootoob-mp3";
 const ARGO_APPLICATION = "yootoob-mp3-dumachine";
 const GITHUB_REPOSITORY = "Isolumi/youtube-mp3";
 const GITHUB_BRANCH = "development";
+const UNKNOWN_OBSERVED_AT = "1970-01-01T00:00:00.000Z";
 const TARGETS = [
   {
     name: "yootoob-mp3-api",
@@ -65,8 +67,9 @@ interface NormalizedKubernetesEvidence {
   invalidContainerTargets: DeploymentTargetName[];
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+interface NormalizedDeploymentCorrelationInput {
+  input: DeploymentCorrelationInput;
+  kubernetes: NormalizedKubernetesEvidence;
 }
 
 function isNullableString(value: unknown): value is string | null {
@@ -81,58 +84,137 @@ function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
-function isPodContainerImageEvidence(value: unknown): value is PodContainerImageEvidence {
-  return (
-    isRecord(value) &&
-    typeof value.name === "string" &&
-    isNullableString(value.repository) &&
-    isNullableString(value.reference) &&
-    isNullableString(value.tag) &&
-    isNullableString(value.digest)
-  );
+function parseDenseArray<T>(value: unknown, parse: (entry: unknown) => T | null): T[] | null {
+  const entries = readDenseArray(value);
+  if (!entries) return null;
+
+  const parsed: T[] = [];
+  for (const entry of entries) {
+    const result = parse(entry);
+    if (result === null) return null;
+    parsed.push(result);
+  }
+  return parsed;
 }
 
-function isWorkloadEvidence(
+function parsePodContainerImageEvidence(value: unknown): PodContainerImageEvidence | null {
+  const properties = readOwnDataProperties(value, [
+    "name",
+    "repository",
+    "reference",
+    "tag",
+    "digest",
+  ]);
+  if (
+    !properties ||
+    typeof properties.name !== "string" ||
+    !isNullableString(properties.repository) ||
+    !isNullableString(properties.reference) ||
+    !isNullableString(properties.tag) ||
+    !isNullableString(properties.digest)
+  ) {
+    return null;
+  }
+
+  return {
+    name: properties.name,
+    repository: properties.repository,
+    reference: properties.reference,
+    tag: properties.tag,
+    digest: properties.digest,
+  };
+}
+
+function parseWorkloadEvidence(
   value: unknown,
-): value is KubernetesDeploymentEvidence["workloads"][number] {
-  return (
-    isRecord(value) &&
-    typeof value.kind === "string" &&
-    typeof value.name === "string" &&
-    typeof value.namespace === "string" &&
-    isHealthStatus(value.status) &&
-    isNonNegativeInteger(value.desiredReplicas) &&
-    isNonNegativeInteger(value.availableReplicas)
-  );
+): KubernetesDeploymentEvidence["workloads"][number] | null {
+  const properties = readOwnDataProperties(value, [
+    "kind",
+    "name",
+    "namespace",
+    "status",
+    "desiredReplicas",
+    "availableReplicas",
+  ]);
+  if (
+    !properties ||
+    typeof properties.kind !== "string" ||
+    typeof properties.name !== "string" ||
+    typeof properties.namespace !== "string" ||
+    !isHealthStatus(properties.status) ||
+    !isNonNegativeInteger(properties.desiredReplicas) ||
+    !isNonNegativeInteger(properties.availableReplicas)
+  ) {
+    return null;
+  }
+
+  return {
+    kind: properties.kind,
+    name: properties.name,
+    namespace: properties.namespace,
+    status: properties.status,
+    desiredReplicas: properties.desiredReplicas,
+    availableReplicas: properties.availableReplicas,
+  };
 }
 
-function isPodEvidence(value: unknown): value is KubernetesDeploymentEvidence["pods"][number] {
-  return (
-    isRecord(value) &&
-    typeof value.name === "string" &&
-    typeof value.namespace === "string" &&
-    isHealthStatus(value.status) &&
-    typeof value.ready === "boolean" &&
-    Array.isArray(value.containerImages) &&
-    value.containerImages.every(isPodContainerImageEvidence)
+function parsePodEvidence(value: unknown): KubernetesDeploymentEvidence["pods"][number] | null {
+  const properties = readOwnDataProperties(value, [
+    "name",
+    "namespace",
+    "status",
+    "ready",
+    "containerImages",
+  ]);
+  if (
+    !properties ||
+    typeof properties.name !== "string" ||
+    typeof properties.namespace !== "string" ||
+    !isHealthStatus(properties.status) ||
+    typeof properties.ready !== "boolean"
+  ) {
+    return null;
+  }
+  const containerImages = parseDenseArray(
+    properties.containerImages,
+    parsePodContainerImageEvidence,
   );
+  if (!containerImages) return null;
+
+  return {
+    name: properties.name,
+    namespace: properties.namespace,
+    status: properties.status,
+    ready: properties.ready,
+    containerImages,
+  };
 }
 
 function findInvalidContainerTargets(value: unknown): DeploymentTargetName[] {
-  if (!isRecord(value) || !Array.isArray(value.pods)) return [];
+  const properties = readOwnDataProperties(value, ["pods"]);
+  if (!properties) return [];
+  const pods = readDenseArray(properties.pods);
+  if (!pods) return [];
 
   const invalidTargets = new Set<DeploymentTargetName>();
-  for (const pod of value.pods) {
-    if (!isRecord(pod) || typeof pod.name !== "string" || pod.namespace !== DEPLOYMENT_NAMESPACE) {
+  for (const pod of pods) {
+    const podProperties = readOwnDataProperties(pod, ["name", "namespace"]);
+    if (
+      !podProperties ||
+      typeof podProperties.name !== "string" ||
+      podProperties.namespace !== DEPLOYMENT_NAMESPACE
+    ) {
       continue;
     }
 
-    const podName = pod.name;
+    const podName = podProperties.name;
     const target = TARGETS.find(({ name }) => podName === name || podName.startsWith(`${name}-`));
+    const containerProperties = readOwnDataProperties(pod, ["containerImages"]);
     if (
       target &&
-      (!Array.isArray(pod.containerImages) ||
-        !pod.containerImages.every(isPodContainerImageEvidence))
+      (!containerProperties ||
+        parseDenseArray(containerProperties.containerImages, parsePodContainerImageEvidence) ===
+          null)
     ) {
       invalidTargets.add(target.name);
     }
@@ -144,20 +226,211 @@ function findInvalidContainerTargets(value: unknown): DeploymentTargetName[] {
 function normalizeKubernetesEvidence(value: unknown): NormalizedKubernetesEvidence {
   const invalidContainerTargets = findInvalidContainerTargets(value);
   if (value === null) return { evidence: null, invalid: false, invalidContainerTargets };
-  if (!isRecord(value)) return { evidence: null, invalid: true, invalidContainerTargets };
+  const properties = readOwnDataProperties(value, ["workloads", "pods"]);
+  if (!properties) return { evidence: null, invalid: true, invalidContainerTargets };
 
-  const workloads = value.workloads;
-  const pods = value.pods;
-  if (
-    !Array.isArray(workloads) ||
-    !workloads.every(isWorkloadEvidence) ||
-    !Array.isArray(pods) ||
-    !pods.every(isPodEvidence)
-  ) {
+  const workloads = parseDenseArray(properties.workloads, parseWorkloadEvidence);
+  const pods = parseDenseArray(properties.pods, parsePodEvidence);
+  if (!workloads || !pods) {
     return { evidence: null, invalid: true, invalidContainerTargets };
   }
 
   return { evidence: { workloads, pods }, invalid: false, invalidContainerTargets };
+}
+
+function parseWorkflowRun(value: unknown): WorkflowRun | null {
+  if (value === null) return null;
+  const properties = readOwnDataProperties(value, [
+    "repository",
+    "branch",
+    "name",
+    "status",
+    "conclusion",
+    "commit",
+    "startedAt",
+    "completedAt",
+    "durationMs",
+    "url",
+  ]);
+  const commit = properties
+    ? readOwnDataProperties(properties.commit, ["sha", "message", "author", "committedAt", "url"])
+    : null;
+  if (
+    !properties ||
+    !commit ||
+    typeof properties.repository !== "string" ||
+    typeof properties.branch !== "string" ||
+    typeof properties.name !== "string" ||
+    typeof properties.status !== "string" ||
+    !isNullableString(properties.conclusion) ||
+    typeof properties.startedAt !== "string" ||
+    !isNullableString(properties.completedAt) ||
+    (properties.durationMs !== null &&
+      (typeof properties.durationMs !== "number" || !Number.isFinite(properties.durationMs))) ||
+    typeof properties.url !== "string" ||
+    typeof commit.sha !== "string" ||
+    typeof commit.message !== "string" ||
+    typeof commit.author !== "string" ||
+    typeof commit.committedAt !== "string" ||
+    typeof commit.url !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    repository: properties.repository,
+    branch: properties.branch,
+    name: properties.name,
+    status: properties.status,
+    conclusion: properties.conclusion,
+    commit: {
+      sha: commit.sha,
+      message: commit.message,
+      author: commit.author,
+      committedAt: commit.committedAt,
+      url: commit.url,
+    },
+    startedAt: properties.startedAt,
+    completedAt: properties.completedAt,
+    durationMs: properties.durationMs,
+    url: properties.url,
+  };
+}
+
+function parseArgoApplicationState(value: unknown): ArgoApplicationState | null {
+  if (value === null) return null;
+  const properties = readOwnDataProperties(value, [
+    "name",
+    "namespace",
+    "sync",
+    "health",
+    "operation",
+    "resources",
+    "images",
+  ]);
+  if (
+    !properties ||
+    typeof properties.name !== "string" ||
+    typeof properties.namespace !== "string"
+  ) {
+    return null;
+  }
+
+  const sync = readOwnDataProperties(properties.sync, ["status", "revision"]);
+  const health = readOwnDataProperties(properties.health, [
+    "status",
+    "message",
+    "lastTransitionAt",
+  ]);
+  const operation = readOwnDataProperties(properties.operation, [
+    "phase",
+    "message",
+    "revision",
+    "startedAt",
+    "finishedAt",
+  ]);
+  if (
+    !sync ||
+    typeof sync.status !== "string" ||
+    typeof sync.revision !== "string" ||
+    !health ||
+    typeof health.status !== "string" ||
+    !isNullableString(health.message) ||
+    !isNullableString(health.lastTransitionAt) ||
+    !operation ||
+    typeof operation.phase !== "string" ||
+    !isNullableString(operation.message) ||
+    !isNullableString(operation.revision) ||
+    !isNullableString(operation.startedAt) ||
+    !isNullableString(operation.finishedAt)
+  ) {
+    return null;
+  }
+
+  const resources = parseDenseArray<ArgoApplicationState["resources"][number]>(
+    properties.resources,
+    (resource) => {
+      const fields = readOwnDataProperties(resource, [
+        "group",
+        "version",
+        "kind",
+        "namespace",
+        "name",
+        "syncStatus",
+        "healthStatus",
+        "healthMessage",
+      ]);
+      if (
+        !fields ||
+        typeof fields.group !== "string" ||
+        typeof fields.version !== "string" ||
+        typeof fields.kind !== "string" ||
+        typeof fields.namespace !== "string" ||
+        typeof fields.name !== "string" ||
+        typeof fields.syncStatus !== "string" ||
+        !isNullableString(fields.healthStatus) ||
+        !isNullableString(fields.healthMessage)
+      ) {
+        return null;
+      }
+      return {
+        group: fields.group,
+        version: fields.version,
+        kind: fields.kind,
+        namespace: fields.namespace,
+        name: fields.name,
+        syncStatus: fields.syncStatus,
+        healthStatus: fields.healthStatus,
+        healthMessage: fields.healthMessage,
+      };
+    },
+  );
+  const images = parseDenseArray(properties.images, (image) =>
+    typeof image === "string" ? image : null,
+  );
+  if (!resources || !images) return null;
+
+  return {
+    name: properties.name,
+    namespace: properties.namespace,
+    sync: { status: sync.status, revision: sync.revision },
+    health: {
+      status: health.status,
+      message: health.message,
+      lastTransitionAt: health.lastTransitionAt,
+    },
+    operation: {
+      phase: operation.phase,
+      message: operation.message,
+      revision: operation.revision,
+      startedAt: operation.startedAt,
+      finishedAt: operation.finishedAt,
+    },
+    resources,
+    images,
+  };
+}
+
+function normalizeDeploymentCorrelationInput(value: unknown): NormalizedDeploymentCorrelationInput {
+  const properties = readOwnDataProperties(value, [
+    "workflow",
+    "application",
+    "kubernetes",
+    "observedAt",
+  ]);
+  const kubernetes = normalizeKubernetesEvidence(properties?.kubernetes);
+  return {
+    input: {
+      workflow: parseWorkflowRun(properties?.workflow),
+      application: parseArgoApplicationState(properties?.application),
+      kubernetes: kubernetes.evidence,
+      observedAt:
+        properties && typeof properties.observedAt === "string"
+          ? properties.observedAt
+          : UNKNOWN_OBSERVED_AT,
+    },
+    kubernetes,
+  };
 }
 
 function worstStatus(statuses: readonly HealthStatus[]): HealthStatus {
@@ -226,8 +499,8 @@ function workloadState(
   const liveImages = unique(targetContainers.map((container) => container.reference));
   const liveTags = unique(targetContainers.map((container) => container.tag));
   const liveDigests = unique(targetContainers.map((container) => container.digest));
-  const desiredReplicas = workload?.desiredReplicas ?? 0;
-  const availableReplicas = workload?.availableReplicas ?? 0;
+  const desiredReplicas = workload?.desiredReplicas ?? (input.kubernetes ? null : 0);
+  const availableReplicas = workload?.availableReplicas ?? (input.kubernetes ? null : 0);
   const issues: HealthIssue[] = [];
 
   if (!input.kubernetes) {
@@ -242,7 +515,19 @@ function workloadState(
         { desiredReplicas: null, availableReplicas: null },
       ),
     );
-  } else if (!workload || desiredReplicas === 0 || availableReplicas === 0) {
+  } else if (!workload) {
+    issues.push(
+      issue(
+        "deployment-workload-unavailable",
+        "unknown",
+        `Deployment evidence for ${target.name} is unavailable.`,
+        "kubernetes",
+        resource,
+        input.observedAt,
+        { desiredReplicas: null, availableReplicas: null },
+      ),
+    );
+  } else if (desiredReplicas === 0 || availableReplicas === 0) {
     issues.push(
       issue(
         "deployment-unavailable",
@@ -254,7 +539,7 @@ function workloadState(
         { desiredReplicas, availableReplicas },
       ),
     );
-  } else if (availableReplicas < desiredReplicas) {
+  } else if (workload.availableReplicas < workload.desiredReplicas) {
     issues.push(
       issue(
         "deployment-partially-available",
@@ -460,13 +745,11 @@ function argoStage(application: ArgoApplicationState | null, observedAt: string)
   };
 }
 
-export function correlateDeployment(input: DeploymentCorrelationInput): DeploymentState {
-  const normalizedKubernetes = normalizeKubernetesEvidence(input.kubernetes);
-  const normalizedInput: DeploymentCorrelationInput = {
-    ...input,
-    kubernetes: normalizedKubernetes.evidence,
-  };
-  const correlated = TARGETS.map((target) => workloadState(normalizedInput, target));
+export function correlateDeployment(value: DeploymentCorrelationInput): DeploymentState {
+  const normalized = normalizeDeploymentCorrelationInput(value);
+  const input = normalized.input;
+  const normalizedKubernetes = normalized.kubernetes;
+  const correlated = TARGETS.map((target) => workloadState(input, target));
   const workloads = correlated.map(({ state }) => state);
   const issues = correlated.flatMap(({ issues: workloadIssues }) => workloadIssues);
   const workflow = workflowStage(input.workflow, input.observedAt);

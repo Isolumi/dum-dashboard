@@ -335,3 +335,71 @@ The literal `bun test` command was also attempted, but Bun interpreted it as its
 - No live network request, mutation/exec API, credential, Kubernetes manifest, shared contract, fixture, or unrelated application file was added or changed.
 - No reviewer subagent capability was available in this environment; the final review gate was performed directly against the complete diff and the Round 3 finding.
 - Full-project TypeScript remains blocked only by the two approved unrelated errors listed above. The application build continues to emit existing non-fatal generated-CSS and third-party bundler warnings.
+
+## Fix Round 4 (2026-08-04)
+
+### Status
+
+DONE — the two remaining Important findings from review of commit `8b725e7` are addressed with explicit missing-workload semantics and hostile-shape-safe runtime parsing.
+
+### Finding Resolution
+
+1. Valid Kubernetes evidence that lacks a target workload now emits `deployment-workload-unavailable` Unknown evidence. The missing workload summary uses `null` desired/available replicas rather than inventing zero replicas, and `DeploymentWorkloadSummary` reflects that nullable contract. Empty arrays, unrelated workloads, and a missing target workload with a matching live pod all remain Unknown without any Critical issue. A present valid target workload with `availableReplicas: 0` still emits `deployment-unavailable` and remains Critical. The Round 3 malformed-whole-source fallback retains its prior zeroed safe summaries.
+2. A shared runtime inspector now reads required fields only through own data-property descriptors, accepts only plain/null-prototype records, checks arrays slot-by-slot for density, and wraps array/prototype/descriptor introspection in `try/catch`. Accessors, inherited fields, custom prototypes, sparse workload/pod/container-image arrays, and throwing proxy traps are rejected without invoking getters or propagating raw errors. Both `correlateDeployment` and route-side `ClusterData` handling build fresh validated copies before correlation; caller input is not mutated or serialized before validation. Invalid direct input returns fixed Unknown correlation evidence, while invalid route data becomes the fixed `Kubernetes unavailable` partial source. Valid plain objects, null-prototype objects, and valid zero-replica evidence retain their prior outcomes.
+
+The existing `development`/`build-images.yml` workflow, exact `yootoob` repositories, source-SHA versus Argo revision semantics, per-container tag/digest evidence, Unknown/mismatch precedence, canonical GitHub URLs, provider timeouts, optional startup, and read-only GitHub/Argo/Kubernetes APIs remain unchanged.
+
+### Strict TDD Evidence
+
+Only `gateway/src/-deployment-correlation.test.ts` and `gateway/src/-snapshot.test.ts` were changed before the first production edit.
+
+Initial RED command:
+
+`bunx vitest run gateway/src/-deployment-correlation.test.ts gateway/src/-snapshot.test.ts`
+
+Initial RED result: exit 1; 2 files ran, with 19 failed and 48 passed. The failures reproduced all three false-Critical missing-target variants, throwing accessors, inherited/custom prototypes accepted as healthy, sparse arrays accepted or crashing correlation, and throwing prototype/property-descriptor proxy traps accepted as healthy.
+
+The public top-level/source accessor cases were then added before their normalization code. RED command:
+
+`bunx vitest run gateway/src/-deployment-correlation.test.ts`
+
+Second RED result: exit 1; 53 tests ran, with 3 failed and 50 passed. The top-level correlation accessor, nested workflow accessor, and nested Argo accessor each escaped before descriptor-based input normalization.
+
+Final focused GREEN:
+
+`bunx vitest run gateway/src/-deployment-correlation.test.ts gateway/src/-snapshot.test.ts`
+
+Result: exit 0; 2 files and 70 tests passed.
+
+The first gateway/shared regression run exposed one existing Prometheus integration failure because fresh validated copies no longer matched raw provider objects by identity. The implementation retained raw identity only for source selection while forwarding the validated copy; the unchanged merge regression then passed. Final gateway/shared verification is listed below.
+
+### Verification Evidence
+
+- Focused Task 7: `bunx vitest run gateway/src/providers/-github.test.ts gateway/src/providers/-argocd.test.ts gateway/src/-deployment-correlation.test.ts gateway/src/providers/-kubernetes.test.ts gateway/src/-snapshot.test.ts gateway/src/-runtime.test.ts gateway/src/-app.test.ts` — exit 0; 7 files and 120 tests passed.
+- Gateway/shared regressions: `bunx vitest run gateway shared` — exit 0; 9 files and 166 tests passed.
+- Full configured repository suite: `bun run test` — exit 0; 21 files and 247 tests passed.
+- Gateway build: `bun run build:gateway` — exit 0; 969 modules bundled into `gateway/dist/index.js`.
+- Application build: `bun run build` — exit 0; client, SSR, and Nitro production builds completed. Existing generated-CSS and third-party `use client`/unused-import warnings remain non-fatal.
+- Lint: `bun run lint` — exit 0; 0 warnings and 0 errors across 80 files.
+- Scoped formatting: `bunx oxfmt --write` followed by `bunx oxfmt --check` over the six changed TypeScript source/test/contract files — exit 0; all files match OXC formatting.
+- TypeScript: `bunx tsc --noEmit` exits 2 only for the two known unrelated diagnostics in `src/lib/secret-vault.ts:46` and `src/routes/_layout/todos/-PrioritySection.tsx:59`; no Task 7 diagnostic is present.
+- Diff validation: `git diff --check` — exit 0.
+
+### Files Changed in Fix Round 4
+
+- `.superpowers/sdd/2026-08-04-homelab-dashboard/task-7-report.md`
+- `gateway/src/runtime-validation.ts`
+- `gateway/src/deployment-correlation.ts`
+- `gateway/src/snapshot.ts`
+- `shared/homelab/contracts.ts`
+- `gateway/src/-deployment-correlation.test.ts`
+- `gateway/src/-snapshot.test.ts`
+
+### Fix Round 4 Self-Review and Concerns
+
+- No raw hostile value is cloned, spread, stringified, or returned before validation. Descriptor values are copied into fresh plain records/arrays only after the required own data properties and dense slots pass inspection.
+- No accessor is invoked by the new validation path. Prototype and descriptor operations are contained by fixed-fallback `try/catch` handling, including revoked/throwing proxy behavior.
+- No mutation/exec API, credential, provider endpoint, Kubernetes manifest, workflow configuration, fixture, or unrelated application source was changed.
+- No live GitHub, Argo CD, or Kubernetes endpoint was contacted; injected provider boundaries and production-shaped fixtures remain the verification mechanism.
+- No reviewer subagent capability was available in this environment, so the final review gate was performed directly against the complete scoped diff and all requested regressions.
+- The application build retains its pre-existing non-fatal generated-CSS and dependency bundler warnings. Full-project TypeScript retains only the two pre-existing unrelated diagnostics listed above.
