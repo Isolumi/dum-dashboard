@@ -19,7 +19,14 @@ export default mergeConfig(
         // Unit tests (.ts): use TanStack Start plugin for createServerFn transform
         mergeConfig(
           defineProject({
-            plugins: [tsconfigPaths({ projects: ["./tsconfig.json"] }), tanstackStart()],
+            plugins: [
+              tsconfigPaths({ projects: ["./tsconfig.json"] }),
+              tanstackStart({
+                router: {
+                  routeFileIgnorePattern: "\\.functions\\.ts$",
+                },
+              }),
+            ],
             test: {
               name: "unit",
               include: ["src/**/-*.test.ts"],

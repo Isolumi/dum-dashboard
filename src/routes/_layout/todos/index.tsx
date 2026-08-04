@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertCircle } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Skeleton } from "#/components/ui/skeleton";
 import type { Todo, TodoPriority } from "#/lib/database.types";
+import { getAccessToken } from "#/lib/auth";
 import { useTodosRealtime } from "#/hooks/useTodosRealtime";
 import {
   createTodo,
@@ -18,21 +19,9 @@ import { PrioritySection } from "./-PrioritySection";
 import { PRIORITY_ORDER, PRIORITY_LABELS, groupAndSortTodos } from "./-todoUtils";
 
 export const Route = createFileRoute("/_layout/todos/")({
-  loader: async () => {
-    try {
-      const todos = await getTodos();
-      return { todos: Array.isArray(todos) ? todos : [], error: null };
-    } catch {
-      return {
-        todos: [] as Todo[],
-        error: "Could not load todos. Refresh to try again.",
-      };
-    }
-  },
   pendingComponent: TodosLoading,
   component: TodosPage,
 });
-
 
 function TodosLoading() {
   return (
@@ -53,9 +42,15 @@ function TodosLoading() {
 }
 
 function TodosPage() {
-  const { todos: initialTodos, error } = Route.useLoaderData();
-  const [todos, setTodos] = useState<Todo[]>(initialTodos);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const todosRef = useRef<Todo[]>([]);
+
+  useEffect(() => {
+    todosRef.current = todos;
+  }, [todos]);
 
   useEffect(() => {
     if (!mutationError) return;
@@ -63,87 +58,140 @@ function TodosPage() {
     return () => clearTimeout(timer);
   }, [mutationError]);
 
-  const channelStatus = useTodosRealtime(async () => {
-    const fresh = await getTodos();
-    setTodos(fresh);
+  const loadTodos = useCallback(async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
+    if (showLoading) setLoading(true);
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setLoadError("Your session expired. Sign in again to load todos.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const fresh = await getTodos({
+        data: { supabase_access_token: accessToken },
+      });
+      setTodos(fresh);
+      setLoadError(null);
+    } catch {
+      setLoadError("Could not load todos. Refresh to try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTodos();
+  }, [loadTodos]);
+
+  const channelStatus = useTodosRealtime(() => {
+    void loadTodos({ showLoading: false });
   });
 
   const grouped = useMemo(() => groupAndSortTodos(todos), [todos]);
 
-  async function handleCreate(fields: {
-    name: string;
-    priority: "high" | "medium" | "low";
-    due_date: string | null;
-  }) {
-    if (fields.name.trim().length === 0) return;
-    try {
-      const created = await createTodo({
-        data: {
-          name: fields.name.trim(),
-          priority: fields.priority,
-          status: "not_started",
-          due_date: fields.due_date,
-        },
+  const requireAccessToken = useCallback(async () => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) throw new Error("missing-session");
+    return accessToken;
+  }, []);
+
+  const handleCreate = useCallback(
+    async (fields: {
+      name: string;
+      priority: "high" | "medium" | "low";
+      due_date: string | null;
+    }) => {
+      if (fields.name.trim().length === 0) return;
+      try {
+        const accessToken = await requireAccessToken();
+        const created = await createTodo({
+          data: {
+            supabase_access_token: accessToken,
+            name: fields.name.trim(),
+            priority: fields.priority,
+            status: "not_started",
+            due_date: fields.due_date,
+          },
+        });
+        setTodos((prev) => [...prev, created]);
+      } catch {
+        setMutationError("Save failed — check your connection and try again.");
+      }
+    },
+    [requireAccessToken],
+  );
+
+  const handleUpdate = useCallback(
+    async (fields: {
+      id: string;
+      name?: string;
+      priority?: "high" | "medium" | "low";
+      status?: "not_started" | "started" | "complete";
+      due_date?: string | null;
+    }) => {
+      const previous = todosRef.current;
+      setTodos((prev) => prev.map((t) => (t.id === fields.id ? { ...t, ...fields } : t)));
+      try {
+        const accessToken = await requireAccessToken();
+        await updateTodo({ data: { ...fields, supabase_access_token: accessToken } });
+      } catch {
+        setTodos(previous);
+        setMutationError("Save failed — check your connection and try again.");
+      }
+    },
+    [requireAccessToken],
+  );
+
+  const handleDelete = useCallback(
+    async (id: string) => {
+      const previous = todosRef.current;
+      setTodos((prev) => prev.filter((t) => t.id !== id));
+      try {
+        const accessToken = await requireAccessToken();
+        await deleteTodo({ data: { id, supabase_access_token: accessToken } });
+      } catch {
+        setTodos(previous);
+        setMutationError("Save failed — check your connection and try again.");
+      }
+    },
+    [requireAccessToken],
+  );
+
+  const handleReorder = useCallback(
+    async (priority: TodoPriority, orderedIds: string[]) => {
+      let previous = todosRef.current;
+      // Optimistic update
+      setTodos((prev) => {
+        previous = prev;
+        const otherTodos = prev.filter((t) => t.priority !== priority);
+        const reordered = orderedIds
+          .map((id, i) => {
+            const todo = prev.find((t) => t.id === id);
+            return todo ? { ...todo, sort_order: i } : null;
+          })
+          .filter(Boolean) as Todo[];
+        return [...otherTodos, ...reordered];
       });
-      setTodos((prev) => [...prev, created]);
-    } catch {
-      setMutationError("Save failed — check your connection and try again.");
-    }
-  }
 
-  async function handleUpdate(fields: {
-    id: string;
-    name?: string;
-    priority?: "high" | "medium" | "low";
-    status?: "not_started" | "started" | "complete";
-    due_date?: string | null;
-  }) {
-    const previous = todos;
-    setTodos((prev) => prev.map((t) => (t.id === fields.id ? { ...t, ...fields } : t)));
-    try {
-      await updateTodo({ data: fields });
-    } catch {
-      setTodos(previous);
-      setMutationError("Save failed — check your connection and try again.");
-    }
-  }
+      // Persist
+      try {
+        const accessToken = await requireAccessToken();
+        await reorderTodos({
+          data: {
+            supabase_access_token: accessToken,
+            updates: orderedIds.map((id, i) => ({ id, sort_order: i })),
+          },
+        });
+      } catch {
+        setTodos(previous);
+        setMutationError("Reorder failed — check your connection and try again.");
+      }
+    },
+    [requireAccessToken],
+  );
 
-  async function handleDelete(id: string) {
-    const previous = todos;
-    setTodos((prev) => prev.filter((t) => t.id !== id));
-    try {
-      await deleteTodo({ data: { id } });
-    } catch {
-      setTodos(previous);
-      setMutationError("Save failed — check your connection and try again.");
-    }
-  }
-
-  async function handleReorder(priority: TodoPriority, orderedIds: string[]) {
-    // Optimistic update
-    setTodos((prev) => {
-      const otherTodos = prev.filter((t) => t.priority !== priority);
-      const reordered = orderedIds
-        .map((id, i) => {
-          const todo = prev.find((t) => t.id === id);
-          return todo ? { ...todo, sort_order: i } : null;
-        })
-        .filter(Boolean) as Todo[];
-      return [...otherTodos, ...reordered];
-    });
-
-    // Persist
-    try {
-      await reorderTodos({
-        data: { updates: orderedIds.map((id, i) => ({ id, sort_order: i })) },
-      });
-    } catch {
-      // Revert on failure
-      const fresh = await getTodos();
-      setTodos(fresh);
-      setMutationError("Reorder failed — check your connection and try again.");
-    }
-  }
+  if (loading) return <TodosLoading />;
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-6">
@@ -151,11 +199,11 @@ function TodosPage() {
         <h1 className="text-xl font-semibold">Todos</h1>
         <LiveIndicator status={channelStatus} />
       </div>
-      {error && (
+      {loadError && (
         <Alert variant="destructive">
           <AlertCircle />
           <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{loadError}</AlertDescription>
         </Alert>
       )}
       <div className="flex flex-col gap-2">

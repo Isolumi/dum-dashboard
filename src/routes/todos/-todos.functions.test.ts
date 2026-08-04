@@ -6,14 +6,22 @@ import { describe, expect, it } from "vitest";
 // RED phase: these imports will fail until todos.functions.ts is created
 import {
   CreateTodoSchema,
+  CreateTodoInputSchema,
   DeleteTodoSchema,
   GetTodoSchema,
+  GetTodosInputSchema,
+  ReorderTodosSchema,
   UpdateTodoSchema,
 } from "./todos.functions";
 
 describe("CreateTodoSchema", () => {
   it("rejects empty name", () => {
     const result = CreateTodoSchema.safeParse({ name: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("trims whitespace-only names before validating", () => {
+    const result = CreateTodoSchema.safeParse({ name: "   " });
     expect(result.success).toBe(false);
   });
 
@@ -85,6 +93,23 @@ describe("CreateTodoSchema", () => {
   });
 });
 
+describe("authenticated todo function inputs", () => {
+  it("requires a Supabase access token for todo reads", () => {
+    expect(GetTodosInputSchema.safeParse({}).success).toBe(false);
+    expect(GetTodosInputSchema.safeParse({ supabase_access_token: "session-token" }).success).toBe(
+      true,
+    );
+  });
+
+  it("requires a Supabase access token for todo writes", () => {
+    const result = CreateTodoInputSchema.safeParse({
+      supabase_access_token: "session-token",
+      name: "Secure todo",
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
 describe("UpdateTodoSchema", () => {
   it("requires valid UUID for id", () => {
     const result = UpdateTodoSchema.safeParse({ id: "not-a-uuid" });
@@ -142,6 +167,20 @@ describe("DeleteTodoSchema", () => {
 
   it("rejects missing id", () => {
     const result = DeleteTodoSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("ReorderTodosSchema", () => {
+  it("rejects empty reorder batches", () => {
+    const result = ReorderTodosSchema.safeParse({ updates: [] });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects negative sort order values", () => {
+    const result = ReorderTodosSchema.safeParse({
+      updates: [{ id: "550e8400-e29b-41d4-a716-446655440000", sort_order: -1 }],
+    });
     expect(result.success).toBe(false);
   });
 });

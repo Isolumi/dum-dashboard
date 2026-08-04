@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Plus, CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 
@@ -30,7 +30,7 @@ const PRIORITY_LABELS: Record<TodoPriority, string> = {
   low: "Low",
 };
 
-export function AddTodoRow({ onCreate, defaultPriority = "low" }: AddTodoRowProps) {
+function AddTodoRowComponent({ onCreate, defaultPriority = "low" }: AddTodoRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [name, setName] = useState("");
   const [priority, setPriority] = useState<TodoPriority>(defaultPriority);
@@ -82,7 +82,7 @@ export function AddTodoRow({ onCreate, defaultPriority = "low" }: AddTodoRowProp
     function handleMouseDown(e: MouseEvent) {
       const target = e.target as Element;
       if (expandedContainerRef.current?.contains(target)) return;
-      if (target.closest?.('[data-add-todo-popover]')) return;
+      if (target.closest?.("[data-add-todo-popover]")) return;
       if (nameRef.current.trim().length === 0) {
         resetFormRef.current();
       } else {
@@ -257,3 +257,5 @@ export function AddTodoRow({ onCreate, defaultPriority = "low" }: AddTodoRowProp
     </div>
   );
 }
+
+export const AddTodoRow = memo(AddTodoRowComponent);

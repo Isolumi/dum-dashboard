@@ -2,9 +2,10 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { Skeleton } from "#/components/ui/skeleton";
-import { supabase } from "#/lib/supabase";
+import { getAccessToken } from "#/lib/auth";
 import type { ToolEntry } from "#/tools/registry";
-import { type CalendarEvent, fetchCalendarEvents } from "./-calendar.api";
+import type { CalendarEvent } from "./-calendar.api";
+import { getCalendarEvents } from "./-calendar.functions";
 import { formatEventTime, getUpcomingEvents, groupEventsByDay } from "./-calendarUtils";
 
 function formatChipDate(isoDate: string): string {
@@ -29,9 +30,8 @@ export function CalendarBentoCard({
 
   useEffect(() => {
     async function load() {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.provider_token;
-      if (!token) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         setStatus("auth_expired");
         return;
       }
@@ -40,8 +40,18 @@ export function CalendarBentoCard({
       const thirtyDaysOut = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
       try {
-        const fetched = await fetchCalendarEvents(token, now, thirtyDaysOut);
-        setEvents(getUpcomingEvents(fetched, now, 5));
+        const result = await getCalendarEvents({
+          data: {
+            supabase_access_token: accessToken,
+            time_min: now.toISOString(),
+            time_max: thirtyDaysOut.toISOString(),
+          },
+        });
+        if (result.status !== "ready") {
+          setStatus("auth_expired");
+          return;
+        }
+        setEvents(getUpcomingEvents(result.events, now, 5));
         setStatus("ready");
       } catch {
         setStatus("auth_expired");
@@ -71,7 +81,7 @@ export function CalendarBentoCard({
 
         {status === "auth_expired" && (
           <p className="text-xs text-muted-foreground">
-            Calendar disconnected — sign in again.
+            Calendar disconnected — connect in Calendar.
           </p>
         )}
 

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import React from "react";
 
 import type { Todo } from "#/lib/database.types";
@@ -10,6 +10,7 @@ import type { ToolEntry } from "#/tools/registry";
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 vi.mock("@tanstack/react-router", () => ({
@@ -24,7 +25,17 @@ vi.mock("@tanstack/react-router", () => ({
   }) => React.createElement("a", { href: to, ...props }, children),
 }));
 
+vi.mock("#/lib/auth", () => ({
+  getAccessToken: vi.fn(),
+}));
+
+vi.mock("#/routes/todos/todos.functions", () => ({
+  getTodos: vi.fn(),
+}));
+
 const { TodoBentoCard } = await import("./-TodoBentoCard");
+const { getAccessToken } = await import("#/lib/auth");
+const { getTodos } = await import("#/routes/todos/todos.functions");
 
 function makeTodo(overrides: Partial<Todo> = {}): Todo {
   return {
@@ -51,10 +62,7 @@ const mockTool = {
 
 describe("TodoBentoCard", () => {
   it("renders priority section labels for non-empty sections", () => {
-    const todos = [
-      makeTodo({ priority: "high" }),
-      makeTodo({ priority: "low" }),
-    ];
+    const todos = [makeTodo({ priority: "high" }), makeTodo({ priority: "low" })];
     render(React.createElement(TodoBentoCard, { tool: mockTool, data: todos }));
 
     expect(screen.getByText("High")).toBeTruthy();
@@ -131,9 +139,24 @@ describe("TodoBentoCard", () => {
     expect(screen.getByText(/no todos yet/i)).toBeTruthy();
   });
 
-  it("handles null data without throwing", () => {
+  it("loads todos from the authenticated server function when data is not preloaded", async () => {
+    vi.mocked(getAccessToken).mockResolvedValue("session-token");
+    vi.mocked(getTodos).mockResolvedValue([makeTodo({ name: "Loaded securely" })]);
+
     render(React.createElement(TodoBentoCard, { tool: mockTool, data: null }));
-    expect(screen.getByText(/no todos yet/i)).toBeTruthy();
+
+    await waitFor(() => expect(screen.getByText("Loaded securely")).toBeTruthy());
+    expect(getTodos).toHaveBeenCalledWith({
+      data: { supabase_access_token: "session-token" },
+    });
+  });
+
+  it("shows a signed-out state when data is not preloaded and no session exists", async () => {
+    vi.mocked(getAccessToken).mockResolvedValue(null);
+
+    render(React.createElement(TodoBentoCard, { tool: mockTool, data: null }));
+
+    await waitFor(() => expect(screen.getByText(/todos unavailable/i)).toBeTruthy());
   });
 
   it("sorts todos within a section by sort_order ascending", () => {

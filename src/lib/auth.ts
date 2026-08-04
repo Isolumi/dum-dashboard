@@ -7,17 +7,17 @@ export async function getSession() {
   return data.session;
 }
 
+export async function getAccessToken() {
+  const session = await getSession();
+  return session?.access_token ?? null;
+}
+
 /** Initiates Google OAuth redirect. */
 export async function signInWithGoogle() {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
       redirectTo: `${window.location.origin}/auth/callback`,
-      scopes: "https://www.googleapis.com/auth/calendar.readonly",
-      queryParams: {
-        access_type: "offline",
-        prompt: "consent",
-      },
     },
   });
   if (error) throw error;

@@ -12,9 +12,10 @@ function formatDate(date: Date): string {
 }
 
 export function ClockBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry; data: unknown }) {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
+    setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
@@ -22,10 +23,10 @@ export function ClockBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry; 
   return (
     <div className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-6">
       <time className="text-4xl font-light tabular-nums tracking-wider text-foreground">
-        {formatTime(now)}
+        {now ? formatTime(now) : "--:--"}
       </time>
       <span className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-        {formatDate(now)}
+        {now ? formatDate(now) : "---, --- --"}
       </span>
     </div>
   );

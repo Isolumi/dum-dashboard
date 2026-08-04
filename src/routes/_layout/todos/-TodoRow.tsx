@@ -1,7 +1,6 @@
-import { useRef, useState } from "react";
-import { Circle, CircleCheck, CalendarIcon, GripVertical, Trash2 } from "lucide-react";
-type SyntheticListenerMap = Record<string, (event: Event) => void>;
 import { format, parseISO } from "date-fns";
+import { Circle, CircleCheck, CalendarIcon, GripVertical, Trash2 } from "lucide-react";
+import { memo, useRef, useState } from "react";
 
 import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
@@ -9,6 +8,8 @@ import { Input } from "#/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
 import type { Todo, TodoStatus } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
+
+type SyntheticListenerMap = Record<string, (event: Event) => void>;
 
 export interface TodoRowProps {
   todo: Todo;
@@ -57,7 +58,7 @@ const STATUS_NEXT_LABEL: Record<TodoStatus, string> = {
   complete: "not started",
 };
 
-export function TodoRow({ todo, onUpdate, onDelete, dragListeners }: TodoRowProps) {
+function TodoRowComponent({ todo, onUpdate, onDelete, dragListeners }: TodoRowProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(todo.name);
   const [isDateOpen, setIsDateOpen] = useState(false);
@@ -203,3 +204,5 @@ export function TodoRow({ todo, onUpdate, onDelete, dragListeners }: TodoRowProp
     </div>
   );
 }
+
+export const TodoRow = memo(TodoRowComponent);

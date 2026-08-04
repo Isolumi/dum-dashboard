@@ -8,14 +8,14 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-const config = defineConfig({
+const config = defineConfig(({ mode }) => ({
   // VITE_* vars are inlined from .env.production at build time (public, committed to git).
   // SUPABASE_SECRET_KEY is NOT inlined — it stays as a runtime reference so workerd
   // can provide it from the Worker secret binding (set via `wrangler secret put`).
   envPrefix: ["VITE_"],
   plugins: [
     cloudflare({ viteEnvironment: { name: "ssr" } }),
-    devtools(),
+    ...(mode === "development" ? [devtools()] : []),
     tsconfigPaths({ projects: ["./tsconfig.json"] }),
     tailwindcss(),
     tanstackStart({
@@ -25,6 +25,6 @@ const config = defineConfig({
     }),
     viteReact(),
   ],
-});
+}));
 
 export default config;

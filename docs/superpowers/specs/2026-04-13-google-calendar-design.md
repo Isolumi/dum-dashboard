@@ -16,7 +16,7 @@ A read-only Google Calendar integration that displays the user's primary calenda
 Extend the existing `signInWithGoogle` call to request an additional OAuth scope:
 
 ```ts
-scopes: 'https://www.googleapis.com/auth/calendar.readonly'
+scopes: "https://www.googleapis.com/auth/calendar.readonly";
 ```
 
 No other auth changes. After re-login, `session.provider_token` carries a Google access token with calendar read access. Existing sessions lack this scope; the user must sign out and back in once. The `/auth/callback` flow is unchanged.
@@ -91,6 +91,7 @@ Uses the existing shadcn `Calendar` component (`src/components/ui/calendar.tsx`,
 **Right column — Event list**
 
 Shows the next 5+ upcoming events starting from `selectedDay`, across as many days as needed. Events are grouped under date headers (e.g. "Today", "Apr 15", "Apr 18"). Each event row shows:
+
 - A left accent bar (3px wide)
 - Event title
 - Time (formatted from `dateTime`) or "All day" (when only `date` is present)
@@ -114,11 +115,13 @@ Skeleton placeholders in both columns while fetching.
 Links to `/calendar`. Shows the next 5 upcoming events from today, across however many days are needed to reach 5 events.
 
 Each row:
+
 - Compact date chip (e.g. "Apr 15")
 - Event title (truncated)
 - Time or "All day"
 
 **States:**
+
 - Loading: skeleton rows
 - Empty: "No upcoming events"
 - Auth expired: "Calendar disconnected — sign in again" (no link, no crash)
@@ -150,13 +153,13 @@ New entry:
 
 ## File Map
 
-| File | Purpose |
-|------|---------|
-| `src/lib/auth.ts` | Add `calendar.readonly` scope to `signInWithGoogle` |
-| `src/routes/_layout/calendar/-calendar.api.ts` | Google Calendar REST API utility |
-| `src/routes/_layout/calendar/index.tsx` | Full calendar page |
-| `src/routes/_layout/calendar/-CalendarBentoCard.tsx` | Overview bento card |
-| `src/tools/registry.ts` | Register calendar tool |
+| File                                                 | Purpose                                             |
+| ---------------------------------------------------- | --------------------------------------------------- |
+| `src/lib/auth.ts`                                    | Add `calendar.readonly` scope to `signInWithGoogle` |
+| `src/routes/_layout/calendar/-calendar.api.ts`       | Google Calendar REST API utility                    |
+| `src/routes/_layout/calendar/index.tsx`              | Full calendar page                                  |
+| `src/routes/_layout/calendar/-CalendarBentoCard.tsx` | Overview bento card                                 |
+| `src/tools/registry.ts`                              | Register calendar tool                              |
 
 ---
 
