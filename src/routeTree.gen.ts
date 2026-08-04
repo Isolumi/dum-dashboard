@@ -9,20 +9,13 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as LoginRouteImport } from './routes/login'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
-import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as LayoutDevColoursRouteImport } from './routes/_layout/dev-colours'
 import { Route as LayoutTodosIndexRouteImport } from './routes/_layout/todos/index'
 import { Route as LayoutCalendarIndexRouteImport } from './routes/_layout/calendar/index'
 import { Route as CalendarOauthCallbackRouteImport } from './routes/calendar/oauth/callback'
 
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
   getParentRoute: () => rootRouteImport,
@@ -31,11 +24,6 @@ const LayoutIndexRoute = LayoutIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => LayoutRoute,
-} as any)
-const AuthCallbackRoute = AuthCallbackRouteImport.update({
-  id: '/auth/callback',
-  path: '/auth/callback',
-  getParentRoute: () => rootRouteImport,
 } as any)
 const LayoutDevColoursRoute = LayoutDevColoursRouteImport.update({
   id: '/dev-colours',
@@ -60,17 +48,13 @@ const CalendarOauthCallbackRoute = CalendarOauthCallbackRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
-  '/login': typeof LoginRoute
   '/dev-colours': typeof LayoutDevColoursRoute
-  '/auth/callback': typeof AuthCallbackRoute
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/calendar/': typeof LayoutCalendarIndexRoute
   '/todos/': typeof LayoutTodosIndexRoute
 }
 export interface FileRoutesByTo {
-  '/login': typeof LoginRoute
   '/dev-colours': typeof LayoutDevColoursRoute
-  '/auth/callback': typeof AuthCallbackRoute
   '/': typeof LayoutIndexRoute
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/calendar': typeof LayoutCalendarIndexRoute
@@ -79,9 +63,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_layout': typeof LayoutRouteWithChildren
-  '/login': typeof LoginRoute
   '/_layout/dev-colours': typeof LayoutDevColoursRoute
-  '/auth/callback': typeof AuthCallbackRoute
   '/_layout/': typeof LayoutIndexRoute
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/_layout/calendar/': typeof LayoutCalendarIndexRoute
@@ -91,27 +73,16 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/login'
     | '/dev-colours'
-    | '/auth/callback'
     | '/calendar/oauth/callback'
     | '/calendar/'
     | '/todos/'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/login'
-    | '/dev-colours'
-    | '/auth/callback'
-    | '/'
-    | '/calendar/oauth/callback'
-    | '/calendar'
-    | '/todos'
+  to: '/dev-colours' | '/' | '/calendar/oauth/callback' | '/calendar' | '/todos'
   id:
     | '__root__'
     | '/_layout'
-    | '/login'
     | '/_layout/dev-colours'
-    | '/auth/callback'
     | '/_layout/'
     | '/calendar/oauth/callback'
     | '/_layout/calendar/'
@@ -120,20 +91,11 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   LayoutRoute: typeof LayoutRouteWithChildren
-  LoginRoute: typeof LoginRoute
-  AuthCallbackRoute: typeof AuthCallbackRoute
   CalendarOauthCallbackRoute: typeof CalendarOauthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_layout': {
       id: '/_layout'
       path: ''
@@ -147,13 +109,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof LayoutIndexRouteImport
       parentRoute: typeof LayoutRoute
-    }
-    '/auth/callback': {
-      id: '/auth/callback'
-      path: '/auth/callback'
-      fullPath: '/auth/callback'
-      preLoaderRoute: typeof AuthCallbackRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/_layout/dev-colours': {
       id: '/_layout/dev-colours'
@@ -205,8 +160,6 @@ const LayoutRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   LayoutRoute: LayoutRouteWithChildren,
-  LoginRoute: LoginRoute,
-  AuthCallbackRoute: AuthCallbackRoute,
   CalendarOauthCallbackRoute: CalendarOauthCallbackRoute,
 }
 export const routeTree = rootRouteImport

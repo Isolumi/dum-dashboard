@@ -3,7 +3,6 @@ import { Circle, CircleCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Skeleton } from "#/components/ui/skeleton";
-import { getAccessToken } from "#/lib/auth";
 import type { Todo } from "#/lib/database.types";
 import { getTodos } from "#/routes/todos/todos.functions";
 import type { ToolEntry } from "#/tools/registry";
@@ -67,7 +66,7 @@ function TodoRow({ todo, today }: { todo: Todo; today: Date }) {
 export function TodoBentoCard({ tool: _tool, data }: { tool: ToolEntry; data: unknown }) {
   const hasInitialData = Array.isArray(data);
   const [todos, setTodos] = useState<Todo[]>(hasInitialData ? (data as Todo[]) : []);
-  const [status, setStatus] = useState<"loading" | "ready" | "auth_expired">(
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(
     hasInitialData ? "ready" : "loading",
   );
 
@@ -80,22 +79,14 @@ export function TodoBentoCard({ tool: _tool, data }: { tool: ToolEntry; data: un
 
     let cancelled = false;
     async function load() {
-      const accessToken = await getAccessToken();
-      if (!accessToken) {
-        if (!cancelled) setStatus("auth_expired");
-        return;
-      }
-
       try {
-        const fresh = await getTodos({
-          data: { supabase_access_token: accessToken },
-        });
+        const fresh = await getTodos();
         if (!cancelled) {
           setTodos(fresh);
           setStatus("ready");
         }
       } catch {
-        if (!cancelled) setStatus("auth_expired");
+        if (!cancelled) setStatus("error");
       }
     }
 
@@ -127,8 +118,8 @@ export function TodoBentoCard({ tool: _tool, data }: { tool: ToolEntry; data: un
           </div>
         )}
 
-        {status === "auth_expired" && (
-          <p className="text-xs text-muted-foreground">Todos unavailable — sign in again.</p>
+        {status === "error" && (
+          <p className="text-xs text-muted-foreground">Todos are unavailable right now.</p>
         )}
 
         {status === "ready" && todos.length === 0 ? (

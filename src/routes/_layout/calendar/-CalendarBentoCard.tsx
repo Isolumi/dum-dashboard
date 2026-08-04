@@ -2,7 +2,6 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { Skeleton } from "#/components/ui/skeleton";
-import { getAccessToken } from "#/lib/auth";
 import type { ToolEntry } from "#/tools/registry";
 import type { CalendarEvent } from "./-calendar.api";
 import { getCalendarEvents } from "./-calendar.functions";
@@ -30,19 +29,12 @@ export function CalendarBentoCard({
 
   useEffect(() => {
     async function load() {
-      const accessToken = await getAccessToken();
-      if (!accessToken) {
-        setStatus("auth_expired");
-        return;
-      }
-
       const now = new Date();
       const thirtyDaysOut = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
       try {
         const result = await getCalendarEvents({
           data: {
-            supabase_access_token: accessToken,
             time_min: now.toISOString(),
             time_max: thirtyDaysOut.toISOString(),
           },

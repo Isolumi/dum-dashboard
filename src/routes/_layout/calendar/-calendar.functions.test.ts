@@ -1,12 +1,40 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
+
+vi.mock("@tanstack/react-start/server", () => ({
+  getRequestHeader: vi.fn((name: string) =>
+    name === "origin" ? "https://dashboard.doh.lumilumi.xyz" : null,
+  ),
+  setResponseHeader: vi.fn(),
+}));
+
+vi.mock("#/lib/cf-env", () => ({
+  getCfEnv: () => ({ GOOGLE_CLIENT_ID: "google-client-id" }),
+}));
+
+vi.mock("#/lib/server-auth", () => ({
+  getOwnerUser: vi.fn(() => ({ id: "owner-user-id" })),
+  noStore: vi.fn(),
+}));
+
+vi.mock("#/lib/supabase-admin", () => ({
+  getSupabaseAdmin: vi.fn(),
+}));
+
+const {
   buildGoogleCalendarAuthUrl,
+  createCalendarOAuthRequest,
   refreshGoogleAccessToken,
   sha256Base64Url,
-} from "./-calendar.functions";
+} = await import("./-calendar.functions");
+const { getOwnerUser } = await import("#/lib/server-auth");
+const { getSupabaseAdmin } = await import("#/lib/supabase-admin");
 
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
+  vi.clearAllMocks();
+  vi.mocked(getSupabaseAdmin).mockReturnValue({
+    from: vi.fn(() => ({ insert: vi.fn().mockResolvedValue({ error: null }) })),
+  } as never);
 });
 
 afterEach(() => {
@@ -23,6 +51,16 @@ function mockResponse(status: number, body?: unknown): Response {
 }
 
 describe("calendar oauth helpers", () => {
+  it("writes the configured owner ID when starting Calendar OAuth", async () => {
+    const result = await createCalendarOAuthRequest();
+
+    expect(getOwnerUser).toHaveBeenCalledWith();
+    const stateInsert =
+      vi.mocked(getSupabaseAdmin).mock.results[0]?.value.from.mock.results[0]?.value.insert;
+    expect(stateInsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: "owner-user-id" }));
+    expect(result.authorizationUrl).toContain("accounts.google.com");
+  });
+
   it("builds a Google OAuth URL for offline read-only calendar access", () => {
     const url = buildGoogleCalendarAuthUrl({
       clientId: "google-client-id",

@@ -2,8 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
-import { SupabaseAccessTokenSchema } from "#/lib/auth-schemas";
-import { noStore, requireOwnerUser } from "#/lib/server-auth";
+import { assertSameOrigin, getOwnerUser, noStore } from "#/lib/server-auth";
 import { getSupabaseAdmin } from "#/lib/supabase-admin";
 import type { Todo } from "#/lib/database.types";
 
@@ -45,48 +44,38 @@ export const GetTodoSchema = z.object({
   id: z.string().uuid(),
 });
 
-export const GetTodosInputSchema = z.object({
-  supabase_access_token: SupabaseAccessTokenSchema,
-});
+export const GetTodosInputSchema = z.object({}).strict();
 
-export const GetTodoInputSchema = GetTodoSchema.extend({
-  supabase_access_token: SupabaseAccessTokenSchema,
-});
+export const GetTodoInputSchema = GetTodoSchema.strict();
 
-export const CreateTodoInputSchema = CreateTodoSchema.extend({
-  supabase_access_token: SupabaseAccessTokenSchema,
-});
+export const CreateTodoInputSchema = CreateTodoSchema.strict();
 
-export const UpdateTodoInputSchema = UpdateTodoSchema.extend({
-  supabase_access_token: SupabaseAccessTokenSchema,
-});
+export const UpdateTodoInputSchema = UpdateTodoSchema.strict();
 
-export const DeleteTodoInputSchema = DeleteTodoSchema.extend({
-  supabase_access_token: SupabaseAccessTokenSchema,
-});
+export const DeleteTodoInputSchema = DeleteTodoSchema.strict();
 
-export const ReorderTodosInputSchema = ReorderTodosSchema.extend({
-  supabase_access_token: SupabaseAccessTokenSchema,
-});
+export const ReorderTodosInputSchema = ReorderTodosSchema.strict();
 
-export const getTodos = createServerFn({ method: "POST" })
-  .inputValidator(zodValidator(GetTodosInputSchema))
-  .handler(async ({ data: input }): Promise<Todo[]> => {
-    noStore();
-    await requireOwnerUser(input.supabase_access_token);
-    const { data, error } = await getSupabaseAdmin()
-      .from("todos")
-      .select(TODO_COLUMNS)
-      .order("sort_order", { ascending: true });
-    if (error) throw new Error(`Failed to fetch todos: ${error.message}`);
-    return data ?? [];
-  });
+export function assertTodoMutationRequest(): void {
+  assertSameOrigin();
+}
+
+export const getTodos = createServerFn({ method: "POST" }).handler(async (): Promise<Todo[]> => {
+  noStore();
+  getOwnerUser();
+  const { data, error } = await getSupabaseAdmin()
+    .from("todos")
+    .select(TODO_COLUMNS)
+    .order("sort_order", { ascending: true });
+  if (error) throw new Error(`Failed to fetch todos: ${error.message}`);
+  return data ?? [];
+});
 
 export const getTodo = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(GetTodoInputSchema))
   .handler(async ({ data }): Promise<Todo> => {
     noStore();
-    await requireOwnerUser(data.supabase_access_token);
+    getOwnerUser();
     const { data: todo, error } = await getSupabaseAdmin()
       .from("todos")
       .select(TODO_COLUMNS)
@@ -100,8 +89,8 @@ export const createTodo = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(CreateTodoInputSchema))
   .handler(async ({ data }): Promise<Todo> => {
     noStore();
-    await requireOwnerUser(data.supabase_access_token);
-    const { supabase_access_token: _accessToken, ...todoFields } = data;
+    assertTodoMutationRequest();
+    const todoFields = data;
     // Assign sort_order as max + 1 within the same priority group
     const { data: maxRow } = await getSupabaseAdmin()
       .from("todos")
@@ -124,8 +113,8 @@ export const updateTodo = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(UpdateTodoInputSchema))
   .handler(async ({ data }): Promise<Todo> => {
     noStore();
-    await requireOwnerUser(data.supabase_access_token);
-    const { id, supabase_access_token: _accessToken, ...fields } = data;
+    assertTodoMutationRequest();
+    const { id, ...fields } = data;
     const { data: todo, error } = await getSupabaseAdmin()
       .from("todos")
       .update(fields)
@@ -140,7 +129,7 @@ export const deleteTodo = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(DeleteTodoInputSchema))
   .handler(async ({ data }): Promise<void> => {
     noStore();
-    await requireOwnerUser(data.supabase_access_token);
+    assertTodoMutationRequest();
     const { error } = await getSupabaseAdmin().from("todos").delete().eq("id", data.id);
     if (error) throw new Error(`Failed to delete todo: ${error.message}`);
   });
@@ -149,7 +138,7 @@ export const reorderTodos = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(ReorderTodosInputSchema))
   .handler(async ({ data }): Promise<void> => {
     noStore();
-    await requireOwnerUser(data.supabase_access_token);
+    assertTodoMutationRequest();
     const results = await Promise.all(
       data.updates.map(({ id, sort_order }) =>
         getSupabaseAdmin().from("todos").update({ sort_order }).eq("id", id),

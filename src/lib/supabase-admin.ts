@@ -1,17 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
-import { getCfEnv } from "./cf-env";
-
-function getRuntimeEnv(name: string): string {
-  const fromWorker = getCfEnv()[name];
-  if (fromWorker) return fromWorker;
-  if (typeof process !== "undefined") return process.env[name] ?? "";
-  return "";
-}
+import { requireServerEnv } from "./runtime-env";
 
 export function getSupabaseAdmin() {
-  const secretKey = getRuntimeEnv("SUPABASE_SECRET_KEY");
-  if (!secretKey) throw new Error("Missing server-only SUPABASE_SECRET_KEY secret");
+  const secretKey = requireServerEnv("SUPABASE_SECRET_KEY");
 
   return createClient<Database>(import.meta.env.VITE_SUPABASE_URL, secretKey);
 }

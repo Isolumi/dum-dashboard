@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
 import { Skeleton } from "#/components/ui/skeleton";
-import { getAccessToken } from "#/lib/auth";
 import type { CalendarEvent } from "./-calendar.api";
 import { getCalendarEvents, startCalendarOAuth } from "./-calendar.functions";
 import {
@@ -39,12 +38,6 @@ function CalendarPage() {
 
   const load = useCallback(async () => {
     setStatus("loading");
-    const accessToken = await getAccessToken();
-
-    if (!accessToken) {
-      setStatus("auth_expired");
-      return;
-    }
 
     const timeMin = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
     const timeMax = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
@@ -52,7 +45,6 @@ function CalendarPage() {
     try {
       const result = await getCalendarEvents({
         data: {
-          supabase_access_token: accessToken,
           time_min: timeMin.toISOString(),
           time_max: timeMax.toISOString(),
         },
@@ -68,14 +60,7 @@ function CalendarPage() {
   async function handleConnectCalendar() {
     setConnecting(true);
     try {
-      const accessToken = await getAccessToken();
-      if (!accessToken) {
-        setStatus("auth_expired");
-        return;
-      }
-      const { authorizationUrl } = await startCalendarOAuth({
-        data: { supabase_access_token: accessToken },
-      });
+      const { authorizationUrl } = await startCalendarOAuth();
       window.location.href = authorizationUrl;
     } catch {
       setStatus("error");

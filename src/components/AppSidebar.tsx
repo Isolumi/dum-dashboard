@@ -1,9 +1,8 @@
-import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router";
-import { LayoutGrid, LogOut } from "lucide-react";
+import { Link, useMatchRoute } from "@tanstack/react-router";
+import { LayoutGrid } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarHeader,
   SidebarMenu,
@@ -11,10 +10,8 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "#/components/ui/sidebar";
-import { Button } from "#/components/ui/button";
 import { tools } from "#/tools/registry";
 import type { ToolEntry } from "#/tools/registry";
-import { signOut } from "#/lib/auth";
 
 function NavItem({
   tool,
@@ -39,7 +36,6 @@ function NavItem({
 
 export function AppSidebar() {
   const matchRoute = useMatchRoute();
-  const navigate = useNavigate();
 
   // Overview is a hardcoded entry — not in the tools registry (Research Open Question 2)
   const isOverviewActive = Boolean(matchRoute({ to: "/" }));
@@ -81,20 +77,6 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarRail />
-      <SidebarFooter>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
-          onClick={async () => {
-            await signOut();
-            void navigate({ to: "/login" });
-          }}
-        >
-          <LogOut className="h-4 w-4" />
-          Sign out
-        </Button>
-      </SidebarFooter>
     </Sidebar>
   );
 }

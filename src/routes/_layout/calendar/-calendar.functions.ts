@@ -3,11 +3,10 @@ import { getRequestHeader } from "@tanstack/react-start/server";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
-import { SupabaseAccessTokenSchema } from "#/lib/auth-schemas";
 import { getCfEnv } from "#/lib/cf-env";
 import type { Database } from "#/lib/database.types";
 import { decryptSecret, encryptSecret } from "#/lib/secret-vault";
-import { noStore, requireOwnerUser } from "#/lib/server-auth";
+import { getOwnerUser, noStore } from "#/lib/server-auth";
 import { getSupabaseAdmin } from "#/lib/supabase-admin";
 import { type CalendarEvent, fetchCalendarEvents } from "./-calendar.api";
 
@@ -15,20 +14,17 @@ export const GOOGLE_CALENDAR_READONLY_SCOPE = "https://www.googleapis.com/auth/c
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
-const StartCalendarOAuthSchema = z.object({
-  supabase_access_token: SupabaseAccessTokenSchema,
-});
-
 const CompleteCalendarOAuthSchema = z.object({
   code: z.string().min(1),
   state: z.string().min(1),
 });
 
-const GetCalendarEventsSchema = z.object({
-  supabase_access_token: SupabaseAccessTokenSchema,
-  time_min: z.string().datetime(),
-  time_max: z.string().datetime(),
-});
+const GetCalendarEventsSchema = z
+  .object({
+    time_min: z.string().datetime(),
+    time_max: z.string().datetime(),
+  })
+  .strict();
 
 type CalendarConnectionRow = Database["public"]["Tables"]["calendar_connections"]["Row"];
 type CalendarOAuthStateRow = Database["public"]["Tables"]["calendar_oauth_states"]["Row"];
@@ -199,32 +195,34 @@ async function getConnection(userId: string): Promise<CalendarConnectionRow | nu
   return data;
 }
 
-export const startCalendarOAuth = createServerFn({ method: "POST" })
-  .inputValidator(zodValidator(StartCalendarOAuthSchema))
-  .handler(async ({ data }): Promise<{ authorizationUrl: string }> => {
-    noStore();
-    const user = await requireOwnerUser(data.supabase_access_token);
-    const state = createStateToken();
-    const stateHash = await sha256Base64Url(state);
-    const redirectUri = `${getRequestOrigin()}/calendar/oauth/callback`;
-    const expiresAt = new Date(Date.now() + OAUTH_STATE_TTL_MS).toISOString();
+export async function createCalendarOAuthRequest(): Promise<{ authorizationUrl: string }> {
+  noStore();
+  const user = getOwnerUser();
+  const state = createStateToken();
+  const stateHash = await sha256Base64Url(state);
+  const redirectUri = `${getRequestOrigin()}/calendar/oauth/callback`;
+  const expiresAt = new Date(Date.now() + OAUTH_STATE_TTL_MS).toISOString();
 
-    const { error } = await getSupabaseAdmin().from("calendar_oauth_states").insert({
-      state_hash: stateHash,
-      user_id: user.id,
-      redirect_uri: redirectUri,
-      expires_at: expiresAt,
-    });
-    if (error) throw new Error(`Failed to start calendar OAuth: ${error.message}`);
-
-    return {
-      authorizationUrl: buildGoogleCalendarAuthUrl({
-        clientId: requireRuntimeEnv("GOOGLE_CLIENT_ID"),
-        redirectUri,
-        state,
-      }).toString(),
-    };
+  const { error } = await getSupabaseAdmin().from("calendar_oauth_states").insert({
+    state_hash: stateHash,
+    user_id: user.id,
+    redirect_uri: redirectUri,
+    expires_at: expiresAt,
   });
+  if (error) throw new Error(`Failed to start calendar OAuth: ${error.message}`);
+
+  return {
+    authorizationUrl: buildGoogleCalendarAuthUrl({
+      clientId: requireRuntimeEnv("GOOGLE_CLIENT_ID"),
+      redirectUri,
+      state,
+    }).toString(),
+  };
+}
+
+export const startCalendarOAuth = createServerFn({ method: "POST" }).handler(
+  async (): Promise<{ authorizationUrl: string }> => createCalendarOAuthRequest(),
+);
 
 export const completeCalendarOAuth = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(CompleteCalendarOAuthSchema))
@@ -281,7 +279,7 @@ export const getCalendarEvents = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(GetCalendarEventsSchema))
   .handler(async ({ data }): Promise<CalendarEventsResult> => {
     noStore();
-    const user = await requireOwnerUser(data.supabase_access_token);
+    const user = getOwnerUser();
     const connection = await getConnection(user.id);
     if (!connection) return { status: "disconnected", events: [] };
 

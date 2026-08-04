@@ -1,41 +1,43 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("#/lib/supabase-admin", () => ({
-  getSupabaseAdmin: vi.fn(),
+vi.mock("@tanstack/react-start/server", () => ({
+  getRequestHeader: vi.fn(),
+  setResponseHeader: vi.fn(),
 }));
 
-const { getSupabaseAdmin } = await import("#/lib/supabase-admin");
-const { requireOwnerUser } = await import("./server-auth");
+const { getRequestHeader } = await import("@tanstack/react-start/server");
+const { assertSameOrigin, getOwnerUser } = await import("./server-auth");
 
-function mockGetUser(result: unknown) {
-  vi.mocked(getSupabaseAdmin).mockReturnValue({
-    auth: {
-      getUser: vi.fn().mockResolvedValue(result),
-    },
-  } as never);
+function mockHeaders(headers: Record<string, string | undefined>) {
+  vi.mocked(getRequestHeader).mockImplementation((name: string) => headers[name]);
 }
 
-describe("requireOwnerUser", () => {
+describe("single-owner server boundary", () => {
   beforeEach(() => {
+    vi.stubEnv("OWNER_USER_ID", "owner-user-id");
     vi.clearAllMocks();
-    vi.stubEnv("VITE_OWNER_ID", "owner-user-id");
   });
 
-  it("returns the owner user for a valid owner access token", async () => {
-    mockGetUser({ data: { user: { id: "owner-user-id" } }, error: null });
-
-    await expect(requireOwnerUser("access-token")).resolves.toEqual({ id: "owner-user-id" });
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
-  it("rejects missing or invalid access tokens", async () => {
-    mockGetUser({ data: { user: null }, error: new Error("invalid") });
-
-    await expect(requireOwnerUser("bad-token")).rejects.toThrow("Unauthorized");
+  it("returns the configured owner without a browser token", () => {
+    expect(getOwnerUser()).toEqual({ id: "owner-user-id" });
   });
 
-  it("rejects authenticated non-owner users", async () => {
-    mockGetUser({ data: { user: { id: "someone-else" } }, error: null });
+  it("rejects a mutation from another origin", () => {
+    mockHeaders({ origin: "https://evil.example", host: "dashboard.doh.lumilumi.xyz" });
 
-    await expect(requireOwnerUser("other-token")).rejects.toThrow("Forbidden");
+    expect(() => assertSameOrigin()).toThrow("Cross-origin request rejected");
+  });
+
+  it("accepts a mutation from the dashboard origin", () => {
+    mockHeaders({
+      origin: "https://dashboard.doh.lumilumi.xyz",
+      host: "dashboard.doh.lumilumi.xyz",
+    });
+
+    expect(() => assertSameOrigin()).not.toThrow();
   });
 });

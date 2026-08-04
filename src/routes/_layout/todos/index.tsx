@@ -5,8 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Skeleton } from "#/components/ui/skeleton";
 import type { Todo, TodoPriority } from "#/lib/database.types";
-import { getAccessToken } from "#/lib/auth";
-import { useTodosRealtime } from "#/hooks/useTodosRealtime";
+import { usePollingRefresh } from "#/hooks/usePollingRefresh";
 import {
   createTodo,
   deleteTodo,
@@ -14,7 +13,6 @@ import {
   reorderTodos,
   updateTodo,
 } from "#/routes/todos/todos.functions";
-import { LiveIndicator } from "./-LiveIndicator";
 import { PrioritySection } from "./-PrioritySection";
 import { PRIORITY_ORDER, PRIORITY_LABELS, groupAndSortTodos } from "./-todoUtils";
 
@@ -60,17 +58,9 @@ function TodosPage() {
 
   const loadTodos = useCallback(async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
     if (showLoading) setLoading(true);
-    const accessToken = await getAccessToken();
-    if (!accessToken) {
-      setLoadError("Your session expired. Sign in again to load todos.");
-      setLoading(false);
-      return;
-    }
 
     try {
-      const fresh = await getTodos({
-        data: { supabase_access_token: accessToken },
-      });
+      const fresh = await getTodos();
       setTodos(fresh);
       setLoadError(null);
     } catch {
@@ -84,17 +74,9 @@ function TodosPage() {
     void loadTodos();
   }, [loadTodos]);
 
-  const channelStatus = useTodosRealtime(() => {
-    void loadTodos({ showLoading: false });
-  });
+  usePollingRefresh(() => loadTodos({ showLoading: false }), 3000);
 
   const grouped = useMemo(() => groupAndSortTodos(todos), [todos]);
-
-  const requireAccessToken = useCallback(async () => {
-    const accessToken = await getAccessToken();
-    if (!accessToken) throw new Error("missing-session");
-    return accessToken;
-  }, []);
 
   const handleCreate = useCallback(
     async (fields: {
@@ -104,10 +86,8 @@ function TodosPage() {
     }) => {
       if (fields.name.trim().length === 0) return;
       try {
-        const accessToken = await requireAccessToken();
         const created = await createTodo({
           data: {
-            supabase_access_token: accessToken,
             name: fields.name.trim(),
             priority: fields.priority,
             status: "not_started",
@@ -119,7 +99,7 @@ function TodosPage() {
         setMutationError("Save failed — check your connection and try again.");
       }
     },
-    [requireAccessToken],
+    [],
   );
 
   const handleUpdate = useCallback(
@@ -133,63 +113,53 @@ function TodosPage() {
       const previous = todosRef.current;
       setTodos((prev) => prev.map((t) => (t.id === fields.id ? { ...t, ...fields } : t)));
       try {
-        const accessToken = await requireAccessToken();
-        await updateTodo({ data: { ...fields, supabase_access_token: accessToken } });
+        await updateTodo({ data: fields });
       } catch {
         setTodos(previous);
         setMutationError("Save failed — check your connection and try again.");
       }
     },
-    [requireAccessToken],
+    [],
   );
 
-  const handleDelete = useCallback(
-    async (id: string) => {
-      const previous = todosRef.current;
-      setTodos((prev) => prev.filter((t) => t.id !== id));
-      try {
-        const accessToken = await requireAccessToken();
-        await deleteTodo({ data: { id, supabase_access_token: accessToken } });
-      } catch {
-        setTodos(previous);
-        setMutationError("Save failed — check your connection and try again.");
-      }
-    },
-    [requireAccessToken],
-  );
+  const handleDelete = useCallback(async (id: string) => {
+    const previous = todosRef.current;
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+    try {
+      await deleteTodo({ data: { id } });
+    } catch {
+      setTodos(previous);
+      setMutationError("Save failed — check your connection and try again.");
+    }
+  }, []);
 
-  const handleReorder = useCallback(
-    async (priority: TodoPriority, orderedIds: string[]) => {
-      let previous = todosRef.current;
-      // Optimistic update
-      setTodos((prev) => {
-        previous = prev;
-        const otherTodos = prev.filter((t) => t.priority !== priority);
-        const reordered = orderedIds
-          .map((id, i) => {
-            const todo = prev.find((t) => t.id === id);
-            return todo ? { ...todo, sort_order: i } : null;
-          })
-          .filter(Boolean) as Todo[];
-        return [...otherTodos, ...reordered];
+  const handleReorder = useCallback(async (priority: TodoPriority, orderedIds: string[]) => {
+    let previous = todosRef.current;
+    // Optimistic update
+    setTodos((prev) => {
+      previous = prev;
+      const otherTodos = prev.filter((t) => t.priority !== priority);
+      const reordered = orderedIds
+        .map((id, i) => {
+          const todo = prev.find((t) => t.id === id);
+          return todo ? { ...todo, sort_order: i } : null;
+        })
+        .filter(Boolean) as Todo[];
+      return [...otherTodos, ...reordered];
+    });
+
+    // Persist
+    try {
+      await reorderTodos({
+        data: {
+          updates: orderedIds.map((id, i) => ({ id, sort_order: i })),
+        },
       });
-
-      // Persist
-      try {
-        const accessToken = await requireAccessToken();
-        await reorderTodos({
-          data: {
-            supabase_access_token: accessToken,
-            updates: orderedIds.map((id, i) => ({ id, sort_order: i })),
-          },
-        });
-      } catch {
-        setTodos(previous);
-        setMutationError("Reorder failed — check your connection and try again.");
-      }
-    },
-    [requireAccessToken],
-  );
+    } catch {
+      setTodos(previous);
+      setMutationError("Reorder failed — check your connection and try again.");
+    }
+  }, []);
 
   if (loading) return <TodosLoading />;
 
@@ -197,7 +167,6 @@ function TodosPage() {
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Todos</h1>
-        <LiveIndicator status={channelStatus} />
       </div>
       {loadError && (
         <Alert variant="destructive">

@@ -23,15 +23,10 @@ vi.mock("@tanstack/react-router", () => ({
   }) => React.createElement("a", { href: to, ...props }, children),
 }));
 
-vi.mock("#/lib/auth", () => ({
-  getAccessToken: vi.fn(),
-}));
-
 vi.mock("./-calendar.functions", () => ({
   getCalendarEvents: vi.fn(),
 }));
 
-const { getAccessToken } = await import("#/lib/auth");
 const { getCalendarEvents } = await import("./-calendar.functions");
 const { CalendarBentoCard } = await import("./-CalendarBentoCard");
 
@@ -49,7 +44,6 @@ function makeEvent(id: string, summary: string, dateTime: string) {
 
 describe("CalendarBentoCard", () => {
   it("shows upcoming events once loaded", async () => {
-    vi.mocked(getAccessToken).mockResolvedValue("supabase-token");
     vi.mocked(getCalendarEvents).mockResolvedValue({
       status: "ready",
       events: [
@@ -65,7 +59,6 @@ describe("CalendarBentoCard", () => {
   });
 
   it("shows 'No upcoming events' when event list is empty", async () => {
-    vi.mocked(getAccessToken).mockResolvedValue("supabase-token");
     vi.mocked(getCalendarEvents).mockResolvedValue({ status: "ready", events: [] });
 
     render(React.createElement(CalendarBentoCard, { tool: mockTool, data: null }));
@@ -73,16 +66,7 @@ describe("CalendarBentoCard", () => {
     await waitFor(() => expect(screen.getByText(/no upcoming events/i)).toBeTruthy());
   });
 
-  it("shows 'Calendar disconnected' when no Supabase session is available", async () => {
-    vi.mocked(getAccessToken).mockResolvedValue(null);
-
-    render(React.createElement(CalendarBentoCard, { tool: mockTool, data: null }));
-
-    await waitFor(() => expect(screen.getByText(/calendar disconnected/i)).toBeTruthy());
-  });
-
   it("shows 'Calendar disconnected' when the server reports expired calendar access", async () => {
-    vi.mocked(getAccessToken).mockResolvedValue("supabase-token");
     vi.mocked(getCalendarEvents).mockResolvedValue({ status: "auth_expired", events: [] });
 
     render(React.createElement(CalendarBentoCard, { tool: mockTool, data: null }));
@@ -91,7 +75,6 @@ describe("CalendarBentoCard", () => {
   });
 
   it("renders the card as a link to /calendar", async () => {
-    vi.mocked(getAccessToken).mockResolvedValue("supabase-token");
     vi.mocked(getCalendarEvents).mockResolvedValue({ status: "ready", events: [] });
 
     render(React.createElement(CalendarBentoCard, { tool: mockTool, data: null }));
