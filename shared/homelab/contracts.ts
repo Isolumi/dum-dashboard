@@ -1,0 +1,193 @@
+export type HealthStatus = "healthy" | "warning" | "critical" | "unknown";
+
+export type SourceName = "kubernetes" | "argocd" | "prometheus" | "github" | "service-probe";
+
+export interface HealthIssue {
+  ruleId: string;
+  status: Exclude<HealthStatus, "healthy">;
+  reason: string;
+  source: SourceName;
+  resource: string;
+  observedAt: string;
+  evidence: Record<string, string | number | boolean | null>;
+}
+
+export interface SourceState {
+  source: SourceName;
+  status: HealthStatus;
+  observedAt: string;
+  stale: boolean;
+  error?: string;
+}
+
+export interface Snapshot<T> {
+  data: T | null;
+  status: HealthStatus;
+  observedAt: string;
+  stale: boolean;
+  issues: HealthIssue[];
+  sources: SourceState[];
+}
+
+export interface MetricPoint {
+  timestamp: string;
+  value: number;
+}
+
+export type ResourceName = "cpu" | "memory" | "disk";
+
+export interface CurrentResourceMetric {
+  resource: ResourceName;
+  usagePercent: number;
+  observedAt: string;
+}
+
+export interface ResourceHistory {
+  resource: ResourceName;
+  points: MetricPoint[];
+}
+
+export interface ResourceMetrics {
+  current: CurrentResourceMetric[];
+  history: ResourceHistory[];
+}
+
+export interface ClusterSummary {
+  status: HealthStatus;
+  readyNodes: number;
+  totalNodes: number;
+}
+
+export interface WorkloadCounts {
+  healthy: number;
+  warning: number;
+  critical: number;
+  unknown: number;
+  total: number;
+}
+
+export interface ArgoSummary {
+  status: HealthStatus;
+  syncedApplications: number;
+  totalApplications: number;
+}
+
+export interface RecentActivity {
+  id: string;
+  resource: string;
+  message: string;
+  status: HealthStatus;
+  occurredAt: string;
+  source: SourceName | null;
+  url: string | null;
+}
+
+export interface ServiceSummary {
+  name: string;
+  description: string;
+  status: HealthStatus;
+  url: string;
+  certificateExpiresAt: string | null;
+  probeLatencyMs: number | null;
+  namespace: string | null;
+  workload: string | null;
+  image: string | null;
+  observedAt: string;
+}
+
+export interface OverviewData {
+  cluster: ClusterSummary;
+  workloads: WorkloadCounts;
+  argo: ArgoSummary;
+  resources: ResourceMetrics;
+  activeIssues: HealthIssue[];
+  recentActivity: RecentActivity[];
+  services: ServiceSummary[];
+}
+
+export interface NodeSummary {
+  name: string;
+  ready: boolean;
+  status: HealthStatus;
+  conditions: string[];
+}
+
+export interface NamespaceSummary {
+  name: string;
+  status: HealthStatus;
+  workloadCount: number;
+  podCount: number;
+}
+
+export interface WorkloadSummary {
+  kind: string;
+  name: string;
+  namespace: string;
+  status: HealthStatus;
+  desiredReplicas: number;
+  availableReplicas: number;
+  failureReason: string | null;
+  restartIncrease15m: boolean;
+}
+
+export interface PodSummary {
+  name: string;
+  namespace: string;
+  status: HealthStatus;
+  ready: boolean;
+  restartCount: number;
+  node: string | null;
+  image: string | null;
+  createdAt: string;
+}
+
+export interface EventSummary {
+  id: string;
+  namespace: string;
+  resource: string;
+  status: HealthStatus;
+  reason: string;
+  message: string;
+  observedAt: string;
+}
+
+export interface ClusterData {
+  nodes: NodeSummary[];
+  namespaces: NamespaceSummary[];
+  workloads: WorkloadSummary[];
+  pods: PodSummary[];
+  events: EventSummary[];
+  resources: ResourceMetrics;
+}
+
+export interface PipelineStage {
+  status: HealthStatus;
+  summary: string;
+  observedAt: string;
+  url: string | null;
+}
+
+export interface ApplicationPipelineSummary {
+  application: string;
+  namespace: string;
+  status: HealthStatus;
+  commit: string | null;
+  expectedImage: string | null;
+  liveImage: string | null;
+  workflow: PipelineStage;
+  argo: PipelineStage;
+  rollout: PipelineStage;
+}
+
+export interface DeploymentData {
+  applications: ApplicationPipelineSummary[];
+}
+
+export interface ServiceData {
+  services: ServiceSummary[];
+}
+
+export type OverviewSnapshot = Snapshot<OverviewData>;
+export type ClusterSnapshot = Snapshot<ClusterData>;
+export type DeploymentSnapshot = Snapshot<DeploymentData>;
+export type ServiceSnapshot = Snapshot<ServiceData>;
