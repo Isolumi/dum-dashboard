@@ -216,6 +216,8 @@ export class PrometheusProvider implements Provider<ResourceMetrics> {
     step: string | number,
     signal?: AbortSignal,
   ): Promise<MetricSeries[]> {
+    if (signal?.aborted) throw new Error("Prometheus request aborted");
+
     const parameters = {
       query,
       start: parameter(start),
@@ -236,8 +238,7 @@ export class PrometheusProvider implements Provider<ResourceMetrics> {
     const existingRequest = this.rangeInFlight.get(cacheKey);
     if (existingRequest) return cloneMetricSeries(await waitForCaller(existingRequest, signal));
 
-    let sharedRequest!: Promise<MetricSeries[]>;
-    sharedRequest = (async () => {
+    const sharedRequest = (async () => {
       const payload = await this.request("query_range", parameters);
       let value: MetricSeries[];
       try {
@@ -251,12 +252,15 @@ export class PrometheusProvider implements Provider<ResourceMetrics> {
         value: cachedValue,
       });
       return cachedValue;
-    })().finally(() => {
+    })();
+    this.rangeInFlight.set(cacheKey, sharedRequest);
+    const clearInFlight = () => {
       if (this.rangeInFlight.get(cacheKey) === sharedRequest) {
         this.rangeInFlight.delete(cacheKey);
       }
-    });
-    this.rangeInFlight.set(cacheKey, sharedRequest);
+    };
+    void sharedRequest.then(clearInFlight, clearInFlight);
+
     return cloneMetricSeries(await waitForCaller(sharedRequest, signal));
   }
 

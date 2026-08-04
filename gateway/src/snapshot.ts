@@ -130,12 +130,13 @@ function healthIssue(
   evaluation: HealthEvaluation & { status: Exclude<HealthStatus, "healthy"> },
   resources: ResourceMetrics,
   observedAt: string,
+  source: SourceName | null,
 ): HealthIssue {
   const resource = RESOURCE_NAMES.find((name) => evaluation.ruleId.startsWith(`${name}-`));
   const metric = resources.current.find((current) => current.resource === resource);
   return {
     ...evaluation,
-    source: "prometheus",
+    source,
     resource: resource ?? "resources",
     observedAt: metric?.observedAt ?? observedAt,
   };
@@ -223,6 +224,9 @@ export async function collectSnapshot(
   const resources = successfulResourceMetrics(results);
   const mergedCluster = clusterData && resources ? { ...clusterData, resources } : undefined;
   const resourcesForHealth = resources ?? clusterData?.resources;
+  const resourceIssueSource = results.some((result) => result.source === "prometheus")
+    ? "prometheus"
+    : null;
   const successfulData = results.flatMap((result) => {
     if (!result.ok) return [];
     if (mergedCluster && result.data === resources) return [];
@@ -244,7 +248,9 @@ export async function collectSnapshot(
       (evaluation): evaluation is HealthEvaluation & { status: Exclude<HealthStatus, "healthy"> } =>
         evaluation.status !== "healthy",
     )
-    .map((evaluation) => healthIssue(evaluation, resourcesForHealth!, observedAt));
+    .map((evaluation) =>
+      healthIssue(evaluation, resourcesForHealth!, observedAt, resourceIssueSource),
+    );
 
   return {
     data: successfulData.length > 0 ? successfulData : null,

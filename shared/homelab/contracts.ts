@@ -6,7 +6,7 @@ export interface HealthIssue {
   ruleId: string;
   status: Exclude<HealthStatus, "healthy">;
   reason: string;
-  source: SourceName;
+  source: SourceName | null;
   resource: string;
   observedAt: string;
   evidence: Record<string, string | number | boolean | null>;

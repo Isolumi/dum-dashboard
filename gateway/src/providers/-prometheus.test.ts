@@ -305,6 +305,71 @@ describe("PrometheusProvider", () => {
     expect(secondRemoveListener).toHaveBeenCalledWith("abort", expect.any(Function));
   });
 
+  it("does not start a range request when the caller signal is already aborted", async () => {
+    const fetchApi = vi.fn(async (_url: string, _options: RequestInit) =>
+      jsonResponse(fixture.matrix),
+    );
+    const provider = new PrometheusProvider({
+      baseUrl: "http://prometheus.test",
+      fetchApi,
+      now: () => NOW,
+    });
+    const controller = new AbortController();
+    const args = ["up", "2026-08-04T11:55:00.000Z", "2026-08-04T12:00:00.000Z", "300s"] as const;
+    controller.abort();
+
+    await expect(provider.queryRange(...args, controller.signal)).rejects.toThrow(
+      "Prometheus request aborted",
+    );
+    expect(fetchApi).not.toHaveBeenCalled();
+  });
+
+  it("observes a shared rejection after every caller aborts and allows a later retry", async () => {
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    let rejectUpstream!: (error: Error) => void;
+    let attempt = 0;
+    const fetchApi = vi.fn((_url: string, _options: RequestInit) => {
+      attempt += 1;
+      if (attempt === 1) {
+        firstController.abort();
+        secondController.abort();
+        return new Promise<Response>((_resolve, reject) => {
+          rejectUpstream = reject;
+        });
+      }
+      return Promise.resolve(jsonResponse(fixture.matrix));
+    });
+    const provider = new PrometheusProvider({
+      baseUrl: "http://prometheus.test",
+      fetchApi,
+      now: () => NOW,
+    });
+    const args = ["up", "2026-08-04T11:55:00.000Z", "2026-08-04T12:00:00.000Z", "300s"] as const;
+    const unhandledRejections: unknown[] = [];
+    const recordUnhandled = (reason: unknown) => unhandledRejections.push(reason);
+    process.on("unhandledRejection", recordUnhandled);
+
+    try {
+      const firstRequest = provider.queryRange(...args, firstController.signal);
+      const secondRequest = provider.queryRange(...args, secondController.signal);
+      const callerResults = await Promise.allSettled([firstRequest, secondRequest]);
+
+      expect(callerResults).toEqual([
+        expect.objectContaining({ status: "rejected", reason: expect.any(Error) }),
+        expect.objectContaining({ status: "rejected", reason: expect.any(Error) }),
+      ]);
+      rejectUpstream(new Error("temporary upstream failure"));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(unhandledRejections).toEqual([]);
+      await expect(provider.queryRange(...args)).resolves.toHaveLength(1);
+      expect(fetchApi).toHaveBeenCalledTimes(2);
+    } finally {
+      process.removeListener("unhandledRejection", recordUnhandled);
+    }
+  });
+
   it("removes a rejected in-flight range request so the next call retries", async () => {
     let rejectFirst = true;
     const fetchApi = vi.fn(async (_url: string, _options: RequestInit) => {
@@ -321,9 +386,20 @@ describe("PrometheusProvider", () => {
     });
     const args = ["up", "2026-08-04T11:55:00.000Z", "2026-08-04T12:00:00.000Z", "300s"] as const;
 
-    await expect(
-      Promise.all([provider.queryRange(...args), provider.queryRange(...args)]),
-    ).rejects.toThrow("Prometheus request failed");
+    const results = await Promise.allSettled([
+      provider.queryRange(...args),
+      provider.queryRange(...args),
+    ]);
+    expect(results).toEqual([
+      expect.objectContaining({
+        status: "rejected",
+        reason: expect.objectContaining({ message: "Prometheus request failed" }),
+      }),
+      expect.objectContaining({
+        status: "rejected",
+        reason: expect.objectContaining({ message: "Prometheus request failed" }),
+      }),
+    ]);
     expect(fetchApi).toHaveBeenCalledTimes(1);
 
     await expect(provider.queryRange(...args)).resolves.toHaveLength(1);
@@ -452,9 +528,13 @@ describe("Prometheus cluster snapshot integration", () => {
     expect(snapshot.status).toBe("unknown");
     expect(snapshot.issues).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ ruleId: "cpu-usage-unknown", status: "unknown" }),
-        expect.objectContaining({ ruleId: "memory-usage-unknown", status: "unknown" }),
-        expect.objectContaining({ ruleId: "disk-usage-unknown", status: "unknown" }),
+        expect.objectContaining({ ruleId: "cpu-usage-unknown", status: "unknown", source: null }),
+        expect.objectContaining({
+          ruleId: "memory-usage-unknown",
+          status: "unknown",
+          source: null,
+        }),
+        expect.objectContaining({ ruleId: "disk-usage-unknown", status: "unknown", source: null }),
       ]),
     );
     expect(snapshot.sources).toEqual([
@@ -585,8 +665,14 @@ describe("Prometheus cluster snapshot integration", () => {
       expect.objectContaining({
         ruleId: "memory-usage-unknown",
         status: "unknown",
+        source: "prometheus",
         evidence: expect.objectContaining({ usagePercent: null }),
       }),
+    );
+    expect(snapshot.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: "prometheus", status: "healthy" }),
+      ]),
     );
   });
 });
