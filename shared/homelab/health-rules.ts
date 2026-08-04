@@ -30,6 +30,7 @@ export interface ResourceHealthInput {
   resource: ResourceName;
   usagePercent: number;
   sustainedMinutes: number;
+  criticalSustainedMinutes?: number;
 }
 
 export interface HealthRollup {
@@ -162,10 +163,13 @@ export function evaluateResources(input: ResourceHealthInput): HealthEvaluation 
   };
   const requiresSustainedUsage = input.resource !== "disk";
   const sustainedLongEnough = !requiresSustainedUsage || input.sustainedMinutes >= FIVE_MINUTES;
+  const criticalSustainedLongEnough =
+    !requiresSustainedUsage ||
+    (input.criticalSustainedMinutes ?? input.sustainedMinutes) >= FIVE_MINUTES;
   const criticalThreshold = input.resource === "disk" ? 97 : 95;
   const warningThreshold = input.resource === "disk" ? 90 : 85;
 
-  if (sustainedLongEnough && input.usagePercent >= criticalThreshold) {
+  if (criticalSustainedLongEnough && input.usagePercent >= criticalThreshold) {
     return {
       status: "critical",
       ruleId: `${input.resource}-usage-critical`,

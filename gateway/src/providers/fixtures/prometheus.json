@@ -1,0 +1,35 @@
+{
+  "vector": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {
+            "instance": "dumachine:9100",
+            "job": "node-exporter"
+          },
+          "value": [1785844800, "42.5"]
+        }
+      ]
+    }
+  },
+  "matrix": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {
+            "instance": "dumachine:9100",
+            "job": "node-exporter"
+          },
+          "values": [
+            [1785844500, "40"],
+            [1785844800, "42.5"]
+          ]
+        }
+      ]
+    }
+  }
+}

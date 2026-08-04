@@ -1,9 +1,19 @@
 import type {
+  ClusterData,
+  HealthIssue,
   HealthStatus,
+  ResourceHistory,
+  ResourceMetrics,
+  ResourceName,
   Snapshot,
   SourceName,
   SourceState,
 } from "../../shared/homelab/contracts";
+import {
+  evaluateResources,
+  rollUpStatus,
+  type HealthEvaluation,
+} from "../../shared/homelab/health-rules";
 import type { Provider } from "./providers/provider";
 
 export type Now = () => Date;
@@ -36,6 +46,117 @@ function sourceUnavailableMessage(source: SourceName): string {
 
 function timestamp(now: Now): string {
   return now().toISOString();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isClusterData(value: unknown): value is ClusterData {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.nodes) &&
+    Array.isArray(value.namespaces) &&
+    Array.isArray(value.workloads) &&
+    Array.isArray(value.pods) &&
+    Array.isArray(value.events) &&
+    isRecord(value.resources)
+  );
+}
+
+function isResourceMetrics(value: unknown): value is ResourceMetrics {
+  return isRecord(value) && Array.isArray(value.current) && Array.isArray(value.history);
+}
+
+const RESOURCE_NAMES: readonly ResourceName[] = ["cpu", "memory", "disk"];
+const FIVE_MINUTES_MS = 5 * 60 * 1_000;
+
+function sustainedMinutes(
+  metric: ResourceMetrics["current"][number],
+  history: ResourceHistory | undefined,
+  threshold: number,
+): number | null {
+  const observedAt = Date.parse(metric.observedAt);
+  if (Number.isNaN(observedAt) || !history) return null;
+  const cutoff = observedAt - FIVE_MINUTES_MS;
+  const points = history.points
+    .map((point) => ({ ...point, timestampMs: Date.parse(point.timestamp) }))
+    .filter((point) => !Number.isNaN(point.timestampMs) && point.timestampMs <= observedAt)
+    .sort((left, right) => left.timestampMs - right.timestampMs);
+  const anchor = points.filter((point) => point.timestampMs <= cutoff).at(-1);
+  if (!anchor) return null;
+
+  const relevant = [anchor, ...points.filter((point) => point.timestampMs > cutoff)];
+  return metric.usagePercent >= threshold && relevant.every((point) => point.value >= threshold)
+    ? 5
+    : 0;
+}
+
+function unknownResource(resource: ResourceName): HealthEvaluation {
+  return {
+    status: "unknown",
+    ruleId: `${resource}-usage-unknown`,
+    reason: `${resource} usage is unavailable.`,
+    evidence: { resource, usagePercent: null, sustainedMinutes: null },
+  };
+}
+
+function evaluateResourceMetrics(resources: ResourceMetrics): HealthEvaluation[] {
+  return RESOURCE_NAMES.map((resource) => {
+    const current = resources.current.find((metric) => metric.resource === resource);
+    if (!current) return unknownResource(resource);
+    if (resource === "disk" || current.usagePercent < 85) {
+      return evaluateResources({
+        resource,
+        usagePercent: current.usagePercent,
+        sustainedMinutes: 0,
+      });
+    }
+
+    const history = resources.history.find((series) => series.resource === resource);
+    const warningMinutes = sustainedMinutes(current, history, 85);
+    const criticalMinutes = sustainedMinutes(current, history, 95);
+    if (warningMinutes === null || criticalMinutes === null) return unknownResource(resource);
+    return evaluateResources({
+      resource,
+      usagePercent: current.usagePercent,
+      sustainedMinutes: warningMinutes,
+      criticalSustainedMinutes: criticalMinutes,
+    });
+  });
+}
+
+function healthIssue(
+  evaluation: HealthEvaluation & { status: Exclude<HealthStatus, "healthy"> },
+  resources: ResourceMetrics,
+  observedAt: string,
+): HealthIssue {
+  const resource = RESOURCE_NAMES.find((name) => evaluation.ruleId.startsWith(`${name}-`));
+  const metric = resources.current.find((current) => current.resource === resource);
+  return {
+    ...evaluation,
+    source: "prometheus",
+    resource: resource ?? "resources",
+    observedAt: metric?.observedAt ?? observedAt,
+  };
+}
+
+function successfulClusterData(results: readonly SourceResult<unknown>[]): ClusterData | undefined {
+  for (const result of results) {
+    if (result.ok && isClusterData(result.data)) return result.data;
+  }
+  return undefined;
+}
+
+function successfulResourceMetrics(
+  results: readonly SourceResult<unknown>[],
+): ResourceMetrics | undefined {
+  for (const result of results) {
+    if (result.ok && result.source === "prometheus" && isResourceMetrics(result.data)) {
+      return result.data;
+    }
+  }
+  return undefined;
 }
 
 async function collectWithTimeout<T>(
@@ -98,16 +219,38 @@ export async function collectSnapshot(
   now: Now = () => new Date(),
 ): Promise<Snapshot<unknown[]>> {
   const results = await collectProviders(providers, timeoutMs, now);
-  const successfulData = results.flatMap((result) => (result.ok ? [result.data] : []));
+  const clusterData = successfulClusterData(results);
+  const resources = successfulResourceMetrics(results);
+  const mergedCluster = clusterData && resources ? { ...clusterData, resources } : undefined;
+  const successfulData = results.flatMap((result) => {
+    if (!result.ok) return [];
+    if (mergedCluster && result.data === resources) return [];
+    if (mergedCluster && result.data === clusterData) return [mergedCluster];
+    return [result.data];
+  });
   const hasFailures = results.some((result) => !result.ok);
-  const status: HealthStatus = hasFailures || results.length === 0 ? "unknown" : "healthy";
+  const resourceEvaluations = resources ? evaluateResourceMetrics(resources) : [];
+  const resourceRollup = rollUpStatus(resourceEvaluations);
+  const status: HealthStatus =
+    resourceRollup.status === "critical" || resourceRollup.status === "warning"
+      ? resourceRollup.status
+      : hasFailures || results.length === 0 || resourceRollup.status === "unknown"
+        ? "unknown"
+        : "healthy";
+  const observedAt = timestamp(now);
+  const issues = resourceEvaluations
+    .filter(
+      (evaluation): evaluation is HealthEvaluation & { status: Exclude<HealthStatus, "healthy"> } =>
+        evaluation.status !== "healthy",
+    )
+    .map((evaluation) => healthIssue(evaluation, resources!, observedAt));
 
   return {
     data: successfulData.length > 0 ? successfulData : null,
     status,
-    observedAt: timestamp(now),
+    observedAt,
     stale: hasFailures || results.length === 0,
-    issues: [],
+    issues,
     sources: results.map((result) => result.state),
   };
 }

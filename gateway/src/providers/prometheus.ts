@@ -1,0 +1,264 @@
+import fetch, { type RequestInit, type Response } from "node-fetch";
+import type {
+  MetricPoint,
+  ResourceHistory as ResourceSeries,
+  ResourceMetrics,
+} from "../../../shared/homelab/contracts";
+import { getGatewayConfig } from "../config";
+import type { Provider } from "./provider";
+
+const PROMETHEUS_TIMEOUT_MS = 5_000;
+const RANGE_CACHE_TTL_MS = 10_000;
+
+const CPU_QUERY = '100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])))';
+const MEMORY_QUERY = "100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))";
+const DISK_QUERY =
+  '100 * (1 - (node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"}))';
+
+export type ResourceWindow = "1h" | "6h" | "24h" | "7d";
+
+export interface PrometheusSample {
+  metric: Record<string, string>;
+  timestamp: string;
+  value: number;
+}
+
+export type PrometheusVector = PrometheusSample[];
+
+export interface MetricSeries {
+  metric: Record<string, string>;
+  points: MetricPoint[];
+}
+
+export interface ResourceHistory {
+  window: ResourceWindow;
+  series: ResourceSeries[];
+}
+
+type FetchApi = (url: string, options: RequestInit) => Promise<Response>;
+
+export interface PrometheusProviderOptions {
+  baseUrl?: string;
+  environment?: NodeJS.ProcessEnv;
+  fetchApi?: FetchApi;
+  now?: () => number;
+}
+
+interface CacheEntry {
+  expiresAt: number;
+  value: MetricSeries[];
+}
+
+const WINDOWS: Record<ResourceWindow, { durationMs: number; step: string }> = {
+  "1h": { durationMs: 60 * 60 * 1_000, step: "60s" },
+  "6h": { durationMs: 6 * 60 * 60 * 1_000, step: "120s" },
+  "24h": { durationMs: 24 * 60 * 60 * 1_000, step: "300s" },
+  "7d": { durationMs: 7 * 24 * 60 * 60 * 1_000, step: "1800s" },
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function metricLabels(value: unknown): Record<string, string> {
+  if (!isRecord(value) || Object.values(value).some((label) => typeof label !== "string")) {
+    throw new Error("invalid metric labels");
+  }
+  return value as Record<string, string>;
+}
+
+function metricPoint(value: unknown): MetricPoint {
+  if (!Array.isArray(value) || value.length !== 2) throw new Error("invalid metric point");
+  const timestamp = Number(value[0]);
+  const metricValue = Number(value[1]);
+  if (!Number.isFinite(timestamp) || !Number.isFinite(metricValue)) {
+    throw new Error("invalid metric point");
+  }
+  return { timestamp: new Date(timestamp * 1_000).toISOString(), value: metricValue };
+}
+
+function resultData(payload: unknown, resultType: "vector" | "matrix"): unknown[] {
+  if (!isRecord(payload) || payload.status !== "success" || !isRecord(payload.data)) {
+    throw new Error("invalid Prometheus response");
+  }
+  if (payload.data.resultType !== resultType || !Array.isArray(payload.data.result)) {
+    throw new Error("invalid Prometheus response");
+  }
+  return payload.data.result;
+}
+
+function parseVector(payload: unknown): PrometheusVector {
+  return resultData(payload, "vector").map((result) => {
+    if (!isRecord(result)) throw new Error("invalid Prometheus vector");
+    const point = metricPoint(result.value);
+    return { metric: metricLabels(result.metric), ...point };
+  });
+}
+
+function parseMatrix(payload: unknown): MetricSeries[] {
+  return resultData(payload, "matrix").map((result) => {
+    if (!isRecord(result) || !Array.isArray(result.values)) {
+      throw new Error("invalid Prometheus matrix");
+    }
+    return {
+      metric: metricLabels(result.metric),
+      points: result.values.map(metricPoint),
+    };
+  });
+}
+
+function parameter(value: string | number | Date): string {
+  return value instanceof Date ? value.toISOString() : String(value);
+}
+
+export class PrometheusProvider implements Provider<ResourceMetrics> {
+  readonly source = "prometheus" as const;
+
+  private readonly baseUrl: URL;
+  private readonly fetchApi: FetchApi;
+  private readonly now: () => number;
+  private readonly rangeCache = new Map<string, CacheEntry>();
+
+  constructor(options: PrometheusProviderOptions = {}) {
+    const baseUrl =
+      options.baseUrl ?? getGatewayConfig(options.environment ?? process.env).prometheusUrl;
+    if (!baseUrl) throw new Error("Prometheus is not configured");
+
+    this.baseUrl = new URL(baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+    this.fetchApi = options.fetchApi ?? fetch;
+    this.now = options.now ?? Date.now;
+  }
+
+  private async request(
+    endpoint: "query" | "query_range",
+    parameters: Record<string, string>,
+    parentSignal?: AbortSignal,
+  ): Promise<unknown> {
+    const controller = new AbortController();
+    let timedOut = false;
+    const abortFromParent = () => controller.abort(parentSignal?.reason);
+    parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+    if (parentSignal?.aborted) abortFromParent();
+
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, PROMETHEUS_TIMEOUT_MS);
+    const url = new URL(`api/v1/${endpoint}`, this.baseUrl);
+    for (const [name, value] of Object.entries(parameters)) url.searchParams.set(name, value);
+
+    try {
+      const response = await this.fetchApi(url.toString(), {
+        method: "GET",
+        headers: { accept: "application/json" },
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error("non-2xx response");
+      return await response.json();
+    } catch {
+      throw new Error(timedOut ? "Prometheus request timed out" : "Prometheus request failed");
+    } finally {
+      clearTimeout(timeoutId);
+      parentSignal?.removeEventListener("abort", abortFromParent);
+    }
+  }
+
+  private async queryInstantWithSignal(
+    query: string,
+    signal?: AbortSignal,
+  ): Promise<PrometheusVector> {
+    const payload = await this.request("query", { query }, signal);
+    try {
+      return parseVector(payload);
+    } catch {
+      throw new Error("Prometheus response invalid");
+    }
+  }
+
+  queryInstant(query: string): Promise<PrometheusVector> {
+    return this.queryInstantWithSignal(query);
+  }
+
+  private async queryRangeWithSignal(
+    query: string,
+    start: string | number | Date,
+    end: string | number | Date,
+    step: string | number,
+    signal?: AbortSignal,
+  ): Promise<MetricSeries[]> {
+    const parameters = {
+      query,
+      start: parameter(start),
+      end: parameter(end),
+      step: String(step),
+    };
+    const cacheKey = JSON.stringify(parameters);
+    const cached = this.rangeCache.get(cacheKey);
+    if (cached && this.now() < cached.expiresAt) return cached.value;
+
+    const payload = await this.request("query_range", parameters, signal);
+    let value: MetricSeries[];
+    try {
+      value = parseMatrix(payload);
+    } catch {
+      throw new Error("Prometheus response invalid");
+    }
+    this.rangeCache.set(cacheKey, { expiresAt: this.now() + RANGE_CACHE_TTL_MS, value });
+    return value;
+  }
+
+  queryRange(
+    query: string,
+    start: string | number | Date,
+    end: string | number | Date,
+    step: string | number,
+  ): Promise<MetricSeries[]> {
+    return this.queryRangeWithSignal(query, start, end, step);
+  }
+
+  private async resourceHistory(
+    window: ResourceWindow,
+    signal?: AbortSignal,
+  ): Promise<ResourceHistory> {
+    const { durationMs, step } = WINDOWS[window];
+    const end = new Date(this.now()).toISOString();
+    const start = new Date(this.now() - durationMs).toISOString();
+    const [cpu, memory] = await Promise.all([
+      this.queryRangeWithSignal(CPU_QUERY, start, end, step, signal),
+      this.queryRangeWithSignal(MEMORY_QUERY, start, end, step, signal),
+    ]);
+
+    return {
+      window,
+      series: [
+        { resource: "cpu", points: cpu[0]?.points ?? [] },
+        { resource: "memory", points: memory[0]?.points ?? [] },
+      ],
+    };
+  }
+
+  getResourceHistory(window: ResourceWindow = "24h"): Promise<ResourceHistory> {
+    return this.resourceHistory(window);
+  }
+
+  async collect(signal: AbortSignal): Promise<ResourceMetrics> {
+    const [cpu, memory, disk, history] = await Promise.all([
+      this.queryInstantWithSignal(CPU_QUERY, signal),
+      this.queryInstantWithSignal(MEMORY_QUERY, signal),
+      this.queryInstantWithSignal(DISK_QUERY, signal),
+      this.resourceHistory("24h", signal),
+    ]);
+    const current = [
+      ["cpu", cpu[0]],
+      ["memory", memory[0]],
+      ["disk", disk[0]],
+    ] as const;
+
+    return {
+      current: current.flatMap(([resource, sample]) =>
+        sample ? [{ resource, usagePercent: sample.value, observedAt: sample.timestamp }] : [],
+      ),
+      history: history.series,
+    };
+  }
+}
