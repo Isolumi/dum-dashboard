@@ -4,6 +4,12 @@ export interface GatewayConfig {
   providerTimeoutMs: number;
 }
 
+export type KubernetesConfigSource = "in-cluster" | "default";
+
+export function getKubernetesConfigSource(environment = process.env): KubernetesConfigSource {
+  return environment.NODE_ENV === "production" ? "in-cluster" : "default";
+}
+
 export function getGatewayConfig(environment = process.env): GatewayConfig {
   const configuredTimeout = Number(environment.GATEWAY_PROVIDER_TIMEOUT_MS);
 

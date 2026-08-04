@@ -141,6 +141,38 @@ export interface PodSummary {
   createdAt: string;
 }
 
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export interface PodContainerDetail {
+  name: string;
+  image: string | null;
+  imageId: string | null;
+  ready: boolean;
+  restartCount: number;
+  state: "running" | "waiting" | "terminated" | "unknown";
+  reason: string | null;
+}
+
+export interface PodConditionDetail {
+  type: string;
+  status: string;
+  reason: string | null;
+  message: string | null;
+  lastTransitionAt: string | null;
+}
+
+export interface PodDetail extends PodSummary {
+  containers: PodContainerDetail[];
+  conditions: PodConditionDetail[];
+  rawStatus: { [key: string]: JsonValue };
+}
+
 export interface EventSummary {
   id: string;
   namespace: string;
