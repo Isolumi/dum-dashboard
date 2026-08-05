@@ -9,6 +9,7 @@ const now = () => new Date("2026-08-04T00:00:00.000Z");
 const SOURCE_SHA = "1829d6ba3b55e66a2134ae64161b9e48ad39a197";
 const API_REPOSITORY = "ghcr.io/isolumi/yootoob-mp3-api";
 const FRONTEND_REPOSITORY = "ghcr.io/isolumi/yootoob-mp3-frontend";
+const invalidReplicaValues = [-1, -0.5, 0.5, 1.5, Number.NaN, Infinity, "1", null];
 
 function validWorkflow(): WorkflowRun {
   return {
@@ -351,6 +352,32 @@ describe("collectDeploymentSnapshot", () => {
       desiredReplicas: 1,
       availableReplicas: 0,
     });
+  });
+
+  it.each(
+    (["desiredReplicas", "availableReplicas"] as const).flatMap((field) =>
+      invalidReplicaValues.map((value) => ({ field, value })),
+    ),
+  )("rejects an invalid $field value from the Kubernetes source", async ({ field, value }) => {
+    const cluster = validCluster();
+    (cluster.workloads[0] as unknown as Record<typeof field, unknown>)[field] = value;
+
+    const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now);
+
+    expect(snapshot.status).toBe("unknown");
+    expect(snapshot.sources).toContainEqual(
+      expect.objectContaining({ source: "kubernetes", status: "unknown" }),
+    );
+    expect(snapshot.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: "deployment-workload-unavailable",
+          status: "unknown",
+          reason: "Deployment evidence for yootoob-mp3-api is unavailable.",
+          evidence: { desiredReplicas: null, availableReplicas: null },
+        }),
+      ]),
+    );
   });
 
   it("does not invoke a throwing ClusterData field accessor", async () => {

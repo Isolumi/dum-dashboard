@@ -4,6 +4,8 @@ import { createGateway } from "./app";
 const SOURCE_SHA = "1829d6ba3b55e66a2134ae64161b9e48ad39a197";
 const API_REPOSITORY = "ghcr.io/isolumi/yootoob-mp3-api";
 const FRONTEND_REPOSITORY = "ghcr.io/isolumi/yootoob-mp3-frontend";
+const invalidReplicaValues = [-1, -0.5, 0.5, 1.5, Number.NaN, Infinity, "1", null];
+const SECRET_REPLICA_MARKER = "SECRET_REPLICA_MARKER";
 
 function validWorkflowSource() {
   return {
@@ -428,6 +430,53 @@ describe("gateway routes", () => {
       ]),
     });
   });
+
+  it.each(
+    (["desiredReplicas", "availableReplicas"] as const).flatMap((field) =>
+      invalidReplicaValues.map((value) => ({ field, value })),
+    ),
+  )("returns HTTP 200 Unknown for an invalid Kubernetes $field value", async ({ field, value }) => {
+    const cluster = validClusterSource();
+    (cluster.workloads[0] as Record<typeof field, unknown>)[field] = value;
+
+    const response = await hostileDeploymentApp("kubernetes", cluster).request("/deployments");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.status).toBe("unknown");
+    expect(body.sources).toContainEqual(
+      expect.objectContaining({ source: "kubernetes", status: "unknown" }),
+    );
+    expect(body.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: "deployment-workload-unavailable",
+          status: "unknown",
+          reason: "Deployment evidence for yootoob-mp3-api is unavailable.",
+          evidence: { desiredReplicas: null, availableReplicas: null },
+        }),
+      ]),
+    );
+  });
+
+  it.each(["desiredReplicas", "availableReplicas"] as const)(
+    "does not expose a non-number Kubernetes %s value",
+    async (field) => {
+      const cluster = validClusterSource();
+      (cluster.workloads[0] as Record<typeof field, unknown>)[field] = SECRET_REPLICA_MARKER;
+
+      const response = await hostileDeploymentApp("kubernetes", cluster).request("/deployments");
+      const body = await response.text();
+      const snapshot = JSON.parse(body);
+
+      expect(response.status).toBe(200);
+      expect(body).not.toContain(SECRET_REPLICA_MARKER);
+      expect(snapshot.status).toBe("unknown");
+      expect(snapshot.sources).toContainEqual(
+        expect.objectContaining({ source: "kubernetes", status: "unknown" }),
+      );
+    },
+  );
 
   it.each([
     {

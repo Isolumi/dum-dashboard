@@ -20,6 +20,7 @@ import { correlateValidatedDeployment, type DeploymentTargetName } from "./deplo
 import { parseArgoApplicationState } from "./providers/argocd";
 import { parseWorkflowRun } from "./providers/github";
 import {
+  isNonNegativeInteger,
   readDenseArray,
   readOwnDataProperties,
   readOwnDataRecord,
@@ -245,8 +246,8 @@ function parseClusterData(
         !isString(fields.name) ||
         !isString(fields.namespace) ||
         !isHealthStatus(fields.status) ||
-        !isFiniteNumber(fields.desiredReplicas) ||
-        !isFiniteNumber(fields.availableReplicas) ||
+        !isNonNegativeInteger(fields.desiredReplicas) ||
+        !isNonNegativeInteger(fields.availableReplicas) ||
         !isNullableString(fields.failureReason) ||
         typeof fields.restartIncrease15m !== "boolean"
       ) {

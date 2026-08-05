@@ -20,6 +20,10 @@ export const RUNTIME_COLLECTION_LIMITS = Object.freeze({
   metricPoints: 4_096,
 });
 
+export function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
 export function readOwnDataRecord(value: unknown): ReadonlyMap<PropertyKey, unknown> | null {
   try {
     if (typeof value !== "object" || value === null || nodeUtilTypes.isProxy(value)) return null;

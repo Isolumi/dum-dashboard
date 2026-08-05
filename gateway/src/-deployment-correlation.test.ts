@@ -534,6 +534,18 @@ describe("correlateDeployment", () => {
       expectedStatus: "unknown",
     },
     {
+      name: "fractional desired replicas below one",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.workloads).desiredReplicas = 0.5),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "fractional desired replicas above one",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.workloads).desiredReplicas = 1.5),
+      expectedStatus: "unknown",
+    },
+    {
       name: "NaN available replicas",
       mutate: (evidence: MutableKubernetesEvidence) =>
         (firstRecord(evidence.workloads).availableReplicas = Number.NaN),
@@ -549,6 +561,18 @@ describe("correlateDeployment", () => {
       name: "negative available replicas",
       mutate: (evidence: MutableKubernetesEvidence) =>
         (firstRecord(evidence.workloads).availableReplicas = -1),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "fractional available replicas below one",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.workloads).availableReplicas = 0.5),
+      expectedStatus: "unknown",
+    },
+    {
+      name: "fractional available replicas above one",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.workloads).availableReplicas = 1.5),
       expectedStatus: "unknown",
     },
     {
@@ -891,4 +915,40 @@ describe("correlateDeployment", () => {
       ]),
     );
   });
+
+  it.each([
+    {
+      name: "zero available replicas",
+      desiredReplicas: 1,
+      availableReplicas: 0,
+      status: "critical",
+    },
+    { name: "one replica", desiredReplicas: 1, availableReplicas: 1, status: "healthy" },
+    {
+      name: "partially available larger replica count",
+      desiredReplicas: 3,
+      availableReplicas: 2,
+      status: "warning",
+    },
+  ] as const)(
+    "retains $status correlation behavior for $name",
+    ({ desiredReplicas, availableReplicas, status }) => {
+      const evidence = kubernetes();
+      evidence.workloads[0] = {
+        ...evidence.workloads[0],
+        desiredReplicas,
+        availableReplicas,
+      };
+      evidence.pods[0] = { ...evidence.pods[0], ready: availableReplicas > 0 };
+
+      const result = correlate({ kubernetes: evidence });
+
+      expect(result.status).toBe(status);
+      expect(result.workloads[0]).toMatchObject({
+        status,
+        desiredReplicas,
+        availableReplicas,
+      });
+    },
+  );
 });

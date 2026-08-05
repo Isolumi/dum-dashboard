@@ -9,6 +9,7 @@ import type {
 import { parseArgoApplicationState, type ArgoApplicationState } from "./providers/argocd";
 import { parseWorkflowRun, type WorkflowRun } from "./providers/github";
 import {
+  isNonNegativeInteger,
   readDenseArray,
   readOwnDataProperties,
   readOwnDataRecord,
@@ -83,10 +84,6 @@ function isNullableString(value: unknown): value is string | null {
 
 function isHealthStatus(value: unknown): value is HealthStatus {
   return ["healthy", "warning", "critical", "unknown"].includes(value as HealthStatus);
-}
-
-function isNonNegativeInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
 function parseDenseArray<T>(
