@@ -1,19 +1,33 @@
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { describe, expect, it, vi } from "vitest";
 
-import { describe, expect, it } from "vitest";
-// RED phase: these imports will fail until todos.functions.ts is created
+vi.mock("#/lib/server-auth", () => ({
+  assertSameOrigin: vi.fn(),
+  getOwnerUser: vi.fn(() => ({ id: "owner-user-id" })),
+  noStore: vi.fn(),
+}));
+
 import {
+  assertTodoMutationRequest,
   CreateTodoSchema,
+  CreateTodoInputSchema,
   DeleteTodoSchema,
   GetTodoSchema,
+  GetTodosInputSchema,
+  ReorderTodosSchema,
   UpdateTodoSchema,
 } from "./todos.functions";
+import { assertSameOrigin } from "#/lib/server-auth";
+
+const TODO_ID = "550e8400-e29b-41d4-a716-446655440000";
 
 describe("CreateTodoSchema", () => {
   it("rejects empty name", () => {
     const result = CreateTodoSchema.safeParse({ name: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("trims whitespace-only names before validating", () => {
+    const result = CreateTodoSchema.safeParse({ name: "   " });
     expect(result.success).toBe(false);
   });
 
@@ -85,6 +99,29 @@ describe("CreateTodoSchema", () => {
   });
 });
 
+describe("single-owner todo function inputs", () => {
+  it("accepts reads without a browser access token", () => {
+    expect(GetTodosInputSchema.safeParse({}).success).toBe(true);
+    expect(GetTodosInputSchema.safeParse({ supabase_access_token: "session-token" }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects browser access tokens for todo writes", () => {
+    const result = CreateTodoInputSchema.safeParse({
+      supabase_access_token: "session-token",
+      name: "Secure todo",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("checks same-origin protection before every todo mutation", async () => {
+    assertTodoMutationRequest();
+
+    expect(assertSameOrigin).toHaveBeenCalledOnce();
+  });
+});
+
 describe("UpdateTodoSchema", () => {
   it("requires valid UUID for id", () => {
     const result = UpdateTodoSchema.safeParse({ id: "not-a-uuid" });
@@ -98,7 +135,7 @@ describe("UpdateTodoSchema", () => {
 
   it("accepts partial update with only name", () => {
     const result = UpdateTodoSchema.safeParse({
-      id: "550e8400-e29b-41d4-a716-446655440000",
+      id: TODO_ID,
       name: "Updated name",
     });
     expect(result.success).toBe(true);
@@ -106,7 +143,7 @@ describe("UpdateTodoSchema", () => {
 
   it("rejects empty name if provided", () => {
     const result = UpdateTodoSchema.safeParse({
-      id: "550e8400-e29b-41d4-a716-446655440000",
+      id: TODO_ID,
       name: "",
     });
     expect(result.success).toBe(false);
@@ -114,7 +151,7 @@ describe("UpdateTodoSchema", () => {
 
   it("accepts valid priority update", () => {
     const result = UpdateTodoSchema.safeParse({
-      id: "550e8400-e29b-41d4-a716-446655440000",
+      id: TODO_ID,
       priority: "low",
     });
     expect(result.success).toBe(true);
@@ -136,12 +173,26 @@ describe("DeleteTodoSchema", () => {
   });
 
   it("accepts valid UUID", () => {
-    const result = DeleteTodoSchema.safeParse({ id: "550e8400-e29b-41d4-a716-446655440000" });
+    const result = DeleteTodoSchema.safeParse({ id: TODO_ID });
     expect(result.success).toBe(true);
   });
 
   it("rejects missing id", () => {
     const result = DeleteTodoSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("ReorderTodosSchema", () => {
+  it("rejects empty reorder batches", () => {
+    const result = ReorderTodosSchema.safeParse({ updates: [] });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects negative sort order values", () => {
+    const result = ReorderTodosSchema.safeParse({
+      updates: [{ id: TODO_ID, sort_order: -1 }],
+    });
     expect(result.success).toBe(false);
   });
 });
@@ -153,28 +204,12 @@ describe("GetTodoSchema", () => {
   });
 
   it("accepts valid UUID", () => {
-    const result = GetTodoSchema.safeParse({ id: "550e8400-e29b-41d4-a716-446655440000" });
+    const result = GetTodoSchema.safeParse({ id: TODO_ID });
     expect(result.success).toBe(true);
   });
 
   it("rejects missing id", () => {
     const result = GetTodoSchema.safeParse({});
     expect(result.success).toBe(false);
-  });
-});
-
-describe("getTodos null safety (bug fix TODO-01)", () => {
-  it("getTodos handler returns data ?? [] — never returns null to callers", () => {
-    // This test verifies the null coalescing guard is present in the getTodos handler.
-    // Supabase .select() can return { data: null } for an empty table.
-    // Without the guard, todos.map() in the loader crashes with
-    // "Cannot read properties of undefined (reading 'map')".
-    //
-    // RED: fails before fix because the file contains `return data` (no null guard)
-    // GREEN: passes after fix because the file contains `return data ?? []`
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    const source = readFileSync(resolve(__dirname, "todos.functions.ts"), "utf-8");
-    expect(source, "getTodos handler must use `data ?? []` null guard").toContain("data ?? []");
   });
 });

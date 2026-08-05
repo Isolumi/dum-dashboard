@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
 import { Skeleton } from "#/components/ui/skeleton";
-import { signInWithGoogle } from "#/lib/auth";
-import { supabase } from "#/lib/supabase";
-import { type CalendarEvent, fetchCalendarEvents } from "./-calendar.api";
+import type { CalendarEvent } from "./-calendar.api";
+import { getCalendarEvents, startCalendarOAuth } from "./-calendar.functions";
 import {
   type DayGroup,
   formatEventTime,
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_layout/calendar/")({
   component: CalendarPage,
 });
 
-type PageStatus = "loading" | "ready" | "auth_expired" | "error";
+type PageStatus = "loading" | "ready" | "disconnected" | "auth_expired" | "error";
 
 function formatDayLabel(isoDate: string): string {
   const [y, m, d] = isoDate.split("-").map(Number);
@@ -34,29 +34,39 @@ function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState<Date>(today);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [status, setStatus] = useState<PageStatus>("loading");
+  const [connecting, setConnecting] = useState(false);
 
   const load = useCallback(async () => {
     setStatus("loading");
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.provider_token;
-
-    if (!token) {
-      setStatus("auth_expired");
-      return;
-    }
 
     const timeMin = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
     const timeMax = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
 
     try {
-      const fetched = await fetchCalendarEvents(token, timeMin, timeMax);
-      setEvents(fetched);
-      setStatus("ready");
+      const result = await getCalendarEvents({
+        data: {
+          time_min: timeMin.toISOString(),
+          time_max: timeMax.toISOString(),
+        },
+      });
+      setEvents(result.events);
+      setStatus(result.status === "ready" ? "ready" : result.status);
     } catch (err: unknown) {
       const e = err as { type?: string };
       setStatus(e?.type === "auth_expired" ? "auth_expired" : "error");
     }
   }, [currentMonth]);
+
+  async function handleConnectCalendar() {
+    setConnecting(true);
+    try {
+      const { authorizationUrl } = await startCalendarOAuth();
+      window.location.href = authorizationUrl;
+    } catch {
+      setStatus("error");
+      setConnecting(false);
+    }
+  }
 
   // Initial load + reload when month changes
   useEffect(() => {
@@ -88,11 +98,7 @@ function CalendarPage() {
   );
 
   const upcomingGroups: DayGroup[] = useMemo(() => {
-    const from = new Date(
-      selectedDay.getFullYear(),
-      selectedDay.getMonth(),
-      selectedDay.getDate(),
-    );
+    const from = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate());
     return groupEventsByDay(getUpcomingEvents(events, from, 5));
   }, [events, selectedDay]);
 
@@ -100,22 +106,26 @@ function CalendarPage() {
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
       <h1 className="text-xl font-semibold">Calendar</h1>
 
-      {status === "auth_expired" && (
+      {(status === "disconnected" || status === "auth_expired") && (
         <div className="flex flex-col items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-4">
-          <p className="text-sm text-destructive">Your calendar session has expired.</p>
-          <button
-            className="text-sm font-medium text-destructive underline underline-offset-2 hover:no-underline"
-            onClick={() => void signInWithGoogle()}
+          <p className="text-sm text-destructive">
+            {status === "disconnected"
+              ? "Google Calendar is not connected yet."
+              : "Your Google Calendar connection needs to be refreshed."}
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void handleConnectCalendar()}
+            disabled={connecting}
           >
-            Reconnect Calendar
-          </button>
+            {connecting ? "Connecting..." : "Connect Google Calendar"}
+          </Button>
         </div>
       )}
 
       {status === "error" && (
-        <p className="text-sm text-destructive">
-          Could not load calendar events. Try refreshing.
-        </p>
+        <p className="text-sm text-destructive">Could not load calendar events. Try refreshing.</p>
       )}
 
       <div className="flex flex-col gap-6 md:flex-row md:items-start">
@@ -169,9 +179,7 @@ function CalendarPage() {
                         <div className="h-9 w-0.5 shrink-0 rounded-full bg-primary" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm text-foreground">{event.summary}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatEventTime(event)}
-                          </p>
+                          <p className="text-xs text-muted-foreground">{formatEventTime(event)}</p>
                         </div>
                       </div>
                     ))}

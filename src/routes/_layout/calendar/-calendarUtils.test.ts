@@ -2,11 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CalendarEvent } from "./-calendar.api";
 import { formatEventTime, getUpcomingEvents, groupEventsByDay } from "./-calendarUtils";
 
-function makeEvent(
-  id: string,
-  summary: string,
-  start: CalendarEvent["start"],
-): CalendarEvent {
+function makeEvent(id: string, summary: string, start: CalendarEvent["start"]): CalendarEvent {
   return { id, summary, start, end: {} };
 }
 

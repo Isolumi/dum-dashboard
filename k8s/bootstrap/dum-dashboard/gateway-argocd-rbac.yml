@@ -1,0 +1,34 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: homelab-gateway-argocd-readonly
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: homelab-gateway
+    app.kubernetes.io/part-of: dum-dashboard
+rules:
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - applications
+    resourceNames:
+      - yootoob-mp3-dumachine
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: homelab-gateway-argocd-readonly
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: homelab-gateway
+    app.kubernetes.io/part-of: dum-dashboard
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: homelab-gateway-argocd-readonly
+subjects:
+  - kind: ServiceAccount
+    name: homelab-gateway
+    namespace: dum-dashboard

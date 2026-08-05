@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - config.yml
+  - certificate.yml
+  - ingress.yml
+  - network-policy.yml
+images:
+  - name: ghcr.io/isolumi/dum-dashboard
+    newTag: bootstrap
+  - name: ghcr.io/isolumi/homelab-gateway
+    newTag: bootstrap

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dum-dashboard
+  namespace: dum-dashboard
+  labels:
+    app.kubernetes.io/name: dum-dashboard
+    app.kubernetes.io/component: dashboard
+    app.kubernetes.io/part-of: dum-dashboard
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: dum-dashboard
+    app.kubernetes.io/component: dashboard
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+      protocol: TCP

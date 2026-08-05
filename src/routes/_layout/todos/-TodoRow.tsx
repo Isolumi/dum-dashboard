@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
-import { Circle, CircleCheck, CalendarIcon, GripVertical, Trash2 } from "lucide-react";
-type SyntheticListenerMap = Record<string, (event: Event) => void>;
 import { format, parseISO } from "date-fns";
+import { Circle, CircleCheck, CalendarIcon, GripVertical, Trash2 } from "lucide-react";
+import { memo, useRef, useState } from "react";
+import type { DraggableSyntheticListeners } from "@dnd-kit/core";
 
 import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
@@ -20,7 +20,7 @@ export interface TodoRowProps {
     due_date?: string | null;
   }) => void;
   onDelete: (id: string) => void;
-  dragListeners?: SyntheticListenerMap;
+  dragListeners?: DraggableSyntheticListeners;
 }
 
 const STATUS_CYCLE: Record<TodoStatus, TodoStatus> = {
@@ -57,7 +57,7 @@ const STATUS_NEXT_LABEL: Record<TodoStatus, string> = {
   complete: "not started",
 };
 
-export function TodoRow({ todo, onUpdate, onDelete, dragListeners }: TodoRowProps) {
+function TodoRowComponent({ todo, onUpdate, onDelete, dragListeners }: TodoRowProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(todo.name);
   const [isDateOpen, setIsDateOpen] = useState(false);
@@ -203,3 +203,5 @@ export function TodoRow({ todo, onUpdate, onDelete, dragListeners }: TodoRowProp
     </div>
   );
 }
+
+export const TodoRow = memo(TodoRowComponent);

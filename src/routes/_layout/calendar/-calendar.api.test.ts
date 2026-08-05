@@ -61,15 +61,15 @@ describe("fetchCalendarEvents", () => {
 
   it("throws { type: 'auth_expired' } on HTTP 401", async () => {
     vi.mocked(fetch).mockResolvedValue(mockResponse(401));
-    await expect(
-      fetchCalendarEvents("bad-token", new Date(), new Date()),
-    ).rejects.toMatchObject({ type: "auth_expired" });
+    await expect(fetchCalendarEvents("bad-token", new Date(), new Date())).rejects.toMatchObject({
+      type: "auth_expired",
+    });
   });
 
   it("throws { type: 'network_error' } on non-401 HTTP error", async () => {
     vi.mocked(fetch).mockResolvedValue(mockResponse(500));
-    await expect(
-      fetchCalendarEvents("token", new Date(), new Date()),
-    ).rejects.toMatchObject({ type: "network_error" });
+    await expect(fetchCalendarEvents("token", new Date(), new Date())).rejects.toMatchObject({
+      type: "network_error",
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { memo, useId, useMemo } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -61,7 +61,7 @@ function SortableTodoRow({ todo, onUpdate, onDelete }: TodoRowProps) {
   );
 }
 
-export function PrioritySection({
+function PrioritySectionComponent({
   priority,
   label,
   todos,
@@ -71,6 +71,7 @@ export function PrioritySection({
   onReorder,
 }: PrioritySectionProps) {
   const dndId = useId();
+  const todoIds = useMemo(() => todos.map((t) => t.id), [todos]);
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -118,7 +119,7 @@ export function PrioritySection({
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext items={todos.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={todoIds} strategy={verticalListSortingStrategy}>
           <div role="list">
             {todos.map((todo) => (
               <SortableTodoRow key={todo.id} todo={todo} onUpdate={onUpdate} onDelete={onDelete} />
@@ -132,3 +133,5 @@ export function PrioritySection({
     </div>
   );
 }
+
+export const PrioritySection = memo(PrioritySectionComponent);

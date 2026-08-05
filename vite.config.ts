@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import { cloudflare } from "@cloudflare/vite-plugin";
+import { nitro } from "nitro/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
@@ -8,14 +8,10 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-const config = defineConfig({
-  // VITE_* vars are inlined from .env.production at build time (public, committed to git).
-  // SUPABASE_SECRET_KEY is NOT inlined — it stays as a runtime reference so workerd
-  // can provide it from the Worker secret binding (set via `wrangler secret put`).
+const config = defineConfig(({ mode }) => ({
   envPrefix: ["VITE_"],
   plugins: [
-    cloudflare({ viteEnvironment: { name: "ssr" } }),
-    devtools(),
+    ...(mode === "development" ? [devtools()] : []),
     tsconfigPaths({ projects: ["./tsconfig.json"] }),
     tailwindcss(),
     tanstackStart({
@@ -23,8 +19,9 @@ const config = defineConfig({
         routeFileIgnorePattern: "\\.functions\\.ts$",
       },
     }),
+    nitro({ preset: "node-server", serverDir: true }),
     viteReact(),
   ],
-});
+}));
 
 export default config;

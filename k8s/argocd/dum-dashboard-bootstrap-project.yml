@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: dum-dashboard-bootstrap
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: dum-dashboard-bootstrap
+    app.kubernetes.io/part-of: dum-dashboard
+spec:
+  description: Manually synchronized bootstrap boundary for dum-dashboard RBAC
+  sourceRepos:
+    - https://github.com/Isolumi/dum-dashboard.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+  namespaceResourceWhitelist:
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding

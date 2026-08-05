@@ -1,0 +1,52 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: homelab-gateway-dashboard-only
+  namespace: dum-dashboard
+  labels:
+    app.kubernetes.io/name: homelab-gateway
+    app.kubernetes.io/part-of: dum-dashboard
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: homelab-gateway
+      app.kubernetes.io/component: gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: dum-dashboard
+              app.kubernetes.io/component: dashboard
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dum-dashboard-traefik-only
+  namespace: dum-dashboard
+  labels:
+    app.kubernetes.io/name: dum-dashboard
+    app.kubernetes.io/part-of: dum-dashboard
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: dum-dashboard
+      app.kubernetes.io/component: dashboard
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: traefik-kube-system
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 3000
+          protocol: TCP

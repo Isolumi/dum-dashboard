@@ -12,21 +12,22 @@
 
 ## File Map
 
-| File | Action | Responsibility |
-|---|---|---|
-| `src/tools/registry.ts` | Modify | Add `overviewOnly?: boolean` to `ToolEntry`; add clock entry |
-| `src/components/AppSidebar.tsx` | Modify | Filter `overviewOnly` tools from nav items |
-| `src/tools/ClockBentoCard.tsx` | **Create** | 24h HH:MM clock, client-only interval |
-| `src/tools/ClockBentoCard.test.tsx` | **Create** | Tests for clock rendering and tick behaviour |
-| `src/routes/_layout/todos/-TodoBentoCard.tsx` | Modify | Replace aggregate stats with scrollable grouped list |
-| `src/routes/_layout/todos/-TodoBentoCard.test.tsx` | Modify | Replace all existing tests with tests for new list UI |
-| `src/routes/_layout/index.tsx` | Modify | 2fr/1fr grid, updated loading skeleton |
+| File                                               | Action     | Responsibility                                               |
+| -------------------------------------------------- | ---------- | ------------------------------------------------------------ |
+| `src/tools/registry.ts`                            | Modify     | Add `overviewOnly?: boolean` to `ToolEntry`; add clock entry |
+| `src/components/AppSidebar.tsx`                    | Modify     | Filter `overviewOnly` tools from nav items                   |
+| `src/tools/ClockBentoCard.tsx`                     | **Create** | 24h HH:MM clock, client-only interval                        |
+| `src/tools/ClockBentoCard.test.tsx`                | **Create** | Tests for clock rendering and tick behaviour                 |
+| `src/routes/_layout/todos/-TodoBentoCard.tsx`      | Modify     | Replace aggregate stats with scrollable grouped list         |
+| `src/routes/_layout/todos/-TodoBentoCard.test.tsx` | Modify     | Replace all existing tests with tests for new list UI        |
+| `src/routes/_layout/index.tsx`                     | Modify     | 2fr/1fr grid, updated loading skeleton                       |
 
 ---
 
 ## Task 1: Extend ToolEntry + filter sidebar
 
 **Files:**
+
 - Modify: `src/tools/registry.ts`
 - Modify: `src/components/AppSidebar.tsx`
 
@@ -68,17 +69,19 @@ export const tools: ToolEntry[] = [
 In `src/components/AppSidebar.tsx`, find the `tools.map(...)` block inside `<SidebarMenu>` and add a filter before `.map`:
 
 ```tsx
-{tools
-  .filter((tool) => !tool.overviewOnly)
-  .map((tool: ToolEntry) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const isActive = Boolean(matchRoute({ to: tool.route as any }));
-    return (
-      <SidebarMenuItem key={tool.id}>
-        <NavItem tool={tool} isActive={isActive} />
-      </SidebarMenuItem>
-    );
-  })}
+{
+  tools
+    .filter((tool) => !tool.overviewOnly)
+    .map((tool: ToolEntry) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const isActive = Boolean(matchRoute({ to: tool.route as any }));
+      return (
+        <SidebarMenuItem key={tool.id}>
+          <NavItem tool={tool} isActive={isActive} />
+        </SidebarMenuItem>
+      );
+    });
+}
 ```
 
 - [ ] **Step 3: Run type check**
@@ -101,6 +104,7 @@ git commit -m "feat: add overviewOnly flag to ToolEntry, filter sidebar"
 ## Task 2: Create ClockBentoCard
 
 **Files:**
+
 - Create: `src/tools/ClockBentoCard.tsx`
 - Create: `src/tools/ClockBentoCard.test.tsx`
 - Modify: `src/tools/registry.ts`
@@ -281,6 +285,7 @@ git commit -m "feat: add ClockBentoCard with 24h HH:MM display"
 ## Task 3: Rewrite TodoBentoCard
 
 **Files:**
+
 - Modify: `src/routes/_layout/todos/-TodoBentoCard.test.tsx`
 - Modify: `src/routes/_layout/todos/-TodoBentoCard.tsx`
 
@@ -343,10 +348,7 @@ const mockTool = {
 
 describe("TodoBentoCard", () => {
   it("renders priority section labels for non-empty sections", () => {
-    const todos = [
-      makeTodo({ priority: "high" }),
-      makeTodo({ priority: "low" }),
-    ];
+    const todos = [makeTodo({ priority: "high" }), makeTodo({ priority: "low" })];
     render(React.createElement(TodoBentoCard, { tool: mockTool, data: todos }));
 
     expect(screen.getByText("High")).toBeTruthy();
@@ -478,8 +480,7 @@ function formatDueDate(dateStr: string): string {
 
 function TodoRow({ todo, today }: { todo: Todo; today: Date }) {
   const isComplete = todo.status === "complete";
-  const isOverdue =
-    !isComplete && todo.due_date !== null && new Date(todo.due_date) < today;
+  const isOverdue = !isComplete && todo.due_date !== null && new Date(todo.due_date) < today;
 
   return (
     <div className="flex items-center gap-2 border-b border-border/40 py-1 last:border-0">
@@ -588,6 +589,7 @@ git commit -m "feat: rewrite TodoBentoCard as scrollable grouped list"
 ## Task 4: Update overview grid
 
 **Files:**
+
 - Modify: `src/routes/_layout/index.tsx`
 
 - [ ] **Step 1: Rewrite the overview page with the 2fr/1fr grid**
@@ -651,9 +653,7 @@ function OverviewPage() {
   return (
     <main className="p-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr] md:gap-6">
-        {firstTool && (
-          <firstTool.BentoCard tool={firstTool} data={toolData[firstTool.id]} />
-        )}
+        {firstTool && <firstTool.BentoCard tool={firstTool} data={toolData[firstTool.id]} />}
         {remainingTools.length > 0 && (
           <div className="flex flex-col gap-4 md:gap-6">
             {remainingTools.map((tool) => (

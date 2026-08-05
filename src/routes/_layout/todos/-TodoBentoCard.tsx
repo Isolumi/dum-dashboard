@@ -1,7 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { Circle, CircleCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
+import { Skeleton } from "#/components/ui/skeleton";
 import type { Todo } from "#/lib/database.types";
+import { getTodos } from "#/routes/todos/todos.functions";
 import type { ToolEntry } from "#/tools/registry";
 import { PRIORITY_ORDER, PRIORITY_LABELS, groupAndSortTodos } from "./-todoUtils";
 
@@ -15,8 +18,7 @@ function formatDueDate(dateStr: string): string {
 
 function TodoRow({ todo, today }: { todo: Todo; today: Date }) {
   const isComplete = todo.status === "complete";
-  const isOverdue =
-    !isComplete && todo.due_date !== null && new Date(todo.due_date) < today;
+  const isOverdue = !isComplete && todo.due_date !== null && new Date(todo.due_date) < today;
 
   return (
     <div className="flex items-center gap-2 border-b border-border/40 py-1 last:border-0">
@@ -62,10 +64,40 @@ function TodoRow({ todo, today }: { todo: Todo; today: Date }) {
 }
 
 export function TodoBentoCard({ tool: _tool, data }: { tool: ToolEntry; data: unknown }) {
-  const todos = Array.isArray(data) ? (data as Todo[]) : [];
-  const today = new Date(new Date().toISOString().split("T")[0]);
+  const hasInitialData = Array.isArray(data);
+  const [todos, setTodos] = useState<Todo[]>(hasInitialData ? (data as Todo[]) : []);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(
+    hasInitialData ? "ready" : "loading",
+  );
 
-  const grouped = groupAndSortTodos(todos);
+  useEffect(() => {
+    if (Array.isArray(data)) {
+      setTodos(data as Todo[]);
+      setStatus("ready");
+      return;
+    }
+
+    let cancelled = false;
+    async function load() {
+      try {
+        const fresh = await getTodos();
+        if (!cancelled) {
+          setTodos(fresh);
+          setStatus("ready");
+        }
+      } catch {
+        if (!cancelled) setStatus("error");
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [data]);
+
+  const today = useMemo(() => new Date(new Date().toISOString().split("T")[0]), []);
+  const grouped = useMemo(() => groupAndSortTodos(todos), [todos]);
 
   return (
     <Link
@@ -74,9 +106,27 @@ export function TodoBentoCard({ tool: _tool, data }: { tool: ToolEntry; data: un
       className="block rounded-lg border border-border bg-card transition-colors duration-150 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="max-h-96 overflow-y-auto p-4">
-        {todos.length === 0 ? (
+        {status === "loading" && (
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Skeleton className="size-4 rounded-full" />
+                <Skeleton className="h-4 flex-1" />
+                <Skeleton className="h-4 w-12" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {status === "error" && (
+          <p className="text-xs text-muted-foreground">Todos are unavailable right now.</p>
+        )}
+
+        {status === "ready" && todos.length === 0 ? (
           <p className="text-xs text-muted-foreground">No todos yet.</p>
-        ) : (
+        ) : null}
+
+        {status === "ready" &&
           PRIORITY_ORDER.map((priority) => {
             const items = grouped[priority];
             if (items.length === 0) return null;
@@ -90,8 +140,7 @@ export function TodoBentoCard({ tool: _tool, data }: { tool: ToolEntry; data: un
                 ))}
               </div>
             );
-          })
-        )}
+          })}
       </div>
     </Link>
   );

@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: dum-dashboard
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: dum-dashboard
+    app.kubernetes.io/part-of: dum-dashboard
+spec:
+  description: Restricted project for the normal dum-dashboard application
+  sourceRepos:
+    - https://github.com/Isolumi/dum-dashboard.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: dum-dashboard
+  clusterResourceBlacklist:
+    - group: "*"
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: apps
+      kind: Deployment
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: cert-manager.io
+      kind: Certificate
+  namespaceResourceBlacklist:
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding

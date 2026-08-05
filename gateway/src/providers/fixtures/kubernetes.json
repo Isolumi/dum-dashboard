@@ -1,0 +1,241 @@
+{
+  "nodes": {
+    "apiVersion": "v1",
+    "kind": "NodeList",
+    "items": [
+      {
+        "apiVersion": "v1",
+        "kind": "Node",
+        "metadata": { "name": "dumachine", "uid": "node-dumachine" },
+        "status": {
+          "conditions": [
+            { "type": "MemoryPressure", "status": "False" },
+            { "type": "Ready", "status": "True" }
+          ]
+        }
+      }
+    ]
+  },
+  "namespaces": {
+    "apiVersion": "v1",
+    "kind": "NamespaceList",
+    "items": [
+      {
+        "apiVersion": "v1",
+        "kind": "Namespace",
+        "metadata": { "name": "homelab", "uid": "namespace-homelab" },
+        "status": { "phase": "Active" }
+      }
+    ]
+  },
+  "deployments": {
+    "apiVersion": "apps/v1",
+    "kind": "DeploymentList",
+    "items": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "metadata": { "name": "gateway", "namespace": "homelab", "uid": "deployment-gateway" },
+        "spec": {
+          "replicas": 2,
+          "selector": { "matchLabels": { "app": "gateway" } },
+          "template": {
+            "metadata": { "labels": { "app": "gateway" } },
+            "spec": {
+              "containers": [{ "name": "gateway", "image": "ghcr.io/isolumi/gateway:main" }]
+            }
+          }
+        },
+        "status": {
+          "availableReplicas": 0,
+          "conditions": [
+            {
+              "type": "Available",
+              "status": "False",
+              "reason": "MinimumReplicasUnavailable"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "statefulSets": {
+    "apiVersion": "apps/v1",
+    "kind": "StatefulSetList",
+    "items": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "StatefulSet",
+        "metadata": {
+          "name": "prometheus",
+          "namespace": "homelab",
+          "uid": "statefulset-prometheus"
+        },
+        "spec": {
+          "replicas": 1,
+          "serviceName": "prometheus",
+          "selector": { "matchLabels": { "app": "prometheus" } },
+          "template": {
+            "metadata": { "labels": { "app": "prometheus" } },
+            "spec": {
+              "containers": [
+                { "name": "prometheus", "image": "quay.io/prometheus/prometheus:v3.5.0" }
+              ]
+            }
+          }
+        },
+        "status": { "availableReplicas": 1 }
+      }
+    ]
+  },
+  "daemonSets": {
+    "apiVersion": "apps/v1",
+    "kind": "DaemonSetList",
+    "items": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "DaemonSet",
+        "metadata": {
+          "name": "node-exporter",
+          "namespace": "homelab",
+          "uid": "daemonset-node-exporter"
+        },
+        "spec": {
+          "selector": { "matchLabels": { "app": "node-exporter" } },
+          "template": {
+            "metadata": { "labels": { "app": "node-exporter" } },
+            "spec": {
+              "containers": [
+                { "name": "node-exporter", "image": "quay.io/prometheus/node-exporter:v1.9.1" }
+              ]
+            }
+          }
+        },
+        "status": {
+          "desiredNumberScheduled": 1,
+          "numberAvailable": 1,
+          "currentNumberScheduled": 1,
+          "numberMisscheduled": 0,
+          "numberReady": 1
+        }
+      }
+    ]
+  },
+  "pods": {
+    "apiVersion": "v1",
+    "kind": "PodList",
+    "items": [
+      {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": {
+          "name": "gateway-abc",
+          "namespace": "homelab",
+          "labels": { "app": "gateway" },
+          "uid": "pod-gateway",
+          "creationTimestamp": "2026-08-04T11:00:00Z"
+        },
+        "spec": {
+          "nodeName": "dumachine",
+          "containers": [{ "name": "gateway", "image": "ghcr.io/isolumi/gateway:main" }]
+        },
+        "status": {
+          "phase": "Running",
+          "conditions": [
+            {
+              "type": "Ready",
+              "status": "False",
+              "reason": "ContainersNotReady",
+              "message": "containers with unready status: [gateway]",
+              "lastTransitionTime": "2026-08-04T11:05:00Z"
+            }
+          ],
+          "containerStatuses": [
+            {
+              "name": "gateway",
+              "image": "ghcr.io/isolumi/gateway:main",
+              "imageID": "docker-pullable://ghcr.io/isolumi/gateway@sha256:0123456789abcdef",
+              "ready": false,
+              "restartCount": 3,
+              "started": false,
+              "state": {
+                "waiting": {
+                  "reason": "CrashLoopBackOff",
+                  "message": "back-off restarting failed container"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": {
+          "name": "prometheus-0",
+          "namespace": "homelab",
+          "labels": { "app": "prometheus" },
+          "uid": "pod-prometheus",
+          "creationTimestamp": "2026-08-04T10:00:00Z"
+        },
+        "spec": {
+          "nodeName": "dumachine",
+          "containers": [{ "name": "prometheus", "image": "quay.io/prometheus/prometheus:v3.5.0" }]
+        },
+        "status": {
+          "phase": "Running",
+          "conditions": [
+            { "type": "Ready", "status": "True", "lastTransitionTime": "2026-08-04T10:01:00Z" }
+          ],
+          "containerStatuses": [
+            {
+              "name": "prometheus",
+              "image": "quay.io/prometheus/prometheus:v3.5.0",
+              "imageID": "docker-pullable://quay.io/prometheus/prometheus@sha256:fedcba9876543210",
+              "ready": true,
+              "restartCount": 0,
+              "started": true,
+              "state": { "running": { "startedAt": "2026-08-04T10:01:00Z" } }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "events": {
+    "apiVersion": "v1",
+    "kind": "EventList",
+    "items": [
+      {
+        "apiVersion": "v1",
+        "kind": "Event",
+        "metadata": { "name": "old-warning", "namespace": "homelab", "uid": "event-old" },
+        "type": "Warning",
+        "reason": "FailedScheduling",
+        "message": "0/1 nodes are available",
+        "involvedObject": { "kind": "Pod", "name": "gateway-abc", "namespace": "homelab" },
+        "lastTimestamp": "2026-08-04T11:10:00Z"
+      },
+      {
+        "apiVersion": "v1",
+        "kind": "Event",
+        "metadata": { "name": "normal-event", "namespace": "homelab", "uid": "event-normal" },
+        "type": "Normal",
+        "reason": "Pulled",
+        "message": "Successfully pulled image",
+        "involvedObject": { "kind": "Pod", "name": "prometheus-0", "namespace": "homelab" },
+        "lastTimestamp": "2026-08-04T11:30:00Z"
+      },
+      {
+        "apiVersion": "v1",
+        "kind": "Event",
+        "metadata": { "name": "new-warning", "namespace": "homelab", "uid": "event-new" },
+        "type": "Warning",
+        "reason": "BackOff",
+        "message": "Back-off restarting failed container",
+        "involvedObject": { "kind": "Pod", "name": "gateway-abc", "namespace": "homelab" },
+        "eventTime": "2026-08-04T11:20:00Z"
+      }
+    ]
+  }
+}

@@ -12,29 +12,30 @@
 
 ## File Map
 
-| File | Action | Responsibility |
-|------|--------|----------------|
-| `src/routes/_layout/calendar/-calendar.api.ts` | Create | `CalendarEvent` type, `fetchCalendarEvents` |
-| `src/routes/_layout/calendar/-calendarUtils.ts` | Create | `getUpcomingEvents`, `groupEventsByDay`, `formatEventTime` |
-| `src/routes/_layout/calendar/-CalendarBentoCard.tsx` | Create | Bento overview card (self-fetching) |
-| `src/routes/_layout/calendar/index.tsx` | Create | Full calendar page |
-| `src/lib/auth.ts` | Modify | Add `calendar.readonly` scope to `signInWithGoogle` |
-| `src/tools/registry.ts` | Modify | Register calendar tool |
+| File                                                 | Action | Responsibility                                             |
+| ---------------------------------------------------- | ------ | ---------------------------------------------------------- |
+| `src/routes/_layout/calendar/-calendar.api.ts`       | Create | `CalendarEvent` type, `fetchCalendarEvents`                |
+| `src/routes/_layout/calendar/-calendarUtils.ts`      | Create | `getUpcomingEvents`, `groupEventsByDay`, `formatEventTime` |
+| `src/routes/_layout/calendar/-CalendarBentoCard.tsx` | Create | Bento overview card (self-fetching)                        |
+| `src/routes/_layout/calendar/index.tsx`              | Create | Full calendar page                                         |
+| `src/lib/auth.ts`                                    | Modify | Add `calendar.readonly` scope to `signInWithGoogle`        |
+| `src/tools/registry.ts`                              | Modify | Register calendar tool                                     |
 
 **Test files:**
 
-| File | Environment |
-|------|-------------|
-| `src/routes/_layout/calendar/-calendar.api.test.ts` | Unit (node) |
-| `src/routes/_layout/calendar/-calendarUtils.test.ts` | Unit (node) |
+| File                                                      | Environment       |
+| --------------------------------------------------------- | ----------------- |
+| `src/routes/_layout/calendar/-calendar.api.test.ts`       | Unit (node)       |
+| `src/routes/_layout/calendar/-calendarUtils.test.ts`      | Unit (node)       |
 | `src/routes/_layout/calendar/-CalendarBentoCard.test.tsx` | Component (jsdom) |
-| `src/lib/-auth.test.ts` | Unit (node) |
+| `src/lib/-auth.test.ts`                                   | Unit (node)       |
 
 ---
 
 ## Task 1: Calendar API utility
 
 **Files:**
+
 - Create: `src/routes/_layout/calendar/-calendar.api.ts`
 - Test: `src/routes/_layout/calendar/-calendar.api.test.ts`
 
@@ -106,16 +107,16 @@ describe("fetchCalendarEvents", () => {
 
   it("throws { type: 'auth_expired' } on HTTP 401", async () => {
     vi.mocked(fetch).mockResolvedValue(mockResponse(401));
-    await expect(
-      fetchCalendarEvents("bad-token", new Date(), new Date()),
-    ).rejects.toMatchObject({ type: "auth_expired" });
+    await expect(fetchCalendarEvents("bad-token", new Date(), new Date())).rejects.toMatchObject({
+      type: "auth_expired",
+    });
   });
 
   it("throws { type: 'network_error' } on non-401 HTTP error", async () => {
     vi.mocked(fetch).mockResolvedValue(mockResponse(500));
-    await expect(
-      fetchCalendarEvents("token", new Date(), new Date()),
-    ).rejects.toMatchObject({ type: "network_error" });
+    await expect(fetchCalendarEvents("token", new Date(), new Date())).rejects.toMatchObject({
+      type: "network_error",
+    });
   });
 });
 ```
@@ -125,6 +126,7 @@ describe("fetchCalendarEvents", () => {
 ```bash
 bun run test --project unit src/routes/_layout/calendar/-calendar.api.test.ts
 ```
+
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement the API utility**
@@ -177,6 +179,7 @@ export async function fetchCalendarEvents(
 ```bash
 bun run test --project unit src/routes/_layout/calendar/-calendar.api.test.ts
 ```
+
 Expected: 5 tests pass.
 
 - [ ] **Step 5: Commit**
@@ -191,6 +194,7 @@ git commit -m "feat: add Google Calendar API utility"
 ## Task 2: Calendar utility functions
 
 **Files:**
+
 - Create: `src/routes/_layout/calendar/-calendarUtils.ts`
 - Test: `src/routes/_layout/calendar/-calendarUtils.test.ts`
 
@@ -203,11 +207,7 @@ import { describe, expect, it } from "vitest";
 import type { CalendarEvent } from "./-calendar.api";
 import { formatEventTime, getUpcomingEvents, groupEventsByDay } from "./-calendarUtils";
 
-function makeEvent(
-  id: string,
-  summary: string,
-  start: CalendarEvent["start"],
-): CalendarEvent {
+function makeEvent(id: string, summary: string, start: CalendarEvent["start"]): CalendarEvent {
   return { id, summary, start, end: {} };
 }
 
@@ -285,6 +285,7 @@ describe("formatEventTime", () => {
 ```bash
 bun run test --project unit src/routes/_layout/calendar/-calendarUtils.test.ts
 ```
+
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement the utility functions**
@@ -363,6 +364,7 @@ export function formatEventTime(event: CalendarEvent): string {
 ```bash
 bun run test --project unit src/routes/_layout/calendar/-calendarUtils.test.ts
 ```
+
 Expected: all tests pass.
 
 - [ ] **Step 5: Commit**
@@ -377,6 +379,7 @@ git commit -m "feat: add calendar utility functions"
 ## Task 3: Auth scope extension
 
 **Files:**
+
 - Modify: `src/lib/auth.ts`
 - Test: `src/lib/-auth.test.ts`
 
@@ -407,6 +410,7 @@ describe("signInWithGoogle", () => {
 ```bash
 bun run test --project unit src/lib/-auth.test.ts
 ```
+
 Expected: FAIL — scope string not present.
 
 - [ ] **Step 3: Add the calendar scope**
@@ -414,6 +418,7 @@ Expected: FAIL — scope string not present.
 In `src/lib/auth.ts`, update `signInWithGoogle`:
 
 Replace:
+
 ```ts
 export async function signInWithGoogle() {
   const { error } = await supabase.auth.signInWithOAuth({
@@ -427,6 +432,7 @@ export async function signInWithGoogle() {
 ```
 
 With:
+
 ```ts
 export async function signInWithGoogle() {
   const { error } = await supabase.auth.signInWithOAuth({
@@ -445,6 +451,7 @@ export async function signInWithGoogle() {
 ```bash
 bun run test --project unit src/lib/-auth.test.ts
 ```
+
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -459,6 +466,7 @@ git commit -m "feat: request calendar.readonly scope on Google OAuth login"
 ## Task 4: CalendarBentoCard
 
 **Files:**
+
 - Create: `src/routes/_layout/calendar/-CalendarBentoCard.tsx`
 - Test: `src/routes/_layout/calendar/-CalendarBentoCard.test.tsx`
 
@@ -594,6 +602,7 @@ describe("CalendarBentoCard", () => {
 ```bash
 bun run test --project components src/routes/_layout/calendar/-CalendarBentoCard.test.tsx
 ```
+
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement CalendarBentoCard**
@@ -673,9 +682,7 @@ export function CalendarBentoCard({
         )}
 
         {status === "auth_expired" && (
-          <p className="text-xs text-muted-foreground">
-            Calendar disconnected — sign in again.
-          </p>
+          <p className="text-xs text-muted-foreground">Calendar disconnected — sign in again.</p>
         )}
 
         {status === "ready" && events.length === 0 && (
@@ -715,6 +722,7 @@ export function CalendarBentoCard({
 ```bash
 bun run test --project components src/routes/_layout/calendar/-CalendarBentoCard.test.tsx
 ```
+
 Expected: all tests pass.
 
 - [ ] **Step 5: Commit**
@@ -729,6 +737,7 @@ git commit -m "feat: add CalendarBentoCard component"
 ## Task 5: Calendar page
 
 **Files:**
+
 - Create: `src/routes/_layout/calendar/index.tsx`
 
 No dedicated unit tests: the page composes already-tested utilities (`fetchCalendarEvents`, `getUpcomingEvents`, `groupEventsByDay`, `formatEventTime`) and contains rendering-only logic. Testing it meaningfully would require mocking `react-day-picker` internals — not worth the complexity.
@@ -819,11 +828,7 @@ function CalendarPage() {
   );
 
   const upcomingGroups: DayGroup[] = useMemo(() => {
-    const from = new Date(
-      selectedDay.getFullYear(),
-      selectedDay.getMonth(),
-      selectedDay.getDate(),
-    );
+    const from = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate());
     return groupEventsByDay(getUpcomingEvents(events, from, 5));
   }, [events, selectedDay]);
 
@@ -844,9 +849,7 @@ function CalendarPage() {
       )}
 
       {status === "error" && (
-        <p className="text-sm text-destructive">
-          Could not load calendar events. Try refreshing.
-        </p>
+        <p className="text-sm text-destructive">Could not load calendar events. Try refreshing.</p>
       )}
 
       <div className="flex flex-col gap-6 md:flex-row md:items-start">
@@ -900,9 +903,7 @@ function CalendarPage() {
                         <div className="h-9 w-0.5 shrink-0 rounded-full bg-primary" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm text-foreground">{event.summary}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatEventTime(event)}
-                          </p>
+                          <p className="text-xs text-muted-foreground">{formatEventTime(event)}</p>
                         </div>
                       </div>
                     ))}
@@ -923,6 +924,7 @@ function CalendarPage() {
 ```bash
 bun run test
 ```
+
 Expected: all existing tests pass.
 
 - [ ] **Step 3: Commit**
@@ -937,6 +939,7 @@ git commit -m "feat: add Calendar page with side-by-side month grid and event li
 ## Task 6: Register calendar tool
 
 **Files:**
+
 - Modify: `src/tools/registry.ts`
 
 - [ ] **Step 1: Update the registry**
@@ -994,6 +997,7 @@ export const tools: ToolEntry[] = [
 ```bash
 bun run test
 ```
+
 Expected: all tests pass.
 
 - [ ] **Step 3: Start the dev server and verify manually**

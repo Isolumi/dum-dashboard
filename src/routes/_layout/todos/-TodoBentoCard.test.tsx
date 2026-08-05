@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import React from "react";
 
 import type { Todo } from "#/lib/database.types";
@@ -10,6 +10,7 @@ import type { ToolEntry } from "#/tools/registry";
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 vi.mock("@tanstack/react-router", () => ({
@@ -24,7 +25,12 @@ vi.mock("@tanstack/react-router", () => ({
   }) => React.createElement("a", { href: to, ...props }, children),
 }));
 
+vi.mock("#/routes/todos/todos.functions", () => ({
+  getTodos: vi.fn(),
+}));
+
 const { TodoBentoCard } = await import("./-TodoBentoCard");
+const { getTodos } = await import("#/routes/todos/todos.functions");
 
 function makeTodo(overrides: Partial<Todo> = {}): Todo {
   return {
@@ -51,10 +57,7 @@ const mockTool = {
 
 describe("TodoBentoCard", () => {
   it("renders priority section labels for non-empty sections", () => {
-    const todos = [
-      makeTodo({ priority: "high" }),
-      makeTodo({ priority: "low" }),
-    ];
+    const todos = [makeTodo({ priority: "high" }), makeTodo({ priority: "low" })];
     render(React.createElement(TodoBentoCard, { tool: mockTool, data: todos }));
 
     expect(screen.getByText("High")).toBeTruthy();
@@ -131,9 +134,13 @@ describe("TodoBentoCard", () => {
     expect(screen.getByText(/no todos yet/i)).toBeTruthy();
   });
 
-  it("handles null data without throwing", () => {
+  it("loads todos from the single-owner server function when data is not preloaded", async () => {
+    vi.mocked(getTodos).mockResolvedValue([makeTodo({ name: "Loaded securely" })]);
+
     render(React.createElement(TodoBentoCard, { tool: mockTool, data: null }));
-    expect(screen.getByText(/no todos yet/i)).toBeTruthy();
+
+    await waitFor(() => expect(screen.getByText("Loaded securely")).toBeTruthy());
+    expect(getTodos).toHaveBeenCalledWith();
   });
 
   it("sorts todos within a section by sort_order ascending", () => {

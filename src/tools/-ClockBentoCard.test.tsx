@@ -35,9 +35,10 @@ describe("ClockBentoCard", () => {
     expect(screen.getByText("09:05")).toBeTruthy();
   });
 
-  it("renders the 24h label", () => {
+  it("renders the compact date label", () => {
+    vi.useFakeTimers({ now: new Date("2026-01-01T14:37:00") });
     render(React.createElement(ClockBentoCard, { tool: mockTool, data: null }));
-    expect(screen.getByText("24h")).toBeTruthy();
+    expect(screen.getByText("Thu, Jan 1")).toBeTruthy();
   });
 
   it("updates display after one minute elapses", () => {

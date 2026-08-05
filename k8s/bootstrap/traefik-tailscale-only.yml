@@ -1,0 +1,13 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    service:
+      spec:
+        # Tailnet IPv4 range. DNS-01 certificate issuance does not require
+        # public HTTP/HTTPS access, so every Traefik route can stay private.
+        loadBalancerSourceRanges:
+          - 100.64.0.0/10

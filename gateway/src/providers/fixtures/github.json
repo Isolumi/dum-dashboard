@@ -1,0 +1,32 @@
+{
+  "workflowRuns": {
+    "total_count": 1,
+    "workflow_runs": [
+      {
+        "id": 987654321,
+        "name": "Build and publish images",
+        "head_branch": "development",
+        "head_sha": "1829d6ba3b55e66a2134ae64161b9e48ad39a197",
+        "status": "completed",
+        "conclusion": "success",
+        "run_started_at": "2026-08-04T11:58:00Z",
+        "updated_at": "2026-08-04T12:00:30Z",
+        "html_url": "https://evil.example/steal?token=private"
+      }
+    ]
+  },
+  "commit": {
+    "sha": "1829d6ba3b55e66a2134ae64161b9e48ad39a197",
+    "html_url": "javascript:alert('malicious upstream URL')",
+    "commit": {
+      "message": "Ship API and frontend changes",
+      "author": {
+        "name": "Isolumi",
+        "date": "2026-08-04T11:57:00Z"
+      }
+    },
+    "author": {
+      "login": "Isolumi"
+    }
+  }
+}

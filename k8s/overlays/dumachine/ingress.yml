@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dum-dashboard
+  namespace: dum-dashboard
+  labels:
+    app.kubernetes.io/name: dum-dashboard
+    app.kubernetes.io/part-of: dum-dashboard
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - dashboard.doh.lumilumi.xyz
+      secretName: dum-dashboard-lumilumi-tls
+  rules:
+    - host: dashboard.doh.lumilumi.xyz
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dum-dashboard
+                port:
+                  number: 3000

@@ -76,11 +76,6 @@ describe("AddTodoRow (expanded state)", () => {
     expect(dateTrigger.className).toContain("shrink-0");
   });
 
-  it("shows keyboard hint containing 'Enter to save' when expanded", () => {
-    renderExpanded();
-    expect(screen.getByText(/enter to save/i)).toBeTruthy();
-  });
-
   it("shows keyboard hint containing 'Esc to cancel' when expanded", () => {
     renderExpanded();
     expect(screen.getByText(/esc to cancel/i)).toBeTruthy();

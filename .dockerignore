@@ -1,0 +1,13 @@
+.git
+.dev.vars
+.env
+.env.*
+!.env.production
+node_modules
+.output
+.tanstack
+.wrangler
+.worktrees
+.superpowers
+dist
+dist-ssr

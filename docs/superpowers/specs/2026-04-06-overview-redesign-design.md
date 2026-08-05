@@ -23,14 +23,17 @@ The `OverviewLoading` skeleton mirrors this layout: one wide placeholder on the 
 The existing `TodoBentoCard` (which shows aggregate counts + attention badges) is replaced entirely.
 
 ### Header
+
 Identical to today: CheckSquare icon · "Todos" label · ArrowRight indicator. The entire card is a `<Link to="/todos">` — read-only, no mutations from the overview.
 
 ### Body
+
 - Scrollable container with `overflow-y: auto` and `max-h-96` (384px).
 - Grouped into **High / Medium / Low** sections, each with a small uppercase section label.
 - Empty sections (no todos in that priority) are hidden entirely — no empty label rendered.
 
 ### Row format (per todo)
+
 ```
 [status icon]  [todo name — truncated]       [due date or —]
 ```
@@ -41,6 +44,7 @@ Identical to today: CheckSquare icon · "Todos" label · ArrowRight indicator. T
 - **Completed rows:** dimmed (`opacity-40`) and name struck through.
 
 ### Data source
+
 Reuses the existing `loadData: getTodos` already in the registry. No new server function.
 
 ## ClockBentoCard
@@ -48,23 +52,29 @@ Reuses the existing `loadData: getTodos` already in the registry. No new server 
 A new, self-contained component with no server dependency.
 
 ### Display
+
 - Large, light-weight monospace `HH:MM` in 24-hour format, horizontally and vertically centred in the card.
 - Small `24h` label below the digits.
 
 ### Updates
+
 A `useEffect` sets a `setInterval` (1-second tick) that reads `new Date()` and reformats on each tick. The interval is cleared on unmount.
 
 ### No dedicated page
+
 The clock has no `/clock` route and no sidebar entry. It is overview-only.
 
 ## Registry Changes
 
 ### `ToolEntry` type extension
+
 Add an optional `overviewOnly?: boolean` field. When `true`:
+
 - The sidebar skips the entry (no nav item rendered).
 - The overview still renders its `BentoCard`.
 
 ### New clock entry
+
 ```ts
 {
   id: "clock",
@@ -78,6 +88,7 @@ Add an optional `overviewOnly?: boolean` field. When `true`:
 ```
 
 ### Grid rendering in overview
+
 The overview page renders the first tool (todos) into the left `2fr` column. All subsequent tools render into the right `1fr` column, stacked vertically.
 
 ## Sidebar Change
