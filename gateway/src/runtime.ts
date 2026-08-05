@@ -49,7 +49,7 @@ export function createProductionGatewayDependencies(
     providers: {
       cluster,
       deployments: [githubProvider, argoProvider, kubernetesProvider],
-      services: [serviceProbeProvider],
+      services: [serviceProbeProvider, argoProvider, kubernetesProvider],
     },
   };
 }

@@ -42,10 +42,15 @@ describe("production gateway dependencies", () => {
     );
 
     const serviceProviders = dependencies.providers.services;
-    expect(serviceProviders.map(({ source }) => source)).toEqual(["service-probe"]);
+    expect(serviceProviders.map(({ source }) => source)).toEqual([
+      "service-probe",
+      "argocd",
+      "kubernetes",
+    ]);
     await expect(serviceProviders[0]!.collect(new AbortController().signal)).resolves.toEqual([
       probeResult,
     ]);
+    expect(serviceProviders[2]).toBe(dependencies.kubernetesProvider);
   });
 
   it("uses Kubernetes for pod routes and both Kubernetes and Prometheus for cluster snapshots", () => {

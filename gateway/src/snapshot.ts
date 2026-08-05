@@ -821,16 +821,37 @@ export async function collectServiceSnapshot(
   const collected = await collectProviders(providers, timeoutMs, now);
   const results: SourceResult<unknown>[] = [];
   const probes: ServiceProbeResult[] = [];
+  let cluster: ClusterData | null = null;
+  let application: ReturnType<typeof parseArgoApplicationState> = null;
   for (const result of collected) {
-    if (!result.ok || result.source !== "service-probe") {
+    if (!result.ok) {
       results.push(result);
       continue;
     }
 
-    const parsed = parseServiceProbeResults(result.data);
-    if (parsed) {
-      probes.push(...parsed);
-      results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+    if (result.source === "service-probe") {
+      const parsed = parseServiceProbeResults(result.data);
+      if (parsed) {
+        probes.push(...parsed);
+        results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+        continue;
+      }
+    } else if (result.source === "kubernetes") {
+      const parsed = parseClusterData(result.data);
+      if (parsed) {
+        cluster = parsed;
+        results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+        continue;
+      }
+    } else if (result.source === "argocd") {
+      const parsed = parseArgoApplicationState(result.data);
+      if (parsed) {
+        application = parsed;
+        results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+        continue;
+      }
+    } else {
+      results.push(result);
       continue;
     }
 
@@ -843,19 +864,110 @@ export async function collectServiceSnapshot(
     });
   }
   const observedAt = timestamp(now);
-  const services: ServiceSummary[] = probes.map((probe) => ({
-    name: probe.entry.name,
-    description: probe.entry.description,
-    status: probe.status,
-    url: probe.entry.url,
-    certificateExpiresAt: probe.certificateExpiresAt,
-    probeLatencyMs: probe.latencyMs,
-    namespace: probe.entry.namespace,
-    workload: probe.entry.workloads.map(({ kind, name }) => `${kind}/${name}`).join(", "),
-    image: null,
-    observedAt,
-  }));
+  const argoHealthStatus = (probe: ServiceProbeResult): HealthStatus => {
+    if (!application || application.name !== probe.entry.argoApplication) return "unknown";
+    if (application.health.status === "Healthy" && application.sync.status === "Synced") {
+      return "healthy";
+    }
+    if (["Degraded", "Missing"].includes(application.health.status)) return "critical";
+    if (["Progressing", "Suspended"].includes(application.health.status)) return "warning";
+    return "unknown";
+  };
+  const services: ServiceSummary[] = probes.map((probe) => {
+    const relatedPods = cluster
+      ? cluster.pods.filter(
+          (pod) =>
+            pod.namespace === probe.entry.namespace &&
+            probe.entry.workloads.some(
+              (workload) => pod.name === workload.name || pod.name.startsWith(`${workload.name}-`),
+            ),
+        )
+      : [];
+    const workloads = probe.entry.workloads.map((catalogWorkload) => {
+      const workload = cluster?.workloads.find(
+        (candidate) =>
+          candidate.namespace === probe.entry.namespace &&
+          candidate.kind === catalogWorkload.kind &&
+          candidate.name === catalogWorkload.name,
+      );
+      const pods = relatedPods.filter(
+        (pod) =>
+          pod.name === catalogWorkload.name || pod.name.startsWith(`${catalogWorkload.name}-`),
+      );
+      const versions = [
+        ...pods.flatMap((pod) =>
+          pod.containerImages.flatMap((image) => image.reference ?? image.digest ?? []),
+        ),
+        ...pods.flatMap((pod) => pod.imageTag ?? pod.image ?? []),
+      ].filter((version, index, all) => all.indexOf(version) === index);
+      const createdAt = pods
+        .map(({ createdAt }) => createdAt)
+        .filter((value) => Number.isFinite(Date.parse(value)))
+        .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
+
+      return {
+        kind: catalogWorkload.kind,
+        name: catalogWorkload.name,
+        status: workload?.status ?? "unknown",
+        version: versions[0] ?? null,
+        createdAt: createdAt ?? null,
+        desiredReplicas: workload?.desiredReplicas ?? null,
+        availableReplicas: workload?.availableReplicas ?? null,
+        podCount: cluster ? pods.length : null,
+      };
+    });
+    const argoStatus = argoHealthStatus(probe);
+    const status = rollUpStatus([
+      {
+        status: probe.status,
+        ruleId: "service-probe",
+        reason: "Service endpoint and certificate were probed.",
+        evidence: { reachable: probe.reachable },
+      },
+      {
+        status: argoStatus,
+        ruleId: "service-argocd",
+        reason: "Argo CD application state was inspected.",
+        evidence: { application: probe.entry.argoApplication },
+      },
+      ...workloads.map((workload) => ({
+        status: workload.status,
+        ruleId: "service-workload",
+        reason: "Kubernetes workload state was inspected.",
+        evidence: { workload: workload.name },
+      })),
+    ]).status;
+    const reason = !probe.reachable
+      ? "The service endpoint is not currently reachable."
+      : argoStatus === "unknown" || workloads.some(({ status }) => status === "unknown")
+        ? "The endpoint is reachable, but deployment state is unavailable."
+        : status === "critical"
+          ? "The endpoint or deployment has a critical health problem."
+          : status === "warning"
+            ? "The endpoint is reachable, but the certificate or deployment needs attention."
+            : "Endpoint, certificate, Argo CD, and workloads are healthy.";
+
+    return {
+      name: probe.entry.name,
+      description: probe.entry.description,
+      status,
+      url: probe.entry.url,
+      certificateExpiresAt: probe.certificateExpiresAt,
+      probeLatencyMs: probe.latencyMs,
+      namespace: probe.entry.namespace,
+      workload: probe.entry.workloads.map(({ kind, name }) => `${kind}/${name}`).join(", "),
+      image: workloads[0]?.version ?? null,
+      observedAt,
+      reachable: probe.reachable,
+      reason,
+      argoApplication: probe.entry.argoApplication,
+      argoStatus,
+      relatedPodCount: cluster ? relatedPods.length : null,
+      workloads,
+    };
+  });
   const hasFailures = results.some((result) => !result.ok);
+  const missingDeploymentEvidence = cluster === null || application === null;
   const status = rollUpStatus(
     services.map((service) => ({
       status: service.status,
@@ -867,9 +979,9 @@ export async function collectServiceSnapshot(
 
   return {
     data: services.length > 0 ? { services } : null,
-    status: hasFailures || services.length === 0 ? "unknown" : status,
+    status: hasFailures || missingDeploymentEvidence || services.length === 0 ? "unknown" : status,
     observedAt,
-    stale: hasFailures || services.length === 0,
+    stale: hasFailures || missingDeploymentEvidence || services.length === 0,
     issues: [],
     sources: results.map((result) => result.state),
   };

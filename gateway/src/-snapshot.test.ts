@@ -284,6 +284,73 @@ describe("collectServiceSnapshot", () => {
     });
     expect(JSON.stringify(snapshot)).not.toContain("private-value");
   });
+
+  it("enriches catalog services with Argo and Kubernetes workload evidence", async () => {
+    const probe = {
+      ...validServiceProbeResult(),
+      entry: {
+        ...validServiceProbeResult().entry,
+        workloads: [
+          { kind: "Deployment", name: "yootoob-mp3-api" },
+          { kind: "Deployment", name: "yootoob-mp3-frontend" },
+        ],
+      },
+    };
+
+    const snapshot = await collectServiceSnapshot(
+      [
+        { source: "service-probe", collect: async () => [probe] },
+        { source: "argocd", collect: async () => validApplication() },
+        { source: "kubernetes", collect: async () => validCluster() },
+      ],
+      1_000,
+      now,
+    );
+
+    expect(snapshot).toMatchObject({
+      status: "healthy",
+      stale: false,
+      data: {
+        services: [
+          {
+            name: "yootoob-mp3",
+            reachable: true,
+            reason: "Endpoint, certificate, Argo CD, and workloads are healthy.",
+            argoApplication: "yootoob-mp3-dumachine",
+            argoStatus: "healthy",
+            relatedPodCount: 2,
+            workloads: [
+              {
+                kind: "Deployment",
+                name: "yootoob-mp3-api",
+                status: "healthy",
+                version: `${API_REPOSITORY}:${SOURCE_SHA}`,
+                createdAt: "2026-08-03T23:59:30.000Z",
+                desiredReplicas: 1,
+                availableReplicas: 1,
+                podCount: 1,
+              },
+              {
+                kind: "Deployment",
+                name: "yootoob-mp3-frontend",
+                status: "healthy",
+                version: `${FRONTEND_REPOSITORY}:${SOURCE_SHA}`,
+                createdAt: "2026-08-03T23:59:30.000Z",
+                desiredReplicas: 1,
+                availableReplicas: 1,
+                podCount: 1,
+              },
+            ],
+          },
+        ],
+      },
+      sources: [
+        { source: "service-probe", status: "healthy", stale: false },
+        { source: "argocd", status: "healthy", stale: false },
+        { source: "kubernetes", status: "healthy", stale: false },
+      ],
+    });
+  });
 });
 
 describe("collectDeploymentSnapshot", () => {

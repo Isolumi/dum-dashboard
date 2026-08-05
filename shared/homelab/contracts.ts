@@ -83,6 +83,17 @@ export interface RecentActivity {
   url: string | null;
 }
 
+export interface ServiceWorkloadSummary {
+  kind: string;
+  name: string;
+  status: HealthStatus;
+  version: string | null;
+  createdAt: string | null;
+  desiredReplicas: number | null;
+  availableReplicas: number | null;
+  podCount: number | null;
+}
+
 export interface ServiceSummary {
   name: string;
   description: string;
@@ -94,6 +105,12 @@ export interface ServiceSummary {
   workload: string | null;
   image: string | null;
   observedAt: string;
+  reachable: boolean;
+  reason: string;
+  argoApplication: string | null;
+  argoStatus: HealthStatus;
+  relatedPodCount: number | null;
+  workloads: ServiceWorkloadSummary[];
 }
 
 export interface OverviewData {

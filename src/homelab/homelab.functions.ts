@@ -108,6 +108,25 @@ const ServiceSummarySchema = z
     workload: z.string().nullable(),
     image: z.string().nullable(),
     observedAt: TimestampSchema,
+    reachable: z.boolean(),
+    reason: z.string(),
+    argoApplication: z.string().nullable(),
+    argoStatus: HealthStatusSchema,
+    relatedPodCount: z.number().int().nonnegative().nullable(),
+    workloads: z.array(
+      z
+        .object({
+          kind: z.string(),
+          name: z.string(),
+          status: HealthStatusSchema,
+          version: z.string().nullable(),
+          createdAt: TimestampSchema.nullable(),
+          desiredReplicas: z.number().int().nonnegative().nullable(),
+          availableReplicas: z.number().int().nonnegative().nullable(),
+          podCount: z.number().int().nonnegative().nullable(),
+        })
+        .strict(),
+    ),
   })
   .strict();
 
