@@ -379,9 +379,13 @@ bun --eval '
   if (
     prometheusApplication?.spec?.project !== "dum-dashboard-monitoring" ||
     prometheusApplication?.spec?.destination?.server !== "https://kubernetes.default.svc" ||
-    prometheusApplication?.spec?.destination?.namespace !== "monitoring"
+    prometheusApplication?.spec?.destination?.namespace !== "monitoring" ||
+    !same(prometheusApplication?.spec?.syncPolicy?.syncOptions ?? [], [
+      "CreateNamespace=true",
+      "ServerSideApply=true",
+    ])
   ) {
-    fail("Prometheus Application must use the restricted monitoring project.");
+    fail("Prometheus Application must use the restricted project and server-side apply.");
   }
   const prometheusValues = parse(readFileSync(process.env.PROMETHEUS_VALUES_PATH, "utf8"));
   if (
