@@ -37,6 +37,42 @@ describe("GitHubProvider", () => {
     expect(fetchApi.mock.calls[0]![1]?.headers).not.toHaveProperty("authorization");
   });
 
+  it("isolates cancellation between concurrent anonymous callers", async () => {
+    let releaseRunsRequest: (() => void) | undefined;
+    let upstreamSignal: AbortSignal | null | undefined;
+    const fetchApi = vi.fn((url: string, options: RequestInit) => {
+      if (!url.includes("/actions/")) return Promise.resolve(jsonResponse(fixture.commit));
+
+      upstreamSignal = options.signal;
+      return new Promise<Response>((resolve, reject) => {
+        releaseRunsRequest = () => resolve(jsonResponse(fixture.workflowRuns));
+        options.signal?.addEventListener(
+          "abort",
+          () => reject(new Error("shared upstream request was aborted")),
+          { once: true },
+        );
+      });
+    });
+    const provider = new GitHubProvider({ fetchApi, environment: {} });
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+
+    const first = provider.collect(firstController.signal);
+    const second = provider.collect(secondController.signal);
+    await vi.waitFor(() => expect(fetchApi).toHaveBeenCalledTimes(1));
+
+    firstController.abort(new Error("first caller cancelled"));
+    await expect(first).rejects.toThrow("first caller cancelled");
+    expect(upstreamSignal?.aborted ?? false).toBe(false);
+
+    releaseRunsRequest?.();
+    await expect(second).resolves.toMatchObject({
+      repository: "Isolumi/youtube-mp3",
+      conclusion: "success",
+    });
+    expect(fetchApi).toHaveBeenCalledTimes(2);
+  });
+
   it("serves stale public evidence with bounded retry after an upstream failure", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-04T00:00:00.000Z"));

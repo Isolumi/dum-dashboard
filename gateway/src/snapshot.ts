@@ -954,17 +954,18 @@ export async function collectDeploymentSnapshot(
     [...invalidContainerTargets],
   );
   const hasFailures = results.some((result) => !result.ok);
+  const hasStaleSources = results.some((result) => result.state.stale);
 
   return {
     data: { applications: [state] },
     status:
       state.status === "critical" || state.status === "warning"
         ? state.status
-        : hasFailures
+        : hasFailures || hasStaleSources
           ? "unknown"
           : state.status,
     observedAt,
-    stale: hasFailures || state.status === "unknown",
+    stale: hasFailures || hasStaleSources || state.status === "unknown",
     issues: state.issues,
     sources: results.map((result) => result.state),
   };

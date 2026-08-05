@@ -44,6 +44,29 @@ function retryAtFromResponse(response: Response, now = Date.now()): number | und
   return future.length > 0 ? Math.max(...future) : undefined;
 }
 
+function waitForCaller<T>(request: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason ?? new Error("request aborted"));
+
+  return new Promise<T>((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    const onAbort = () => {
+      cleanup();
+      reject(signal.reason ?? new Error("request aborted"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    request.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error: unknown) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
+}
+
 export interface WorkflowRun {
   repository: string;
   branch: string;
@@ -319,16 +342,24 @@ export class GitHubProvider implements Provider<WorkflowRun> {
     const now = Date.now();
     const cached = this.cachedPublicWorkflow;
     if (cached && now - cached.observedAt < PUBLIC_CACHE_TTL_MS) {
-      return Promise.resolve(structuredClone(cached.value));
+      return waitForCaller(Promise.resolve(structuredClone(cached.value)), signal);
     }
-    if (this.publicRequest) return this.publicRequest.then((value) => structuredClone(value));
+    if (this.publicRequest) {
+      return waitForCaller(
+        this.publicRequest.then((value) => structuredClone(value)),
+        signal,
+      );
+    }
     if (now < this.publicRetryAt) {
-      return cached
-        ? Promise.resolve(structuredClone(cached.value))
-        : Promise.reject(new Error("GitHub request failed"));
+      return waitForCaller(
+        cached
+          ? Promise.resolve(structuredClone(cached.value))
+          : Promise.reject(new Error("GitHub request failed")),
+        signal,
+      );
     }
 
-    const request = this.latestWorkflow(DEFAULT_REPOSITORY, DEFAULT_BRANCH, signal)
+    const request = this.latestWorkflow(DEFAULT_REPOSITORY, DEFAULT_BRANCH)
       .then((value) => {
         this.cachedPublicWorkflow = { value: structuredClone(value), observedAt: Date.now() };
         this.publicRetryAt = 0;
@@ -350,6 +381,9 @@ export class GitHubProvider implements Provider<WorkflowRun> {
         this.publicRequest = undefined;
       });
     this.publicRequest = request;
-    return request.then((value) => structuredClone(value));
+    return waitForCaller(
+      request.then((value) => structuredClone(value)),
+      signal,
+    );
   }
 }

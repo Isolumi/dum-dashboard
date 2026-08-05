@@ -120,6 +120,26 @@ function deploymentProviders(
   ];
 }
 
+function validServiceProbeResult() {
+  return {
+    entry: {
+      id: "yootoob-mp3",
+      name: "yootoob-mp3",
+      description: "Private YouTube MP3 downloader",
+      url: "https://yootoob.doh.lumilumi.xyz",
+      namespace: "yootoob-mp3",
+      argoApplication: "yootoob-mp3-dumachine",
+      workloads: [{ kind: "Deployment", name: "yootoob-mp3-api" }],
+    },
+    id: "yootoob-mp3",
+    reachable: true,
+    status: "healthy",
+    latencyMs: 42,
+    certificateExpiresAt: "2026-09-01T00:00:00.000Z",
+    consecutiveFailures: 0,
+  };
+}
+
 function withLeadingHole<T>(values: readonly T[]): T[] {
   const sparse: T[] = [];
   sparse.length = values.length + 1;
@@ -423,24 +443,6 @@ describe("collectClusterSnapshot", () => {
 });
 
 describe("collectServiceSnapshot", () => {
-  const validServiceProbeResult = () => ({
-    entry: {
-      id: "yootoob-mp3",
-      name: "yootoob-mp3",
-      description: "Private YouTube MP3 downloader",
-      url: "https://yootoob.doh.lumilumi.xyz",
-      namespace: "yootoob-mp3",
-      argoApplication: "yootoob-mp3-dumachine",
-      workloads: [{ kind: "Deployment", name: "yootoob-mp3-api" }],
-    },
-    id: "yootoob-mp3",
-    reachable: true,
-    status: "healthy",
-    latencyMs: 42,
-    certificateExpiresAt: "2026-09-01T00:00:00.000Z",
-    consecutiveFailures: 0,
-  });
-
   it("contains malformed service probe results as an unknown stale source", async () => {
     const snapshot = await collectServiceSnapshot(
       [
@@ -601,6 +603,61 @@ describe("collectServiceSnapshot", () => {
 });
 
 describe("collectOverviewSnapshot", () => {
+  it("propagates a successful stale GitHub observation to the deployment and overview rollups", async () => {
+    const github: Provider<unknown> = {
+      source: "github",
+      collect: async () => validWorkflow(),
+      observation: () => ({
+        observedAt: "2026-08-03T23:50:00.000Z",
+        stale: true,
+        error: "GitHub observation is stale",
+      }),
+    };
+    const argocd: Provider<unknown> = {
+      source: "argocd",
+      collect: async () => validApplication(),
+    };
+    const kubernetes: Provider<unknown> = {
+      source: "kubernetes",
+      collect: async () => validCluster(),
+    };
+    const serviceProbe: Provider<unknown> = {
+      source: "service-probe",
+      collect: async () => [validServiceProbeResult()],
+    };
+
+    const deployment = await collectDeploymentSnapshot([github, argocd, kubernetes], 1_000, now);
+    expect(deployment).toMatchObject({
+      status: "unknown",
+      stale: true,
+      sources: expect.arrayContaining([
+        expect.objectContaining({
+          source: "github",
+          status: "unknown",
+          stale: true,
+          error: "GitHub observation is stale",
+        }),
+      ]),
+    });
+
+    const overview = await collectOverviewSnapshot(
+      {
+        cluster: [kubernetes],
+        deployments: [github, argocd, kubernetes],
+        services: [serviceProbe, argocd, kubernetes],
+      },
+      1_000,
+      now,
+    );
+    expect(overview).toMatchObject({
+      status: "unknown",
+      stale: true,
+      sources: expect.arrayContaining([
+        expect.objectContaining({ source: "github", status: "unknown", stale: true }),
+      ]),
+    });
+  });
+
   it("reports certificate renewal and expiry-threshold transitions after the initial observation", async () => {
     let currentNow = new Date("2026-08-04T00:00:00.000Z");
     let certificateExpiresAt = "2026-09-01T00:00:00.000Z";
