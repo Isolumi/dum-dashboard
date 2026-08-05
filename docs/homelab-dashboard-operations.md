@@ -48,12 +48,14 @@ kubectl -n dum-dashboard create secret docker-registry ghcr-pull \
   --docker-password="$GHCR_PULL_TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
 
+read "SUPABASE_URL?Supabase project URL: "
 read -s "SUPABASE_SECRET_KEY?Supabase secret key: "; echo
 read "OWNER_USER_ID?Supabase owner UUID: "
 read "GOOGLE_CLIENT_ID?Google client ID: "
 read -s "GOOGLE_CLIENT_SECRET?Google client secret: "; echo
 read -s "GOOGLE_TOKEN_ENCRYPTION_KEY?Calendar encryption key: "; echo
 kubectl -n dum-dashboard create secret generic dum-dashboard-secrets \
+  --from-literal=SUPABASE_URL="$SUPABASE_URL" \
   --from-literal=SUPABASE_SECRET_KEY="$SUPABASE_SECRET_KEY" \
   --from-literal=OWNER_USER_ID="$OWNER_USER_ID" \
   --from-literal=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
@@ -66,7 +68,7 @@ kubectl -n dum-dashboard create secret generic homelab-gateway-secrets \
   --from-literal=GITHUB_READ_TOKEN="$GITHUB_READ_TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-unset GHCR_USER GHCR_PULL_TOKEN SUPABASE_SECRET_KEY OWNER_USER_ID GOOGLE_CLIENT_ID \
+unset GHCR_USER GHCR_PULL_TOKEN SUPABASE_URL SUPABASE_SECRET_KEY OWNER_USER_ID GOOGLE_CLIENT_ID \
   GOOGLE_CLIENT_SECRET GOOGLE_TOKEN_ENCRYPTION_KEY GITHUB_READ_TOKEN
 ```
 
