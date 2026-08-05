@@ -390,10 +390,11 @@ bun --eval '
   const prometheusValues = parse(readFileSync(process.env.PROMETHEUS_VALUES_PATH, "utf8"));
   if (
     prometheusValues?.prometheusOperator?.admissionWebhooks?.enabled !== false ||
+    prometheusValues?.prometheusOperator?.tls?.enabled !== false ||
     prometheusValues?.coreDns?.enabled !== false ||
     prometheusValues?.kubeProxy?.enabled !== false
   ) {
-    fail("Prometheus values must avoid webhook and kube-system write access.");
+    fail("Prometheus values must avoid webhook TLS and kube-system write access.");
   }
 
   const workflow = parse(readFileSync(process.env.WORKFLOW_PATH, "utf8"));
