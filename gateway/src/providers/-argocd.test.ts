@@ -145,17 +145,25 @@ describe("ArgoProvider", () => {
       },
     });
     const validApplication = await provider.getApplication("yootoob-mp3-dumachine");
-    const requiredPaths = [
-      ["sync", "status"],
-      ["sync", "revision"],
-      ["health", "status"],
-      ["operation", "phase"],
+    const requiredMutations = [
+      (value: typeof validApplication, invalid: string) => {
+        value.sync.status = invalid;
+      },
+      (value: typeof validApplication, invalid: string) => {
+        value.sync.revision = invalid;
+      },
+      (value: typeof validApplication, invalid: string) => {
+        value.health.status = invalid;
+      },
+      (value: typeof validApplication, invalid: string) => {
+        value.operation.phase = invalid;
+      },
     ] as const;
 
-    for (const path of requiredPaths) {
+    for (const mutate of requiredMutations) {
       for (const invalid of ["", "   "]) {
         const value = structuredClone(validApplication);
-        value[path[0]][path[1]] = invalid;
+        mutate(value, invalid);
 
         expect(parseArgoApplicationState(value)).toBeNull();
       }
