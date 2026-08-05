@@ -455,6 +455,11 @@ bun --eval '
   if (!updateCommands.includes("git push origin HEAD:deploy")) {
     fail("The image workflow must update only the deploy branch.");
   }
+  const mergeIndex = updateCommands.indexOf("git merge --no-edit");
+  const identityIndex = updateCommands.indexOf("git config user.name \"github-actions[bot]\"");
+  if (mergeIndex < 0 || identityIndex < 0 || identityIndex > mergeIndex) {
+    fail("The deploy workflow must configure its Git identity before a merge can commit.");
+  }
   const updateCheckout = workflow?.jobs?.["update-tags"]?.steps?.find(
     (step) => typeof step?.uses === "string" && step.uses.startsWith("actions/checkout@"),
   );
