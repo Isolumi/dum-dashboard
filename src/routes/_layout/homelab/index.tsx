@@ -441,10 +441,10 @@ function HomelabOverviewContent({
 
 export function HomelabOverview({
   initialSnapshot,
-  fetcher = getHomelabOverview,
+  fetcher = (signal) => getHomelabOverview({ signal }),
 }: {
   initialSnapshot: OverviewSnapshot;
-  fetcher?: () => Promise<OverviewSnapshot>;
+  fetcher?: (signal: AbortSignal) => Promise<OverviewSnapshot>;
 }) {
   const { snapshot, refreshing, error } = useHomelabSnapshot(fetcher, initialSnapshot);
   return <HomelabOverviewContent snapshot={snapshot} refreshing={refreshing} error={error} />;

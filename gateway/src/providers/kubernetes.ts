@@ -20,6 +20,7 @@ import {
 } from "@kubernetes/client-node";
 import fetch, { type RequestInit, type Response } from "node-fetch";
 import type { ClusterData, PodDetail } from "../../../shared/homelab/contracts";
+import { normalizePodLogCursor } from "../../../shared/homelab/log-cursor";
 import { getKubernetesConfigSource } from "../config";
 import type { Provider } from "./provider";
 import { mapClusterData, mapPodDetail } from "./kubernetes-mappers";
@@ -71,6 +72,7 @@ export interface KubernetesReader extends Provider<ClusterData> {
     pod: string,
     container: string,
     signal: AbortSignal,
+    sinceTime?: string,
   ): AsyncIterable<string>;
 }
 
@@ -191,7 +193,11 @@ export class KubernetesProvider implements KubernetesReader {
     pod: string,
     container: string,
     signal: AbortSignal,
+    sinceTime?: string,
   ): Promise<{ output: PassThrough; completion: Promise<void> }> {
+    const cursor = sinceTime === undefined ? null : normalizePodLogCursor(sinceTime);
+    if (sinceTime !== undefined && !cursor) throw new Error("Invalid pod log cursor");
+
     const kubeConfig = this.getKubeConfig();
     const cluster = kubeConfig.getCurrentCluster();
     if (!cluster) throw new Error("Kubernetes cluster configuration is unavailable");
@@ -200,7 +206,8 @@ export class KubernetesProvider implements KubernetesReader {
     const basePath = url.pathname.replace(/\/$/, "");
     url.pathname = `${basePath}/api/v1/namespaces/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(pod)}/log`;
     url.searchParams.set("container", container);
-    url.searchParams.set("tailLines", "200");
+    if (cursor) url.searchParams.set("sinceTime", cursor);
+    else url.searchParams.set("tailLines", "200");
     url.searchParams.set("follow", "true");
     url.searchParams.set("timestamps", "true");
 
@@ -226,6 +233,7 @@ export class KubernetesProvider implements KubernetesReader {
     pod: string,
     container: string,
     signal: AbortSignal,
+    sinceTime?: string,
   ): PodLogStream {
     const upstream = new AbortController();
     let output: PassThrough | undefined;
@@ -238,13 +246,17 @@ export class KubernetesProvider implements KubernetesReader {
     signal.addEventListener("abort", abortUpstream, { once: true });
     if (signal.aborted) abortUpstream();
 
-    const connection = this.connectPodLogs(namespace, pod, container, upstream.signal).then(
-      (connected) => {
-        output = connected.output;
-        completion = connected.completion;
-        if (signal.aborted) abortUpstream();
-      },
-    );
+    const connection = this.connectPodLogs(
+      namespace,
+      pod,
+      container,
+      upstream.signal,
+      sinceTime,
+    ).then((connected) => {
+      output = connected.output;
+      completion = connected.completion;
+      if (signal.aborted) abortUpstream();
+    });
     void connection.catch(() => undefined);
 
     return {

@@ -16,6 +16,7 @@ import type {
   EventSummary,
   ResourceHistory,
   ResourceName,
+  ResourceWindow,
 } from "@shared/homelab/contracts";
 import { Button } from "#/components/ui/button";
 import { StatusBadge } from "./-StatusBadge";
@@ -23,7 +24,7 @@ import { StatusBadge } from "./-StatusBadge";
 const CHART_WIDTH = 480;
 const CHART_HEIGHT = 112;
 
-type HistoryWindow = "1h" | "6h" | "24h" | "7d";
+type HistoryWindow = ResourceWindow;
 
 const HISTORY_WINDOWS: ReadonlyArray<{
   value: HistoryWindow;
@@ -234,9 +235,27 @@ function WarningEvents({ events }: { events: readonly EventSummary[] }) {
   );
 }
 
-export function ClusterSummary({ data }: { data: ClusterData }) {
-  const [historyWindow, setHistoryWindow] = useState<HistoryWindow>("24h");
-  const selectedWindow = HISTORY_WINDOWS.find(({ value }) => value === historyWindow)!;
+export function ClusterSummary({
+  data,
+  requestedHistoryWindow,
+  loadedHistoryWindow,
+  historyRefreshing = false,
+  historyError = false,
+  onHistoryWindowChange,
+}: {
+  data: ClusterData;
+  requestedHistoryWindow?: HistoryWindow;
+  loadedHistoryWindow?: HistoryWindow;
+  historyRefreshing?: boolean;
+  historyError?: boolean;
+  onHistoryWindowChange?: (window: HistoryWindow) => void;
+}) {
+  const [localHistoryWindow, setLocalHistoryWindow] = useState<HistoryWindow>("24h");
+  const requestedWindowValue = requestedHistoryWindow ?? localHistoryWindow;
+  const loadedWindowValue = loadedHistoryWindow ?? requestedWindowValue;
+  const requestedWindow = HISTORY_WINDOWS.find(({ value }) => value === requestedWindowValue)!;
+  const selectedWindow = HISTORY_WINDOWS.find(({ value }) => value === loadedWindowValue)!;
+  const changeHistoryWindow = onHistoryWindowChange ?? setLocalHistoryWindow;
   const healthyNamespaces = data.namespaces.filter(({ status }) => status === "healthy").length;
   const healthyWorkloads = data.workloads.filter(({ status }) => status === "healthy").length;
 
@@ -384,18 +403,37 @@ export function ClusterSummary({ data }: { data: ClusterData }) {
               <Button
                 key={window.value}
                 type="button"
-                variant={historyWindow === window.value ? "secondary" : "ghost"}
+                variant={requestedWindowValue === window.value ? "secondary" : "ghost"}
                 size="sm"
                 className="min-h-11 min-w-11"
                 aria-label={`Show ${window.label}`}
-                aria-pressed={historyWindow === window.value}
-                onClick={() => setHistoryWindow(window.value)}
+                aria-pressed={requestedWindowValue === window.value}
+                onClick={() => changeHistoryWindow(window.value)}
               >
                 {window.shortLabel}
               </Button>
             ))}
           </div>
         </div>
+        {historyRefreshing && requestedWindowValue !== loadedWindowValue ? (
+          <p
+            role="status"
+            aria-label="Resource history request"
+            className="mt-3 text-xs text-muted-foreground"
+          >
+            Loading {requestedWindow.label} history. Showing the last successful range meanwhile.
+          </p>
+        ) : null}
+        {historyError && requestedWindowValue !== loadedWindowValue ? (
+          <p
+            role="alert"
+            aria-label="Resource history error"
+            className="mt-3 text-xs text-health-unknown"
+          >
+            {requestedWindow.label} history unavailable. Showing the last successful{" "}
+            {selectedWindow.label.replace(/s$/, "")} history.
+          </p>
+        ) : null}
         <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2">
           {(["cpu", "memory"] as const).map((resource) => (
             <ResourceHistoryChart

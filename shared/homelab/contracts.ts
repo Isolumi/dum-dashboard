@@ -35,6 +35,7 @@ export interface MetricPoint {
 }
 
 export type ResourceName = "cpu" | "memory" | "disk";
+export type ResourceWindow = "1h" | "6h" | "24h" | "7d";
 
 export interface CurrentResourceMetric {
   resource: ResourceName;

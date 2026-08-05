@@ -2,9 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertCircle, Clock3, RefreshCw, Server } from "lucide-react";
 
-import type { ClusterSnapshot, PodDetail as PodDetailContract } from "@shared/homelab/contracts";
+import type {
+  ClusterSnapshot,
+  PodDetail as PodDetailContract,
+  ResourceWindow,
+} from "@shared/homelab/contracts";
 import { Skeleton } from "#/components/ui/skeleton";
-import { getClusterSnapshot, getPodDetail } from "#/homelab/homelab.functions";
+import {
+  getClusterSnapshot,
+  getClusterSnapshotForWindow,
+  getPodDetail,
+} from "#/homelab/homelab.functions";
 import { useHomelabSnapshot } from "#/homelab/useHomelabSnapshot";
 import { ClusterSummary } from "./-ClusterSummary";
 import { PodDetail, type PodDetailFetcher } from "./-PodDetail";
@@ -44,8 +52,16 @@ export function normalizeClusterSearch(search: Record<string, unknown>): Cluster
   return normalized;
 }
 
-const fetchPodDetail: PodDetailFetcher = ({ namespace, pod }) =>
-  getPodDetail({ data: { namespace, pod } }) as Promise<PodDetailContract>;
+const fetchPodDetail: PodDetailFetcher = ({ namespace, pod }, signal) =>
+  getPodDetail({ data: { namespace, pod }, signal }) as Promise<PodDetailContract>;
+
+export type ClusterSnapshotFetcher = (
+  window: ResourceWindow,
+  signal: AbortSignal,
+) => Promise<ClusterSnapshot>;
+
+const fetchClusterSnapshot: ClusterSnapshotFetcher = (window, signal) =>
+  getClusterSnapshotForWindow({ data: { window }, signal });
 
 export const Route = createFileRoute("/_layout/homelab/cluster")({
   validateSearch: normalizeClusterSearch,
@@ -68,7 +84,7 @@ function ClusterRoute() {
   return (
     <ClusterView
       initialSnapshot={initialSnapshot}
-      fetcher={getClusterSnapshot}
+      fetcher={fetchClusterSnapshot}
       detailFetcher={fetchPodDetail}
       search={search}
       onSearchChange={changeSearch}
@@ -102,12 +118,24 @@ export function ClusterView({
   onSearchChange,
 }: {
   initialSnapshot: ClusterSnapshot | null;
-  fetcher: () => Promise<ClusterSnapshot>;
+  fetcher: ClusterSnapshotFetcher;
   detailFetcher: PodDetailFetcher;
   search: ClusterSearch;
   onSearchChange: (search: ClusterSearch) => void;
 }) {
-  const { snapshot, refreshing, error } = useHomelabSnapshot(fetcher, initialSnapshot);
+  const [requestedHistoryWindow, setRequestedHistoryWindow] = useState<ResourceWindow>("24h");
+  const [loadedHistoryWindow, setLoadedHistoryWindow] = useState<ResourceWindow>("24h");
+  const fetchSelectedWindow = useCallback(
+    async (signal: AbortSignal) => {
+      const nextSnapshot = await fetcher(requestedHistoryWindow, signal);
+      if (!signal.aborted) setLoadedHistoryWindow(requestedHistoryWindow);
+      return nextSnapshot;
+    },
+    [fetcher, requestedHistoryWindow],
+  );
+  const { snapshot, refreshing, error } = useHomelabSnapshot(fetchSelectedWindow, initialSnapshot, {
+    refreshKey: requestedHistoryWindow,
+  });
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -153,6 +181,29 @@ export function ClusterView({
     },
     [onSearchChange, search.namespace, search.pod],
   );
+
+  if (!snapshot && error) {
+    return (
+      <div className="mx-auto w-full max-w-7xl p-4 sm:p-6">
+        <section className="rounded-lg border border-health-unknown/30 bg-card p-6 text-center">
+          <AlertCircle className="mx-auto size-5 text-health-unknown" aria-hidden="true" />
+          <h2 className="mt-3 text-base font-semibold text-foreground">
+            Cluster data is unavailable
+          </h2>
+          <p role="alert" className="mt-2 text-sm text-muted-foreground">
+            Cluster data is unavailable. No last-good snapshot is available yet.
+          </p>
+          <p
+            role="status"
+            aria-label="Cluster retry status"
+            className="mt-2 text-xs font-medium text-health-unknown"
+          >
+            Retrying automatically every 10 seconds.
+          </p>
+        </section>
+      </div>
+    );
+  }
 
   if (!snapshot) return <ClusterViewLoading />;
 
@@ -251,7 +302,14 @@ export function ClusterView({
 
       {snapshot.data ? (
         <>
-          <ClusterSummary data={snapshot.data} />
+          <ClusterSummary
+            data={snapshot.data}
+            requestedHistoryWindow={requestedHistoryWindow}
+            loadedHistoryWindow={loadedHistoryWindow}
+            historyRefreshing={refreshing}
+            historyError={Boolean(error)}
+            onHistoryWindowChange={setRequestedHistoryWindow}
+          />
           <PodTable
             pods={snapshot.data.pods}
             selectedPod={
@@ -263,10 +321,12 @@ export function ClusterView({
           />
           {selectedPod && search.namespace && search.pod ? (
             <PodDetail
+              key={`${search.namespace}/${search.pod}`}
               selection={{ namespace: search.namespace, pod: search.pod }}
               selectedContainer={search.container}
               onContainerChange={changeContainer}
               fetcher={detailFetcher}
+              refreshKey={snapshot.observedAt}
             />
           ) : (
             <section

@@ -6,6 +6,12 @@ const REFRESH_INTERVAL_MS = 10_000;
 const STALE_AFTER_MS = 30_000;
 const REFRESH_ERROR = "Could not refresh homelab data";
 
+export interface HomelabSnapshotOptions {
+  refreshKey?: string;
+}
+
+export type HomelabSnapshotFetcher<T> = (signal: AbortSignal) => Promise<T>;
+
 export interface HomelabSnapshotState<T> {
   snapshot: T;
   refreshing: boolean;
@@ -13,18 +19,22 @@ export interface HomelabSnapshotState<T> {
 }
 
 export function useHomelabSnapshot<T extends Snapshot<unknown>>(
-  fetcher: () => Promise<T>,
+  fetcher: HomelabSnapshotFetcher<T>,
   initialData: T,
+  options?: HomelabSnapshotOptions,
 ): HomelabSnapshotState<T>;
 export function useHomelabSnapshot<T extends Snapshot<unknown>>(
-  fetcher: () => Promise<T>,
+  fetcher: HomelabSnapshotFetcher<T>,
   initialData: T | null,
+  options?: HomelabSnapshotOptions,
 ): HomelabSnapshotState<T | null>;
 export function useHomelabSnapshot<T extends Snapshot<unknown>>(
-  fetcher: () => Promise<T>,
+  fetcher: HomelabSnapshotFetcher<T>,
   initialData: T | null,
+  options: HomelabSnapshotOptions = {},
 ): HomelabSnapshotState<T | null> {
   const fetcherRef = useRef(fetcher);
+  const mounted = useRef(false);
   const [snapshot, setSnapshot] = useState<T | null>(initialData);
   const [refreshing, setRefreshing] = useState(initialData === null);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +46,7 @@ export function useHomelabSnapshot<T extends Snapshot<unknown>>(
   useEffect(() => {
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const controller = new AbortController();
 
     const schedule = () => {
       timeoutId = setTimeout(() => void refresh(), REFRESH_INTERVAL_MS);
@@ -45,7 +56,7 @@ export function useHomelabSnapshot<T extends Snapshot<unknown>>(
       if (cancelled) return;
       setRefreshing(true);
       try {
-        const nextSnapshot = await fetcherRef.current();
+        const nextSnapshot = await fetcherRef.current(controller.signal);
         if (!cancelled) {
           setSnapshot(nextSnapshot);
           setError(null);
@@ -60,13 +71,16 @@ export function useHomelabSnapshot<T extends Snapshot<unknown>>(
       }
     };
 
-    if (initialData) schedule();
+    const firstRun = !mounted.current;
+    mounted.current = true;
+    if (firstRun && initialData) schedule();
     else void refresh();
     return () => {
       cancelled = true;
+      controller.abort();
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, []);
+  }, [options.refreshKey]);
 
   useEffect(() => {
     if (!snapshot) return;

@@ -67,6 +67,30 @@ describe("production gateway dependencies", () => {
     ]);
   });
 
+  it("wires a selected history window through the production Prometheus provider", async () => {
+    const dependencies = createProductionGatewayDependencies({
+      NODE_ENV: "production",
+      PROMETHEUS_URL: "http://prometheus.monitoring.svc.cluster.local:9090",
+    });
+    vi.spyOn(dependencies.kubernetesProvider, "collect").mockResolvedValue(
+      structuredClone(emptyCluster),
+    );
+    const prometheusProvider = dependencies.providers.cluster.find(
+      ({ source }) => source === "prometheus",
+    )! as (typeof dependencies.providers.cluster)[number] & {
+      collectForWindow: ReturnType<typeof vi.fn>;
+    };
+    const collectForWindow = vi.fn(async () => ({ current: [], history: [] }));
+    vi.spyOn(prometheusProvider, "collect").mockResolvedValue({ current: [], history: [] });
+    prometheusProvider.collectForWindow = collectForWindow;
+
+    const response = await createGateway(dependencies).request("/cluster?window=7d");
+
+    expect(response.status).toBe(200);
+    expect(collectForWindow).toHaveBeenCalledWith("7d", expect.any(AbortSignal));
+    expect(response.url).not.toContain("prometheus.monitoring.svc.cluster.local");
+  });
+
   it("starts with Kubernetes only when PROMETHEUS_URL is absent", async () => {
     const dependencies = createProductionGatewayDependencies({ NODE_ENV: "production" });
     vi.spyOn(dependencies.kubernetesProvider, "collect").mockResolvedValue(

@@ -3,9 +3,10 @@ import type {
   MetricPoint,
   ResourceHistory as ResourceSeries,
   ResourceMetrics,
+  ResourceWindow,
 } from "../../../shared/homelab/contracts";
 import { getGatewayConfig } from "../config";
-import type { Provider } from "./provider";
+import type { WindowedProvider } from "./provider";
 
 const PROMETHEUS_TIMEOUT_MS = 5_000;
 const RANGE_CACHE_TTL_MS = 10_000;
@@ -14,8 +15,6 @@ const CPU_QUERY = '100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))
 const MEMORY_QUERY = "100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))";
 const DISK_QUERY =
   '100 * (1 - (node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"}))';
-
-export type ResourceWindow = "1h" | "6h" | "24h" | "7d";
 
 export interface PrometheusSample {
   metric: Record<string, string>;
@@ -140,7 +139,7 @@ function waitForCaller<T>(operation: Promise<T>, signal?: AbortSignal): Promise<
   });
 }
 
-export class PrometheusProvider implements Provider<ResourceMetrics> {
+export class PrometheusProvider implements WindowedProvider<ResourceMetrics> {
   readonly source = "prometheus" as const;
 
   private readonly baseUrl: URL;
@@ -296,16 +295,19 @@ export class PrometheusProvider implements Provider<ResourceMetrics> {
     };
   }
 
-  getResourceHistory(window: ResourceWindow = "24h"): Promise<ResourceHistory> {
-    return this.resourceHistory(window);
+  getResourceHistory(
+    window: ResourceWindow = "24h",
+    signal?: AbortSignal,
+  ): Promise<ResourceHistory> {
+    return this.resourceHistory(window, signal);
   }
 
-  async collect(signal: AbortSignal): Promise<ResourceMetrics> {
+  async collectForWindow(window: ResourceWindow, signal: AbortSignal): Promise<ResourceMetrics> {
     const [cpu, memory, disk, history] = await Promise.all([
       this.queryInstantWithSignal(CPU_QUERY, signal),
       this.queryInstantWithSignal(MEMORY_QUERY, signal),
       this.queryInstantWithSignal(DISK_QUERY, signal),
-      this.resourceHistory("24h", signal),
+      this.resourceHistory(window, signal),
     ]);
     const current = [
       ["cpu", cpu[0]],
@@ -319,5 +321,9 @@ export class PrometheusProvider implements Provider<ResourceMetrics> {
       ),
       history: history.series,
     };
+  }
+
+  collect(signal: AbortSignal): Promise<ResourceMetrics> {
+    return this.collectForWindow("24h", signal);
   }
 }

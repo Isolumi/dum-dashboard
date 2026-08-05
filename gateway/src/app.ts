@@ -1,8 +1,10 @@
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
+import type { ResourceWindow } from "../../shared/homelab/contracts";
+import { normalizePodLogCursor, podLogCursorFromLine } from "../../shared/homelab/log-cursor";
 import { getGatewayConfig } from "./config";
 import type { KubernetesReader, PodLogStream } from "./providers/kubernetes";
-import type { Provider } from "./providers/provider";
+import { isWindowedProvider, type Provider } from "./providers/provider";
 import {
   collectClusterSnapshot,
   collectDeploymentSnapshot,
@@ -14,6 +16,7 @@ import {
 type SnapshotRoute = "cluster" | "deployments" | "services";
 
 const DNS_LABEL = /^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/;
+const RESOURCE_WINDOWS = new Set<ResourceWindow>(["1h", "6h", "24h", "7d"]);
 
 function isDnsLabel(value: string): boolean {
   return value.length > 0 && value.length <= 63 && DNS_LABEL.test(value);
@@ -21,6 +24,24 @@ function isDnsLabel(value: string): boolean {
 
 function isDnsSubdomain(value: string): boolean {
   return value.length > 0 && value.length <= 253 && value.split(".").every(isDnsLabel);
+}
+
+function isResourceWindow(value: string): value is ResourceWindow {
+  return RESOURCE_WINDOWS.has(value as ResourceWindow);
+}
+
+function clusterProvidersForWindow(
+  providers: readonly Provider<unknown>[],
+  window: ResourceWindow,
+): readonly Provider<unknown>[] {
+  return providers.map((provider) =>
+    isWindowedProvider(provider)
+      ? {
+          source: provider.source,
+          collect: (signal: AbortSignal) => provider.collectForWindow(window, signal),
+        }
+      : provider,
+  );
 }
 
 export interface GatewayDependencies {
@@ -57,9 +78,20 @@ export function createGateway(dependencies: GatewayDependencies = {}): Hono {
       ),
     ),
   );
-  app.get("/cluster", async (context) =>
-    context.json(await collectClusterSnapshot(clusterProviders, timeoutMs, now)),
-  );
+  app.get("/cluster", async (context) => {
+    const requestedWindow = context.req.query("window");
+    if (requestedWindow !== undefined && !isResourceWindow(requestedWindow)) {
+      return context.json({ error: "Invalid history window" }, 400);
+    }
+    const window = requestedWindow ?? "24h";
+    return context.json(
+      await collectClusterSnapshot(
+        clusterProvidersForWindow(clusterProviders, window),
+        timeoutMs,
+        now,
+      ),
+    );
+  });
   app.get("/deployments", async (context) =>
     context.json(await collectDeploymentSnapshot(deploymentProviders, timeoutMs, now)),
   );
@@ -92,8 +124,14 @@ export function createGateway(dependencies: GatewayDependencies = {}): Hono {
     const namespace = context.req.param("namespace");
     const pod = context.req.param("pod");
     const container = context.req.query("container");
+    const requestedCursor = context.req.query("since");
+    const cursor =
+      requestedCursor === undefined ? undefined : normalizePodLogCursor(requestedCursor);
     if (!isDnsLabel(namespace) || !isDnsSubdomain(pod) || !container || !isDnsLabel(container)) {
       return context.json({ error: "Invalid Kubernetes resource name" }, 400);
+    }
+    if (requestedCursor !== undefined && !cursor) {
+      return context.json({ error: "Invalid pod log cursor" }, 400);
     }
 
     return streamSSE(context, async (stream) => {
@@ -103,13 +141,23 @@ export function createGateway(dependencies: GatewayDependencies = {}): Hono {
       context.req.raw.signal.addEventListener("abort", abort, { once: true });
 
       try {
-        const logs = provider.streamPodLogs(namespace, pod, container, controller.signal);
+        const logs = provider.streamPodLogs(
+          namespace,
+          pod,
+          container,
+          controller.signal,
+          cursor ?? undefined,
+        );
         const ready = (logs as Partial<PodLogStream>).ready;
         if (ready) await ready;
         await stream.writeSSE({ event: "ready", data: JSON.stringify({ status: "ready" }) });
 
         for await (const line of logs) {
-          await stream.writeSSE({ event: "line", data: JSON.stringify({ line }) });
+          const lineCursor = podLogCursorFromLine(line);
+          await stream.writeSSE({
+            event: "line",
+            data: JSON.stringify({ line, ...(lineCursor ? { cursor: lineCursor } : {}) }),
+          });
         }
       } catch {
         if (!controller.signal.aborted) {

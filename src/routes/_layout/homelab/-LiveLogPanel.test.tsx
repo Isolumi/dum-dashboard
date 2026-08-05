@@ -6,8 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LiveLogPanel } from "./-LiveLogPanel";
 
-type Listener = (event: MessageEvent<string>) => void;
-
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
 
@@ -15,7 +13,7 @@ class FakeEventSource {
   readonly close = vi.fn();
   onopen: ((event: Event) => void) | null = null;
   onerror: ((event: Event) => void) | null = null;
-  private listeners = new Map<string, Set<Listener>>();
+  private listeners = new Map<string, Set<EventListenerOrEventListenerObject>>();
 
   constructor(url: string | URL) {
     this.url = String(url);
@@ -23,24 +21,53 @@ class FakeEventSource {
   }
 
   addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
-    const listeners = this.listeners.get(type) ?? new Set<Listener>();
-    listeners.add(listener as Listener);
+    const listeners = this.listeners.get(type) ?? new Set<EventListenerOrEventListenerObject>();
+    listeners.add(listener);
     this.listeners.set(type, listeners);
   }
 
   removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
-    this.listeners.get(type)?.delete(listener as Listener);
+    this.listeners.get(type)?.delete(listener);
+  }
+
+  listenerCount(type: string) {
+    return this.listeners.get(type)?.size ?? 0;
+  }
+
+  private dispatch(type: string, event: Event) {
+    this.listeners.get(type)?.forEach((listener) => {
+      if (typeof listener === "function") listener(event);
+      else listener.handleEvent(event);
+    });
   }
 
   open() {
     this.onopen?.(new Event("open"));
   }
 
-  line(line: string) {
+  ready() {
+    this.dispatch(
+      "ready",
+      new MessageEvent<string>("ready", { data: JSON.stringify({ status: "ready" }) }),
+    );
+  }
+
+  line(line: string, cursor?: string) {
     const event = new MessageEvent<string>("line", {
-      data: JSON.stringify({ line }),
+      data: JSON.stringify({ line, ...(cursor ? { cursor } : {}) }),
     });
-    this.listeners.get("line")?.forEach((listener) => listener(event));
+    this.dispatch("line", event);
+  }
+
+  queuedLine(line: string) {
+    const queuedListeners = [...(this.listeners.get("line") ?? [])];
+    const event = new MessageEvent<string>("line", { data: JSON.stringify({ line }) });
+    return () => {
+      queuedListeners.forEach((listener) => {
+        if (typeof listener === "function") listener(event);
+        else listener.handleEvent(event);
+      });
+    };
   }
 
   fail() {
@@ -87,6 +114,13 @@ describe("LiveLogPanel", () => {
 
     act(() => {
       FakeEventSource.instances[0]!.open();
+    });
+    expect(screen.getByRole("status", { name: "Log stream status" }).textContent).toContain(
+      "Connecting",
+    );
+
+    act(() => {
+      FakeEventSource.instances[0]!.ready();
       for (let index = 0; index < 199; index += 1) {
         FakeEventSource.instances[0]!.line(`line-${index}`);
       }
@@ -108,6 +142,7 @@ describe("LiveLogPanel", () => {
 
     act(() => {
       FakeEventSource.instances[0]!.open();
+      FakeEventSource.instances[0]!.ready();
       for (let index = 0; index < 2_005; index += 1) {
         FakeEventSource.instances[0]!.line(`line-${index}`);
       }
@@ -132,6 +167,7 @@ describe("LiveLogPanel", () => {
 
     act(() => {
       firstSource.open();
+      firstSource.ready();
       firstSource.line("before pause");
     });
     expect(logViewport.scrollTop).toBe(500);
@@ -148,6 +184,7 @@ describe("LiveLogPanel", () => {
     const resumedSource = FakeEventSource.instances[1]!;
     act(() => {
       resumedSource.open();
+      resumedSource.ready();
     });
 
     fireEvent.click(screen.getByRole("checkbox", { name: "Auto-scroll logs" }));
@@ -165,6 +202,10 @@ describe("LiveLogPanel", () => {
 
     const delays = [1_000, 2_000, 4_000, 8_000, 15_000, 15_000];
     for (const [index, delay] of delays.entries()) {
+      act(() => FakeEventSource.instances[index]!.open());
+      expect(screen.getByRole("status", { name: "Log stream status" }).textContent).not.toContain(
+        "Live",
+      );
       act(() => FakeEventSource.instances[index]!.fail());
       expect(screen.getByRole("status", { name: "Log stream status" }).textContent).toContain(
         "Reconnecting",
@@ -176,22 +217,50 @@ describe("LiveLogPanel", () => {
     }
   });
 
+  it("resets reconnect backoff only after the Kubernetes ready event", () => {
+    vi.useFakeTimers();
+    renderPanel();
+
+    act(() => {
+      FakeEventSource.instances[0]!.open();
+      FakeEventSource.instances[0]!.fail();
+      vi.advanceTimersByTime(1_000);
+      FakeEventSource.instances[1]!.open();
+      FakeEventSource.instances[1]!.fail();
+      vi.advanceTimersByTime(2_000);
+      FakeEventSource.instances[2]!.open();
+      FakeEventSource.instances[2]!.ready();
+      FakeEventSource.instances[2]!.fail();
+    });
+
+    act(() => vi.advanceTimersByTime(999));
+    expect(FakeEventSource.instances).toHaveLength(3);
+    act(() => vi.advanceTimersByTime(1));
+    expect(FakeEventSource.instances).toHaveLength(4);
+  });
+
   it("closes stale sources on selection changes and never reconnects after unmount", () => {
     vi.useFakeTimers();
     const { rerender, unmount } = renderPanel();
     const firstSource = FakeEventSource.instances[0]!;
     act(() => {
       firstSource.open();
+      firstSource.ready();
       firstSource.line("old container output");
     });
     expect(screen.getByText("old container output")).toBeTruthy();
+    const deliverQueuedOldLine = firstSource.queuedLine("queued stale output");
 
     rerender(
       <LiveLogPanel namespace="yootoob-mp3" pod="yootoob-mp3-api-7c9d8" container="sidecar" />,
     );
     expect(firstSource.close).toHaveBeenCalledTimes(1);
     expect(FakeEventSource.instances[1]?.url).toContain("container=sidecar");
+    expect(firstSource.listenerCount("line")).toBe(0);
+    expect(firstSource.listenerCount("ready")).toBe(0);
+    act(deliverQueuedOldLine);
     expect(screen.queryByText("old container output")).toBeNull();
+    expect(screen.queryByText("queued stale output")).toBeNull();
     expect(screen.getByText("Waiting for log output.")).toBeTruthy();
 
     const secondSource = FakeEventSource.instances[1]!;
@@ -213,5 +282,65 @@ describe("LiveLogPanel", () => {
 
     expect(FakeEventSource.instances).toHaveLength(0);
     expect(screen.getByRole("alert").textContent).toBe("Invalid pod log selection.");
+  });
+
+  it("uses a validated timestamp cursor and suppresses inclusive replay on resume and reconnect", () => {
+    vi.useFakeTimers();
+    renderPanel();
+    const firstSource = FakeEventSource.instances[0]!;
+    const firstCursor = "2026-08-04T12:00:00.000000001Z";
+    const secondCursor = "2026-08-04T12:00:01.000000002Z";
+    const thirdCursor = "2026-08-04T12:00:02.000000003Z";
+    const fourthCursor = "2026-08-04T12:00:03.000000004Z";
+    const firstLine = `${firstCursor} first`;
+    const secondLine = `${secondCursor} second`;
+    const thirdLine = `${thirdCursor} third`;
+    const fourthLine = `${fourthCursor} fourth`;
+
+    act(() => {
+      firstSource.open();
+      firstSource.ready();
+      firstSource.line(firstLine, firstCursor);
+      firstSource.line(secondLine, secondCursor);
+      firstSource.line("malformed cursor line", "../../secret");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Pause logs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resume logs" }));
+    const resumedSource = FakeEventSource.instances[1]!;
+    expect(new URL(resumedSource.url, "https://dashboard.test").searchParams.get("since")).toBe(
+      secondCursor,
+    );
+
+    act(() => {
+      resumedSource.open();
+      resumedSource.ready();
+      resumedSource.line(secondLine, secondCursor);
+      resumedSource.line(thirdLine, thirdCursor);
+      resumedSource.fail();
+      vi.advanceTimersByTime(1_000);
+    });
+
+    const reconnectedSource = FakeEventSource.instances[2]!;
+    expect(new URL(reconnectedSource.url, "https://dashboard.test").searchParams.get("since")).toBe(
+      thirdCursor,
+    );
+    act(() => {
+      reconnectedSource.open();
+      reconnectedSource.ready();
+      reconnectedSource.line(thirdLine, thirdCursor);
+      reconnectedSource.line(fourthLine, fourthCursor);
+    });
+
+    const rendered = within(screen.getByRole("log", { name: "Live pod logs" }))
+      .getAllByRole("listitem")
+      .map((line) => line.textContent);
+    expect(rendered).toEqual([
+      firstLine,
+      secondLine,
+      "malformed cursor line",
+      thirdLine,
+      fourthLine,
+    ]);
   });
 });

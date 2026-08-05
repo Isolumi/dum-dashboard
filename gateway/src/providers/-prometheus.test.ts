@@ -510,6 +510,44 @@ describe("PrometheusProvider", () => {
       ],
     });
   });
+
+  it("collects a bounded selected history window for a cluster request", async () => {
+    const currentValues = new Map([
+      [CPU_QUERY, 40],
+      [MEMORY_QUERY, 50],
+      [DISK_QUERY, 60],
+    ]);
+    const fetchApi = vi.fn(async (url: string) => {
+      const request = new URL(url);
+      const query = request.searchParams.get("query")!;
+      return jsonResponse(
+        request.pathname.endsWith("query_range")
+          ? matrix([[NOW, currentValues.get(query)!]])
+          : vector(currentValues.get(query)),
+      );
+    });
+    const provider = new PrometheusProvider({
+      baseUrl: "http://prometheus.test",
+      fetchApi,
+      now: () => NOW,
+    });
+    const signal = new AbortController().signal;
+
+    const resources = await provider.collectForWindow("7d", signal);
+    const rangeUrls = fetchApi.mock.calls
+      .map(([url]) => new URL(url))
+      .filter(({ pathname }) => pathname.endsWith("query_range"));
+
+    expect(resources.history.map(({ resource }) => resource)).toEqual(["cpu", "memory"]);
+    expect(rangeUrls).toHaveLength(2);
+    expect(rangeUrls.every((url) => url.searchParams.get("step") === "1800s")).toBe(true);
+    expect(
+      rangeUrls.every(
+        (url) =>
+          url.searchParams.get("start") === new Date(NOW - 7 * 24 * 60 * 60 * 1_000).toISOString(),
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("Prometheus cluster snapshot integration", () => {

@@ -232,6 +232,21 @@ function podDetail(): PodDetail {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flushPromises() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 beforeEach(() => {
   vi.useRealTimers();
 });
@@ -367,10 +382,13 @@ describe("Cluster route composition", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Pod details" })).toBeTruthy();
-    expect(detailFetcher).toHaveBeenCalledWith({
-      namespace: "yootoob-mp3",
-      pod: "yootoob-mp3-api-7c9d8",
-    });
+    expect(detailFetcher).toHaveBeenCalledWith(
+      {
+        namespace: "yootoob-mp3",
+        pod: "yootoob-mp3-api-7c9d8",
+      },
+      expect.any(AbortSignal),
+    );
     await waitFor(() => {
       expect(onSearchChange).toHaveBeenCalledWith({
         namespace: "yootoob-mp3",
@@ -461,5 +479,188 @@ describe("Cluster route composition", () => {
     );
     expect((await screen.findByRole("alert")).textContent).toBe("Pod details unavailable.");
     expect(screen.queryByText("private gateway details")).toBeNull();
+  });
+
+  it("shows an unavailable retry state after the initial load fails and recovers automatically", async () => {
+    vi.useFakeTimers();
+    const recovered = clusterSnapshot({ observedAt: "2026-08-04T12:00:10.000Z" });
+    const fetcher = vi
+      .fn<() => Promise<ClusterSnapshot>>()
+      .mockRejectedValueOnce(new Error("private gateway failure"))
+      .mockResolvedValueOnce(recovered);
+
+    render(
+      <ClusterView
+        initialSnapshot={null}
+        fetcher={fetcher}
+        detailFetcher={vi.fn()}
+        search={{}}
+        onSearchChange={vi.fn()}
+      />,
+    );
+
+    await act(flushPromises);
+    expect(screen.getByRole("alert").textContent).toContain("Cluster data is unavailable");
+    expect(screen.getByRole("status", { name: "Cluster retry status" }).textContent).toContain(
+      "Retrying automatically",
+    );
+
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("heading", { name: "Cluster health" })).toBeTruthy();
+    expect(screen.queryByRole("status", { name: "Cluster retry status" })).toBeNull();
+  });
+
+  it("loads selected history windows server-side, cancels superseded reads, and keeps last-good history", async () => {
+    vi.useFakeTimers();
+    const sevenDay = deferred<ClusterSnapshot>();
+    const oneHour = deferred<ClusterSnapshot>();
+    const sixHour = deferred<ClusterSnapshot>();
+    const signals: AbortSignal[] = [];
+    const fetcher = vi.fn((window: string, signal?: AbortSignal) => {
+      if (signal) signals.push(signal);
+      if (window === "7d") return sevenDay.promise;
+      if (window === "1h") return oneHour.promise;
+      if (window === "6h") return sixHour.promise;
+      return Promise.resolve(clusterSnapshot());
+    });
+
+    render(
+      <ClusterView
+        initialSnapshot={clusterSnapshot()}
+        fetcher={fetcher}
+        detailFetcher={vi.fn()}
+        search={{}}
+        onSearchChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show 7 days" }));
+    expect(fetcher).toHaveBeenCalledWith("7d", expect.any(AbortSignal));
+    expect(screen.getByRole("status", { name: "Resource history request" }).textContent).toContain(
+      "Loading 7 days",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show 1 hour" }));
+    expect(signals[0]?.aborted).toBe(true);
+    expect(fetcher).toHaveBeenCalledWith("1h", expect.any(AbortSignal));
+
+    await act(async () =>
+      sevenDay.resolve(clusterSnapshot({ observedAt: "2026-08-04T12:00:07.000Z" })),
+    );
+    await act(async () => oneHour.reject(new Error("private Prometheus URL")));
+
+    expect(screen.getByRole("img", { name: "CPU usage over 24 hours" })).toBeTruthy();
+    expect(screen.getByRole("alert", { name: "Resource history error" }).textContent).toContain(
+      "1 hour history unavailable. Showing the last successful 24 hour history.",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show 6 hours" }));
+    const recovered = clusterSnapshot({ observedAt: "2026-08-04T12:00:20.000Z" });
+    await act(async () => sixHour.resolve(recovered));
+
+    expect(fetcher).toHaveBeenCalledWith("6h", expect.any(AbortSignal));
+    expect(screen.getByRole("img", { name: "CPU usage over 6 hours" })).toBeTruthy();
+    expect(screen.queryByRole("status", { name: "Resource history request" })).toBeNull();
+  });
+
+  it("refreshes selected pod details with cluster snapshots, preserves last-good data, and recovers", async () => {
+    vi.useFakeTimers();
+    const initialDetail = podDetail();
+    const recoveredDetail = podDetail();
+    recoveredDetail.containers[0] = {
+      ...recoveredDetail.containers[0]!,
+      state: "running",
+      reason: null,
+      ready: true,
+      restartCount: 4,
+    };
+    const detailFetcher = vi
+      .fn()
+      .mockResolvedValueOnce(initialDetail)
+      .mockRejectedValueOnce(new Error("private pod detail failure"))
+      .mockResolvedValueOnce(recoveredDetail);
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(clusterSnapshot({ observedAt: "2026-08-04T12:00:10.000Z" }))
+      .mockResolvedValueOnce(clusterSnapshot({ observedAt: "2026-08-04T12:00:20.000Z" }));
+
+    render(
+      <ClusterView
+        initialSnapshot={clusterSnapshot()}
+        fetcher={fetcher}
+        detailFetcher={detailFetcher}
+        search={{ namespace: "yootoob-mp3", pod: "yootoob-mp3-api-7c9d8", container: "api" }}
+        onSearchChange={vi.fn()}
+      />,
+    );
+
+    await act(flushPromises);
+    expect(screen.getByText("CrashLoopBackOff")).toBeTruthy();
+
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+
+    expect(detailFetcher).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("CrashLoopBackOff")).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Could not refresh pod details. Showing the last successful details.",
+    );
+    expect(screen.getByText("Stale pod details")).toBeTruthy();
+
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+
+    expect(detailFetcher).toHaveBeenCalledTimes(3);
+    expect(screen.queryByText("CrashLoopBackOff")).toBeNull();
+    expect(screen.getByText(/4 restarts/)).toBeTruthy();
+    expect(screen.queryByText("Stale pod details")).toBeNull();
+  });
+
+  it("aborts superseded pod-detail reads and ignores a late result after the pod disappears", async () => {
+    vi.useFakeTimers();
+    const pendingRefresh = deferred<PodDetail>();
+    const signals: AbortSignal[] = [];
+    let detailCalls = 0;
+    const detailFetcher = vi.fn((_: unknown, signal?: AbortSignal) => {
+      detailCalls += 1;
+      if (signal) signals.push(signal);
+      return detailCalls === 1 ? Promise.resolve(podDetail()) : pendingRefresh.promise;
+    });
+    const refreshed = clusterSnapshot({ observedAt: "2026-08-04T12:00:10.000Z" });
+    const disappeared = clusterSnapshot({ observedAt: "2026-08-04T12:00:20.000Z" });
+    disappeared.data!.pods = disappeared.data!.pods.filter(
+      ({ name }) => name !== "yootoob-mp3-api-7c9d8",
+    );
+    const fetcher = vi.fn().mockResolvedValueOnce(refreshed).mockResolvedValueOnce(disappeared);
+    const onSearchChange = vi.fn();
+
+    render(
+      <ClusterView
+        initialSnapshot={clusterSnapshot()}
+        fetcher={fetcher}
+        detailFetcher={detailFetcher}
+        search={{ namespace: "yootoob-mp3", pod: "yootoob-mp3-api-7c9d8", container: "api" }}
+        onSearchChange={onSearchChange}
+      />,
+    );
+    await act(flushPromises);
+    expect(screen.getByText("CrashLoopBackOff")).toBeTruthy();
+
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    expect(detailFetcher).toHaveBeenCalledTimes(2);
+    expect(signals[0]?.aborted).toBe(true);
+    expect(signals[1]?.aborted).toBe(false);
+
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    expect(signals[1]?.aborted).toBe(true);
+    expect(onSearchChange).toHaveBeenCalledWith({ namespace: "yootoob-mp3" });
+
+    const lateDetail = podDetail();
+    lateDetail.containers[0] = { ...lateDetail.containers[0]!, reason: "LATE_RESULT" };
+    await act(async () => pendingRefresh.resolve(lateDetail));
+
+    expect(screen.queryByText("LATE_RESULT")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Pod details" })).toBeTruthy();
+    expect(screen.getByText(/Select a pod to inspect/)).toBeTruthy();
   });
 });

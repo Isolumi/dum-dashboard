@@ -130,4 +130,45 @@ describe("useHomelabSnapshot", () => {
 
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  it("cancels an in-flight keyed refresh, ignores its late result, and preserves last-good data", async () => {
+    const sevenDay = deferred<ServiceSnapshot>();
+    const oneHour = deferred<ServiceSnapshot>();
+    const recovered = serviceSnapshot("2026-08-04T12:00:20.000Z");
+    const signals: AbortSignal[] = [];
+    const fetcher = vi.fn((signal: AbortSignal) => {
+      signals.push(signal);
+      return signals.length === 1
+        ? sevenDay.promise
+        : signals.length === 2
+          ? oneHour.promise
+          : Promise.resolve(recovered);
+    });
+    const initial = serviceSnapshot(STARTED_AT, "warning");
+    const { result, rerender } = renderHook(
+      ({ refreshKey }) => useHomelabSnapshot(fetcher, initial, { refreshKey }),
+      { initialProps: { refreshKey: "24h" } },
+    );
+
+    rerender({ refreshKey: "7d" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(signals[0]?.aborted).toBe(false);
+
+    rerender({ refreshKey: "1h" });
+    expect(signals[0]?.aborted).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(signals[1]?.aborted).toBe(false);
+
+    await act(async () => sevenDay.resolve(serviceSnapshot("2026-08-04T12:00:10.000Z")));
+    await act(async () => oneHour.reject(new Error("private history failure")));
+    expect(result.current.snapshot).toEqual(initial);
+    expect(result.current.error).toBe("Could not refresh homelab data");
+
+    rerender({ refreshKey: "6h" });
+    await act(async () => Promise.resolve());
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(signals[1]?.aborted).toBe(true);
+    expect(result.current.snapshot).toEqual(recovered);
+    expect(result.current.error).toBeNull();
+  });
 });

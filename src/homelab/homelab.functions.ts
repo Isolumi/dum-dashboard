@@ -8,6 +8,7 @@ import type {
   JsonValue,
   OverviewSnapshot,
   PodDetail,
+  ResourceWindow,
   ServiceSnapshot,
 } from "@shared/homelab/contracts";
 import { requireServerEnv } from "#/lib/runtime-env";
@@ -16,7 +17,25 @@ import { noStore } from "#/lib/server-auth";
 const SNAPSHOT_TIMEOUT_MS = 5_000;
 const DNS_LABEL = /^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/;
 
+function isKubernetesLabel(value: string): boolean {
+  return value.length > 0 && value.length <= 63 && DNS_LABEL.test(value);
+}
+
+const KubernetesLabelSchema = z
+  .string()
+  .min(1)
+  .max(63)
+  .regex(DNS_LABEL, "Invalid Kubernetes label");
+const KubernetesSubdomainSchema = z
+  .string()
+  .min(1)
+  .max(253)
+  .refine((value) => value.split(".").every(isKubernetesLabel), {
+    message: "Invalid Kubernetes subdomain",
+  });
+
 const HealthStatusSchema = z.enum(["healthy", "warning", "critical", "unknown"]);
+const ResourceWindowSchema = z.enum(["1h", "6h", "24h", "7d"]);
 const SourceNameSchema = z.enum(["kubernetes", "argocd", "prometheus", "github", "service-probe"]);
 const TimestampSchema = z.string().datetime({ offset: true });
 const EvidenceSchema = z.record(z.union([z.string(), z.number(), z.boolean(), z.null()]));
@@ -138,8 +157,8 @@ const OverviewDataSchema = z
 
 const PodSummarySchema = z
   .object({
-    name: z.string(),
-    namespace: z.string(),
+    name: KubernetesSubdomainSchema,
+    namespace: KubernetesLabelSchema,
     status: HealthStatusSchema,
     ready: z.boolean(),
     restartCount: z.number().int().nonnegative(),
@@ -150,7 +169,7 @@ const PodSummarySchema = z
     containerImages: z.array(
       z
         .object({
-          name: z.string(),
+          name: KubernetesLabelSchema,
           repository: z.string().nullable(),
           reference: z.string().nullable(),
           tag: z.string().nullable(),
@@ -177,7 +196,7 @@ const PodDetailSchema: z.ZodType<PodDetail> = PodSummarySchema.extend({
   containers: z.array(
     z
       .object({
-        name: z.string(),
+        name: KubernetesLabelSchema,
         image: z.string().nullable(),
         imageId: z.string().nullable(),
         ready: z.boolean(),
@@ -201,24 +220,13 @@ const PodDetailSchema: z.ZodType<PodDetail> = PodSummarySchema.extend({
   rawStatus: z.record(JsonValueSchema),
 }).strict();
 
-const KubernetesLabelSchema = z
-  .string()
-  .min(1)
-  .max(63)
-  .regex(DNS_LABEL, "Invalid Kubernetes label");
-const KubernetesSubdomainSchema = z
-  .string()
-  .min(1)
-  .max(253)
-  .refine((value) => value.split(".").every((label) => DNS_LABEL.test(label)), {
-    message: "Invalid Kubernetes subdomain",
-  });
 const PodDetailInputSchema = z
   .object({
     namespace: KubernetesLabelSchema,
     pod: KubernetesSubdomainSchema,
   })
   .strict();
+const ClusterWindowInputSchema = z.object({ window: ResourceWindowSchema }).strict();
 
 const ClusterDataSchema = z
   .object({
@@ -369,6 +377,12 @@ function podDetailEndpointUrl(namespace: string, pod: string): URL {
   return gatewayEndpointUrl(`pods/${encodeURIComponent(namespace)}/${encodeURIComponent(pod)}`);
 }
 
+function clusterEndpointUrl(window: ResourceWindow): URL {
+  const url = gatewayEndpointUrl("cluster");
+  url.searchParams.set("window", window);
+  return url;
+}
+
 async function requestGateway<T>(url: URL, schema: z.ZodType<T>): Promise<T> {
   const controller = new AbortController();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -408,6 +422,10 @@ async function loadClusterSnapshot(): Promise<ClusterSnapshot> {
   return requestSnapshot("cluster", ClusterSnapshotSchema);
 }
 
+async function loadClusterSnapshotForWindow(window: ResourceWindow): Promise<ClusterSnapshot> {
+  return requestGateway(clusterEndpointUrl(window), ClusterSnapshotSchema);
+}
+
 async function loadDeploymentSnapshot(): Promise<DeploymentSnapshot> {
   return requestSnapshot("deployments", DeploymentSnapshotSchema);
 }
@@ -417,7 +435,12 @@ async function loadServiceSnapshot(): Promise<ServiceSnapshot> {
 }
 
 async function loadPodDetail(input: z.infer<typeof PodDetailInputSchema>): Promise<PodDetail> {
-  return requestGateway(podDetailEndpointUrl(input.namespace, input.pod), PodDetailSchema);
+  const detail = await requestGateway(
+    podDetailEndpointUrl(input.namespace, input.pod),
+    PodDetailSchema,
+  );
+  if (detail.namespace !== input.namespace || detail.name !== input.pod) throw unavailableError();
+  return detail;
 }
 
 export const getHomelabOverview = createServerFn({ method: "GET" }).handler(
@@ -427,6 +450,10 @@ export const getHomelabOverview = createServerFn({ method: "GET" }).handler(
 export const getClusterSnapshot = createServerFn({ method: "GET" }).handler(
   async (): Promise<ClusterSnapshot> => loadClusterSnapshot(),
 );
+
+export const getClusterSnapshotForWindow = createServerFn({ method: "GET" })
+  .inputValidator(zodValidator(ClusterWindowInputSchema))
+  .handler(async ({ data }): Promise<ClusterSnapshot> => loadClusterSnapshotForWindow(data.window));
 
 export const getDeploymentSnapshot = createServerFn({ method: "GET" }).handler(
   async (): Promise<DeploymentSnapshot> => loadDeploymentSnapshot(),

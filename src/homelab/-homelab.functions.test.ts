@@ -34,6 +34,7 @@ vi.mock("@tanstack/react-start", () => ({
 
 const {
   getClusterSnapshot,
+  getClusterSnapshotForWindow,
   getDeploymentSnapshot,
   getHomelabOverview,
   getPodDetail,
@@ -414,6 +415,27 @@ describe("homelab server functions", () => {
     }
   });
 
+  it.each(["1h", "6h", "24h", "7d"] as const)(
+    "requests only the validated %s cluster history window through the server boundary",
+    async (window) => {
+      await expect(getClusterSnapshotForWindow({ data: { window } })).resolves.toEqual(cluster);
+
+      expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toBe(
+        `http://gateway.internal:8080/cluster?window=${window}`,
+      );
+    },
+  );
+
+  it("rejects an unsupported cluster history window before gateway access", async () => {
+    await expect(
+      Promise.resolve().then(() =>
+        getClusterSnapshotForWindow({ data: { window: "30d" as "7d" } }),
+      ),
+    ).rejects.toThrow();
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("validates and proxies pod detail through the server-only gateway boundary", async () => {
     vi.mocked(fetch).mockResolvedValue(Response.json(detail));
 
@@ -437,6 +459,46 @@ describe("homelab server functions", () => {
       }),
     ).toThrow();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a pod input whose individual DNS label exceeds 63 characters", async () => {
+    await expect(
+      Promise.resolve().then(() =>
+        getPodDetail({
+          data: { namespace: "yootoob-mp3", pod: `${"a".repeat(64)}.valid` },
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a valid-looking pod detail response whose identity does not match the request", async () => {
+    vi.mocked(fetch).mockResolvedValue(Response.json({ ...detail, name: "another-valid-pod" }));
+
+    const error = await getPodDetail({
+      data: { namespace: "yootoob-mp3", pod: "yootoob-mp3-api-7c9d8" },
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ message: "Homelab data unavailable", stack: undefined });
+    expect(JSON.stringify(error)).not.toContain("another-valid-pod");
+  });
+
+  it.each([
+    ["pod name", { name: "Bad_Pod" }],
+    ["namespace", { namespace: "n".repeat(64) }],
+    ["container name", { containers: [{ ...detail.containers[0]!, name: "bad/container" }] }],
+    [
+      "container image name",
+      { containerImages: [{ ...detail.containerImages[0]!, name: "c".repeat(64) }] },
+    ],
+  ])("rejects an invalid returned %s with the fixed safe error", async (_label, override) => {
+    vi.mocked(fetch).mockResolvedValue(Response.json({ ...detail, ...override }));
+
+    const error = await getPodDetail({
+      data: { namespace: "yootoob-mp3", pod: "yootoob-mp3-api-7c9d8" },
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ message: "Homelab data unavailable", stack: undefined });
   });
 
   it("rejects malformed pod detail without exposing the gateway response", async () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ClusterData } from "../../shared/homelab/contracts";
 import { createGateway } from "./app";
 
@@ -651,6 +651,49 @@ describe("gateway routes", () => {
         issues: [],
         sources: [],
       });
+    },
+  );
+
+  it.each(["1h", "6h", "24h", "7d"] as const)(
+    "passes the validated %s history window only to window-aware cluster providers",
+    async (window) => {
+      const collect = vi.fn(async () => validClusterSource());
+      const collectForWindow = vi.fn(async () => validClusterSource().resources);
+      const provider = {
+        source: "prometheus" as const,
+        collect,
+        collectForWindow,
+      };
+
+      const response = await createGateway({ providers: { cluster: [provider] } }).request(
+        `/cluster?window=${window}`,
+      );
+
+      expect(response.status).toBe(200);
+      expect(collectForWindow).toHaveBeenCalledWith(window, expect.any(AbortSignal));
+      expect(collect).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["30d", "7D", "", "1h,7d"])(
+    "rejects unsupported cluster history window %s before provider access",
+    async (window) => {
+      const collect = vi.fn(async () => validClusterSource());
+      const collectForWindow = vi.fn(async () => validClusterSource().resources);
+      const provider = {
+        source: "prometheus" as const,
+        collect,
+        collectForWindow,
+      };
+
+      const response = await createGateway({ providers: { cluster: [provider] } }).request(
+        `/cluster?window=${encodeURIComponent(window)}`,
+      );
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({ error: "Invalid history window" });
+      expect(collect).not.toHaveBeenCalled();
+      expect(collectForWindow).not.toHaveBeenCalled();
     },
   );
 });

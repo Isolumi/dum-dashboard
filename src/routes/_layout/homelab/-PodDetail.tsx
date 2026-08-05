@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, CircleAlert, Container, FileJson, Image } from "lucide-react";
 
 import type { PodDetail as PodDetailContract } from "@shared/homelab/contracts";
@@ -6,7 +6,10 @@ import { StatusBadge } from "./-StatusBadge";
 import { LiveLogPanel } from "./-LiveLogPanel";
 import type { PodSelection } from "./-PodTable";
 
-export type PodDetailFetcher = (selection: PodSelection) => Promise<PodDetailContract>;
+export type PodDetailFetcher = (
+  selection: PodSelection,
+  signal: AbortSignal,
+) => Promise<PodDetailContract>;
 
 function podReason(detail: PodDetailContract): string {
   const container = detail.containers.find((item) => item.reason);
@@ -26,41 +29,46 @@ export function PodDetail({
   selectedContainer,
   onContainerChange,
   fetcher,
+  refreshKey,
 }: {
   selection: PodSelection;
   selectedContainer?: string;
   onContainerChange: (container: string | undefined) => void;
   fetcher: PodDetailFetcher;
+  refreshKey: string;
 }) {
   const [detail, setDetail] = useState<PodDetailContract | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
+  const requestSequence = useRef(0);
 
   useEffect(() => {
-    let active = true;
-    setDetail(null);
-    setLoading(true);
-    setError(false);
+    const requestId = ++requestSequence.current;
+    const controller = new AbortController();
+    setLoading((current) => (detail ? current : true));
+    setRefreshing(Boolean(detail));
 
-    void fetcher(selection)
+    void fetcher(selection, controller.signal)
       .then((nextDetail) => {
-        if (!active) return;
+        if (controller.signal.aborted || requestSequence.current !== requestId) return;
         setDetail(nextDetail);
         setError(false);
       })
       .catch(() => {
-        if (!active) return;
-        setDetail(null);
+        if (controller.signal.aborted || requestSequence.current !== requestId) return;
         setError(true);
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (controller.signal.aborted || requestSequence.current !== requestId) return;
+        setLoading(false);
+        setRefreshing(false);
       });
 
     return () => {
-      active = false;
+      controller.abort();
     };
-  }, [fetcher, selection.namespace, selection.pod]);
+  }, [fetcher, refreshKey, selection.namespace, selection.pod]);
 
   const containerNames = useMemo(
     () => detail?.containers.map((container) => container.name) ?? [],
@@ -96,7 +104,7 @@ export function PodDetail({
     );
   }
 
-  if (error || !detail) {
+  if (!detail) {
     return (
       <section
         aria-labelledby="pod-detail-title"
@@ -105,9 +113,15 @@ export function PodDetail({
         <h2 id="pod-detail-title" className="text-base font-semibold text-foreground">
           Pod details
         </h2>
-        <p role="alert" className="mt-4 text-sm text-health-unknown">
-          Pod details unavailable.
-        </p>
+        {error ? (
+          <p role="alert" className="mt-4 text-sm text-health-unknown">
+            Pod details unavailable.
+          </p>
+        ) : (
+          <p role="status" className="mt-4 text-sm text-muted-foreground">
+            Waiting for pod details.
+          </p>
+        )}
       </section>
     );
   }
@@ -131,8 +145,23 @@ export function PodDetail({
             </h2>
             <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{detail.name}</p>
           </div>
-          <StatusBadge status={detail.status} />
+          <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
+            <StatusBadge status={error ? "unknown" : detail.status} />
+            {error ? (
+              <span className="text-xs font-medium text-health-unknown">Stale pod details</span>
+            ) : refreshing ? (
+              <span role="status" className="text-xs text-muted-foreground">
+                Refreshing pod details
+              </span>
+            ) : null}
+          </div>
         </div>
+
+        {error ? (
+          <p role="alert" className="mt-3 text-sm text-health-unknown">
+            Could not refresh pod details. Showing the last successful details.
+          </p>
+        ) : null}
 
         <div className="mt-4 rounded-md border border-border/70 bg-background/40 p-3">
           <div className="flex items-start gap-2">

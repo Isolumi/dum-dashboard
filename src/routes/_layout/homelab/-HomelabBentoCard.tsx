@@ -98,7 +98,10 @@ function LoadingHomelabCard() {
 }
 
 function LiveHomelabCard({ initialSnapshot }: { initialSnapshot: OverviewSnapshot | null }) {
-  const { snapshot, refreshing, error } = useHomelabSnapshot(getHomelabOverview, initialSnapshot);
+  const { snapshot, refreshing, error } = useHomelabSnapshot(
+    (signal) => getHomelabOverview({ signal }),
+    initialSnapshot,
+  );
   if (!snapshot) return refreshing && !error ? <LoadingHomelabCard /> : <UnavailableHomelabCard />;
 
   const displayStatus = error ? "unknown" : snapshot.status;

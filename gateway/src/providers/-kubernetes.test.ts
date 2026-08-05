@@ -311,6 +311,44 @@ describe("KubernetesProvider", () => {
     await iterator.return?.();
   });
 
+  it("resumes from a validated timestamp cursor without replaying a fresh 200-line tail", async () => {
+    const { kubeConfig } = createLogKubeConfig();
+    let requestUrl: string | undefined;
+    const fetchApi = vi.fn(async (url: string) => {
+      requestUrl = url;
+      return new Response(Readable.from(["2026-08-04T12:00:01Z next line\n"]), { status: 200 });
+    });
+    const provider = new KubernetesProvider({ kubeConfig, fetchApi });
+    const cursor = "2026-08-04T12:00:00.123456789Z";
+    const iterator = provider
+      .streamPodLogs("homelab", "gateway-abc", "gateway", new AbortController().signal, cursor)
+      [Symbol.asyncIterator]();
+
+    await iterator.next();
+    const url = new URL(requestUrl!);
+    expect(url.searchParams.get("sinceTime")).toBe(cursor);
+    expect(url.searchParams.has("tailLines")).toBe(false);
+    expect(url.searchParams.get("follow")).toBe("true");
+    expect(url.searchParams.get("timestamps")).toBe("true");
+    await iterator.return?.();
+  });
+
+  it("rejects a malformed direct resume cursor before Kubernetes access", async () => {
+    const { kubeConfig } = createLogKubeConfig();
+    const fetchApi = vi.fn();
+    const provider = new KubernetesProvider({ kubeConfig, fetchApi });
+    const logs = provider.streamPodLogs(
+      "homelab",
+      "gateway-abc",
+      "gateway",
+      new AbortController().signal,
+      "../../secret",
+    );
+
+    await expect(logs.ready).rejects.toThrow("Invalid pod log cursor");
+    expect(fetchApi).not.toHaveBeenCalled();
+  });
+
   it("aborts the initial request while its connection is still pending", async () => {
     const { kubeConfig } = createLogKubeConfig();
     let requestSignal: AbortSignal | undefined;
@@ -387,6 +425,27 @@ describe("pod gateway routes", () => {
   });
 
   it.each([
+    "/pods/good/pod/logs?container=main&since=..%2Fsecret",
+    "/pods/good/pod/logs?container=main&since=2026-08-04%2012%3A00%3A00Z",
+    "/pods/good/pod/logs?container=main&since=2026-08-04T12%3A00%3A00",
+  ])("rejects invalid log cursor query %s before Kubernetes access", async (path) => {
+    const streamPodLogs = vi.fn(async function* () {
+      yield "unused";
+    });
+    const kubernetesProvider = {
+      source: "kubernetes" as const,
+      collect: vi.fn(async () => mapClusterData(kubernetesFixture)),
+      getPod: vi.fn(async () => mapPodDetail(fixturePod)),
+      streamPodLogs,
+    };
+
+    const response = await createGateway({ kubernetesProvider }).request(path);
+
+    expect(response.status).toBe(400);
+    expect(streamPodLogs).not.toHaveBeenCalled();
+  });
+
+  it.each([
     "/pods/bad%2Fname/pod/logs?container=main",
     "/pods/good/bad%2Fname/logs?container=main",
     "/pods/good/%2e%2e/logs?container=main",
@@ -445,7 +504,33 @@ describe("pod gateway routes", () => {
     await expect(podResponse.json()).resolves.toMatchObject({ name: "gateway-abc" });
     expect(logsResponse.headers.get("content-type")).toContain("text/event-stream");
     expect(await logsResponse.text()).toBe(
-      'event: ready\ndata: {"status":"ready"}\n\nevent: line\ndata: {"line":"2026-08-04T12:00:00Z request complete"}\n\n',
+      'event: ready\ndata: {"status":"ready"}\n\nevent: line\ndata: {"line":"2026-08-04T12:00:00Z request complete","cursor":"2026-08-04T12:00:00Z"}\n\n',
+    );
+  });
+
+  it("passes a validated resume cursor from the gateway to the provider", async () => {
+    const streamPodLogs = vi.fn(async function* () {
+      yield "2026-08-04T12:00:01Z next";
+    });
+    const kubernetesProvider = {
+      source: "kubernetes" as const,
+      collect: vi.fn(async () => mapClusterData(kubernetesFixture)),
+      getPod: vi.fn(async () => mapPodDetail(fixturePod)),
+      streamPodLogs,
+    };
+    const cursor = "2026-08-04T12:00:00.123456789Z";
+
+    const response = await createGateway({ kubernetesProvider }).request(
+      `/pods/homelab/gateway-abc/logs?container=gateway&since=${encodeURIComponent(cursor)}`,
+    );
+    await response.text();
+
+    expect(streamPodLogs).toHaveBeenCalledWith(
+      "homelab",
+      "gateway-abc",
+      "gateway",
+      expect.any(AbortSignal),
+      cursor,
     );
   });
 

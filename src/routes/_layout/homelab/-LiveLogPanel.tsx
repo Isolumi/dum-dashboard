@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CirclePause, CirclePlay, RotateCcw, Terminal } from "lucide-react";
 
+import { normalizePodLogCursor, podLogCursorFromLine } from "@shared/homelab/log-cursor";
 import { Button } from "#/components/ui/button";
 
 const DNS_LABEL = /^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/;
@@ -26,8 +27,13 @@ function isValidSelection(namespace: string, pod: string, container: string): bo
   return isDnsLabel(namespace) && isDnsSubdomain(pod) && isDnsLabel(container);
 }
 
-function logStreamUrl(namespace: string, pod: string, container: string): string {
-  const query = new URLSearchParams({ container });
+function logStreamUrl(
+  namespace: string,
+  pod: string,
+  container: string,
+  cursor: string | null,
+): string {
+  const query = new URLSearchParams({ container, ...(cursor ? { since: cursor } : {}) });
   return `/api/homelab/logs/${encodeURIComponent(namespace)}/${encodeURIComponent(pod)}?${query}`;
 }
 
@@ -38,7 +44,9 @@ function connectionLabel(state: ConnectionState, reconnectDelayMs: number | null
     case "open":
       return "Live";
     case "reconnecting":
-      return `Reconnecting in ${Math.ceil((reconnectDelayMs ?? 0) / 1_000)}s`;
+      return reconnectDelayMs
+        ? `Reconnecting in ${Math.ceil(reconnectDelayMs / 1_000)}s`
+        : "Reconnecting";
     case "paused":
       return "Paused";
     case "invalid":
@@ -56,8 +64,8 @@ export function LiveLogPanel({
   container: string;
 }) {
   const validSelection = isValidSelection(namespace, pod, container);
-  const streamUrl = useMemo(
-    () => (validSelection ? logStreamUrl(namespace, pod, container) : null),
+  const streamSelection = useMemo(
+    () => (validSelection ? `${namespace}/${pod}/${container}` : null),
     [container, namespace, pod, validSelection],
   );
   const [lines, setLines] = useState<RenderedLogLine[]>([]);
@@ -68,11 +76,20 @@ export function LiveLogPanel({
   );
   const [reconnectDelayMs, setReconnectDelayMs] = useState<number | null>(null);
   const lineId = useRef(0);
+  const cursor = useRef<string | null>(null);
+  const cursorTimestamp = useRef(Number.NEGATIVE_INFINITY);
+  const seenTimestampedLines = useRef(new Set<string>());
+  const seenTimestampedLineOrder = useRef<string[]>([]);
   const logViewport = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setLines([]);
-  }, [streamUrl]);
+    lineId.current = 0;
+    cursor.current = null;
+    cursorTimestamp.current = Number.NEGATIVE_INFINITY;
+    seenTimestampedLines.current.clear();
+    seenTimestampedLineOrder.current = [];
+  }, [streamSelection]);
 
   useEffect(() => {
     if (!autoScroll || lines.length === 0) return;
@@ -81,7 +98,7 @@ export function LiveLogPanel({
   }, [autoScroll, lines]);
 
   useEffect(() => {
-    if (!streamUrl) {
+    if (!streamSelection) {
       setConnectionState("invalid");
       setReconnectDelayMs(null);
       return;
@@ -94,14 +111,27 @@ export function LiveLogPanel({
 
     let active = true;
     let source: EventSource | null = null;
+    let sourceListeners:
+      | {
+          source: EventSource;
+          line: EventListener;
+          ready: EventListener;
+        }
+      | undefined;
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     let reconnectAttempt = 0;
 
     const closeSource = () => {
       if (!source) return;
-      source.onopen = null;
-      source.onerror = null;
-      source.close();
+      const closingSource = source;
+      if (sourceListeners?.source === closingSource) {
+        closingSource.removeEventListener("line", sourceListeners.line);
+        closingSource.removeEventListener("ready", sourceListeners.ready);
+        sourceListeners = undefined;
+      }
+      closingSource.onopen = null;
+      closingSource.onerror = null;
+      closingSource.close();
       source = null;
     };
 
@@ -120,32 +150,77 @@ export function LiveLogPanel({
       }, delay);
     };
 
-    const onLine = (event: Event) => {
-      if (!active) return;
-      try {
-        const payload = JSON.parse((event as MessageEvent<string>).data) as { line?: unknown };
-        if (typeof payload.line !== "string") return;
-        const nextLine = { id: lineId.current++, text: payload.line };
-        setLines((current) => [...current, nextLine].slice(-MAX_RENDERED_LINES));
-      } catch {
-        // Malformed upstream events are ignored without exposing their contents.
-      }
-    };
-
     const connect = () => {
       if (!active) return;
       setConnectionState(reconnectAttempt === 0 ? "initial" : "reconnecting");
+      setReconnectDelayMs(null);
       try {
-        const nextSource = new EventSource(streamUrl);
+        const nextSource = new EventSource(logStreamUrl(namespace, pod, container, cursor.current));
         source = nextSource;
+        const onLine: EventListener = (event) => {
+          if (!active || source !== nextSource) return;
+          try {
+            const payload = JSON.parse((event as MessageEvent<string>).data) as {
+              line?: unknown;
+              cursor?: unknown;
+            };
+            if (typeof payload.line !== "string") return;
+
+            const payloadCursor = normalizePodLogCursor(payload.cursor);
+            const lineCursor = podLogCursorFromLine(payload.line);
+            const validCursor =
+              payloadCursor && payloadCursor === lineCursor ? payloadCursor : null;
+            const identity = validCursor ? `${validCursor}\u0000${payload.line}` : null;
+            if (identity && seenTimestampedLines.current.has(identity)) return;
+
+            if (identity) {
+              seenTimestampedLines.current.add(identity);
+              seenTimestampedLineOrder.current.push(identity);
+              if (seenTimestampedLineOrder.current.length > MAX_RENDERED_LINES) {
+                const removed = seenTimestampedLineOrder.current.shift();
+                if (removed) seenTimestampedLines.current.delete(removed);
+              }
+            }
+
+            if (validCursor) {
+              const nextTimestamp = Date.parse(validCursor);
+              if (nextTimestamp >= cursorTimestamp.current) {
+                cursor.current = validCursor;
+                cursorTimestamp.current = nextTimestamp;
+              }
+            }
+
+            const nextLine = { id: lineId.current++, text: payload.line };
+            setLines((current) => [...current, nextLine].slice(-MAX_RENDERED_LINES));
+          } catch {
+            // Malformed upstream events are ignored without exposing their contents.
+          }
+        };
+        const onReady: EventListener = (event) => {
+          if (!active || source !== nextSource) return;
+          try {
+            const payload = JSON.parse((event as MessageEvent<string>).data) as {
+              status?: unknown;
+            };
+            if (payload.status !== "ready") return;
+            reconnectAttempt = 0;
+            setReconnectDelayMs(null);
+            setConnectionState("open");
+          } catch {
+            // A malformed readiness event cannot promote the stream to Live.
+          }
+        };
         nextSource.addEventListener("line", onLine);
+        nextSource.addEventListener("ready", onReady);
+        sourceListeners = { source: nextSource, line: onLine, ready: onReady };
         nextSource.onopen = () => {
           if (!active || source !== nextSource) return;
-          reconnectAttempt = 0;
           setReconnectDelayMs(null);
-          setConnectionState("open");
         };
-        nextSource.onerror = scheduleReconnect;
+        nextSource.onerror = () => {
+          if (!active || source !== nextSource) return;
+          scheduleReconnect();
+        };
       } catch {
         scheduleReconnect();
       }
@@ -157,7 +232,7 @@ export function LiveLogPanel({
       if (reconnectTimer) clearTimeout(reconnectTimer);
       closeSource();
     };
-  }, [paused, streamUrl]);
+  }, [container, namespace, paused, pod, streamSelection]);
 
   if (!validSelection) {
     return (
