@@ -35,6 +35,7 @@ export default mergeConfig(
                 "shared/**/-*.test.ts",
                 "gateway/src/**/-*.test.ts",
               ],
+              exclude: ["src/homelab/-homelab.functions.test.ts"],
               environment: "node",
               env: {
                 VITE_SUPABASE_URL: "http://localhost",
@@ -43,11 +44,24 @@ export default mergeConfig(
                 GOOGLE_CLIENT_ID: "test-google-client-id",
                 GOOGLE_CLIENT_SECRET: "test-google-client-secret",
                 GOOGLE_TOKEN_ENCRYPTION_KEY: "test-google-token-encryption-key",
+                GATEWAY_URL: "http://gateway.internal:8080",
               },
             },
           }),
           {},
         ),
+        // Server-function tests: keep handlers directly callable without the RPC transform.
+        defineProject({
+          plugins: [tsconfigPaths({ projects: ["./tsconfig.json"] })],
+          test: {
+            name: "server-unit",
+            include: ["src/homelab/-homelab.functions.test.ts"],
+            environment: "node",
+            env: {
+              GATEWAY_URL: "http://gateway.internal:8080",
+            },
+          },
+        }),
         // Component tests (.tsx): use jsdom environment, no TanStack Start plugin
         defineProject({
           plugins: [tsconfigPaths({ projects: ["./tsconfig.json"] }), viteReact()],
