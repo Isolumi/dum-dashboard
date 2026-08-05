@@ -47,7 +47,12 @@ describe("GitHubProvider", () => {
       const provider = new GitHubProvider({ fetchApi, environment: {} });
       const initial = await provider.collect(new AbortController().signal);
 
-      vi.advanceTimersByTime(5 * 60_000 + 1);
+      vi.advanceTimersByTime(31_000);
+      await expect(provider.collect(new AbortController().signal)).resolves.toEqual(initial);
+      expect(provider.observation()).toMatchObject({ stale: false });
+      expect(fetchApi).toHaveBeenCalledTimes(2);
+
+      vi.advanceTimersByTime(5 * 60_000 - 31_000 + 1);
       fetchApi.mockRejectedValueOnce(new Error("rate limited"));
       await expect(provider.collect(new AbortController().signal)).resolves.toEqual(initial);
       expect(provider.observation()).toEqual({
@@ -57,9 +62,48 @@ describe("GitHubProvider", () => {
       });
       expect(fetchApi).toHaveBeenCalledTimes(3);
 
-      vi.advanceTimersByTime(10_000);
+      vi.advanceTimersByTime(60_001);
+      fetchApi.mockRejectedValueOnce(new Error("still unavailable"));
+      await expect(provider.collect(new AbortController().signal)).resolves.toEqual(initial);
+      expect(fetchApi).toHaveBeenCalledTimes(4);
+
+      vi.advanceTimersByTime(60_001);
+      await expect(provider.collect(new AbortController().signal)).resolves.toEqual(initial);
+      expect(fetchApi).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("honors GitHub rate-limit reset headers before retrying", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-04T00:00:00.000Z"));
+    try {
+      const fetchApi = vi.fn(async (url: string, _options: RequestInit) =>
+        jsonResponse(url.includes("/actions/") ? fixture.workflowRuns : fixture.commit),
+      );
+      const provider = new GitHubProvider({ fetchApi, environment: {} });
+      const initial = await provider.collect(new AbortController().signal);
+      const resetAt = Date.now() + 10 * 60_000;
+
+      vi.advanceTimersByTime(5 * 60_000 + 1);
+      fetchApi.mockResolvedValueOnce(
+        new Response("rate limited", {
+          status: 429,
+          headers: { "x-ratelimit-reset": String(Math.ceil(resetAt / 1_000)) },
+        }),
+      );
       await expect(provider.collect(new AbortController().signal)).resolves.toEqual(initial);
       expect(fetchApi).toHaveBeenCalledTimes(3);
+
+      vi.advanceTimersByTime(60_001);
+      await expect(provider.collect(new AbortController().signal)).resolves.toEqual(initial);
+      expect(fetchApi).toHaveBeenCalledTimes(3);
+
+      vi.setSystemTime(resetAt + 1);
+      await expect(provider.collect(new AbortController().signal)).resolves.toEqual(initial);
+      expect(fetchApi).toHaveBeenCalledTimes(5);
+      expect(provider.observation()).toMatchObject({ stale: false });
     } finally {
       vi.useRealTimers();
     }

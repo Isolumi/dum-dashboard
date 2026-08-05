@@ -16,10 +16,33 @@ const REPOSITORY_COMPONENT = /^[A-Za-z0-9_.-]+$/;
 const COMMIT_SHA = /^[0-9a-f]{40}$/i;
 const RUN_ID = /^[1-9][0-9]*$/;
 const PUBLIC_CACHE_TTL_MS = 5 * 60_000;
-const PUBLIC_FRESH_FOR_MS = 30_000;
+const PUBLIC_FRESH_FOR_MS = PUBLIC_CACHE_TTL_MS;
 const PUBLIC_FAILURE_BACKOFF_MS = 60_000;
+const PUBLIC_MAX_FAILURE_BACKOFF_MS = 15 * 60_000;
 
 type FetchApi = (url: string, options: RequestInit) => Promise<Response>;
+
+class GitHubRequestError extends Error {
+  constructor(readonly retryAt?: number) {
+    super("GitHub request failed");
+  }
+}
+
+function retryAtFromResponse(response: Response, now = Date.now()): number | undefined {
+  const candidates: number[] = [];
+  const retryAfter = response.headers.get("retry-after");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    const retryAt = Number.isFinite(seconds)
+      ? now + Math.max(0, seconds) * 1_000
+      : Date.parse(retryAfter);
+    if (Number.isFinite(retryAt)) candidates.push(retryAt);
+  }
+  const resetSeconds = Number(response.headers.get("x-ratelimit-reset"));
+  if (Number.isFinite(resetSeconds) && resetSeconds > 0) candidates.push(resetSeconds * 1_000);
+  const future = candidates.filter((candidate) => candidate > now);
+  return future.length > 0 ? Math.max(...future) : undefined;
+}
 
 export interface WorkflowRun {
   repository: string;
@@ -165,6 +188,7 @@ export class GitHubProvider implements Provider<WorkflowRun> {
   private cachedPublicWorkflow: { value: WorkflowRun; observedAt: number } | undefined;
   private publicRequest: Promise<WorkflowRun> | undefined;
   private publicRetryAt = 0;
+  private publicFailureCount = 0;
 
   constructor(options: GitHubProviderOptions = {}) {
     this.token = options.token ?? (options.environment ?? process.env).GITHUB_READ_TOKEN;
@@ -184,10 +208,11 @@ export class GitHubProvider implements Provider<WorkflowRun> {
         },
         signal,
       });
-      if (!response.ok) throw new Error("non-2xx response");
+      if (!response.ok) throw new GitHubRequestError(retryAtFromResponse(response));
       return await response.json();
-    } catch {
-      throw new Error("GitHub request failed");
+    } catch (error) {
+      if (error instanceof GitHubRequestError) throw error;
+      throw new GitHubRequestError();
     }
   }
 
@@ -268,7 +293,7 @@ export class GitHubProvider implements Provider<WorkflowRun> {
         url: githubUrl(owner, name, "actions", "runs", id),
       };
     } catch (error) {
-      if (error instanceof Error && error.message === "GitHub request failed") throw error;
+      if (error instanceof GitHubRequestError) throw error;
       throw new Error("GitHub response invalid");
     }
   }
@@ -307,10 +332,17 @@ export class GitHubProvider implements Provider<WorkflowRun> {
       .then((value) => {
         this.cachedPublicWorkflow = { value: structuredClone(value), observedAt: Date.now() };
         this.publicRetryAt = 0;
+        this.publicFailureCount = 0;
         return value;
       })
       .catch((error: unknown) => {
-        this.publicRetryAt = Date.now() + PUBLIC_FAILURE_BACKOFF_MS;
+        this.publicFailureCount += 1;
+        const fallback = Math.min(
+          PUBLIC_FAILURE_BACKOFF_MS * 2 ** (this.publicFailureCount - 1),
+          PUBLIC_MAX_FAILURE_BACKOFF_MS,
+        );
+        const responseRetryAt = error instanceof GitHubRequestError ? error.retryAt : undefined;
+        this.publicRetryAt = Math.max(Date.now() + fallback, responseRetryAt ?? 0);
         if (this.cachedPublicWorkflow) return structuredClone(this.cachedPublicWorkflow.value);
         throw error;
       })

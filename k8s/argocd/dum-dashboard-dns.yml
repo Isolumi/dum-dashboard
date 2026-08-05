@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dum-dashboard-dns
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: dum-dashboard-dns
+    app.kubernetes.io/part-of: dum-dashboard
+spec:
+  project: dum-dashboard-dns
+  source:
+    repoURL: https://github.com/Isolumi/dum-dashboard.git
+    targetRevision: v1
+    path: k8s/bootstrap/cluster-dns
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system

@@ -76,14 +76,27 @@ From the repository root:
 
 ```zsh
 kubectl apply -f k8s/argocd/dum-dashboard-bootstrap-project.yml
+kubectl apply -f k8s/argocd/dum-dashboard-dns-project.yml
 kubectl apply -f k8s/argocd/dum-dashboard-project.yml
 kubectl apply -f k8s/argocd/prometheus-project.yml
 kubectl apply -f k8s/argocd/dum-dashboard-bootstrap.yml
+kubectl apply -f k8s/argocd/dum-dashboard-dns.yml
 
+git fetch origin v1
+DUM_DASH_REVISION="$(git rev-parse origin/v1)"
 kubectl -n argocd patch application dum-dashboard-bootstrap --type=merge \
-  --patch='{"operation":{"sync":{"revision":"v1"}}}'
+  --patch="{\"operation\":{\"sync\":{\"revision\":\"$DUM_DASH_REVISION\"}}}"
+kubectl -n argocd patch application dum-dashboard-dns --type=merge \
+  --patch="{\"operation\":{\"sync\":{\"revision\":\"$DUM_DASH_REVISION\"}}}"
+kubectl -n argocd wait application/dum-dashboard-bootstrap \
+  --for=jsonpath='{.status.sync.revision}'="$DUM_DASH_REVISION" --timeout=120s
+kubectl -n argocd wait application/dum-dashboard-dns \
+  --for=jsonpath='{.status.sync.revision}'="$DUM_DASH_REVISION" --timeout=120s
 kubectl -n argocd wait application/dum-dashboard-bootstrap \
   --for=jsonpath='{.status.sync.status}'=Synced --timeout=120s
+kubectl -n argocd wait application/dum-dashboard-dns \
+  --for=jsonpath='{.status.sync.status}'=Synced --timeout=120s
+unset DUM_DASH_REVISION
 
 # CoreDNS only discovers a newly created optional coredns-custom volume after its pod restarts.
 kubectl -n kube-system rollout restart deployment/coredns
@@ -93,10 +106,11 @@ kubectl apply -f k8s/argocd/prometheus.yml
 kubectl apply -f k8s/argocd/dum-dashboard.yml
 ```
 
-The manually synchronized bootstrap application owns the namespace, reviewed read-only RBAC, and
-the private CoreDNS route that sends `*.doh.lumilumi.xyz` to in-cluster Traefik. The normal
-dashboard and monitoring applications use separate restricted projects. Do not run `kubectl apply`
-against `k8s/base`, `k8s/overlays`, or `k8s/bootstrap/dum-dashboard`; Argo CD owns those resources.
+The manually synchronized bootstrap applications split namespace/RBAC access from the dedicated
+CoreDNS ConfigMap boundary. Address lookups for `*.doh.lumilumi.xyz` go to in-cluster Traefik;
+TXT lookups still go to public DNS for ACME renewal. The normal dashboard and monitoring
+applications use separate restricted projects. Do not run `kubectl apply` against `k8s/base`,
+`k8s/overlays`, or `k8s/bootstrap`; Argo CD owns those resources.
 
 Watch all applications until they report `Synced` and `Healthy`:
 

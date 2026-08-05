@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: dum-dashboard-dns
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: dum-dashboard-dns
+    app.kubernetes.io/part-of: dum-dashboard
+spec:
+  description: Manually synchronized private DNS boundary for dumachine
+  sourceRepos:
+    - https://github.com/Isolumi/dum-dashboard.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: kube-system
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
