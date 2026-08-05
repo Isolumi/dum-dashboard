@@ -650,11 +650,20 @@ export async function collectProviders<T>(
     const observedAt = timestamp(now);
 
     if (result.status === "fulfilled") {
+      const observation = providers[index].observation?.();
+      const sourceObservedAt = observation?.observedAt ?? observedAt;
+      const stale = observation?.stale ?? false;
       return {
         source,
         ok: true,
         data: result.value,
-        state: { source, status: "healthy", observedAt, stale: false },
+        state: {
+          source,
+          status: stale ? ("unknown" as const) : ("healthy" as const),
+          observedAt: sourceObservedAt,
+          stale,
+          ...(observation?.error ? { error: observation.error } : {}),
+        },
       };
     }
 
@@ -1327,6 +1336,7 @@ export async function collectOverviewSnapshot(
         collections.set(provider, collection);
         return collection;
       },
+      ...(provider.observation ? { observation: () => provider.observation?.() } : {}),
     };
     wrappers.set(provider, shared);
     return shared;

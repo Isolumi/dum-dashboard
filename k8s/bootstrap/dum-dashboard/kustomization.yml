@@ -4,3 +4,4 @@ resources:
   - namespace.yml
   - gateway-cluster-rbac.yml
   - gateway-argocd-rbac.yml
+  - coredns-custom.yml

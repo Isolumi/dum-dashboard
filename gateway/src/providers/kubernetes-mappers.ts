@@ -98,6 +98,7 @@ function podStatus(pod: V1Pod, ready: boolean): HealthStatus {
     .find((reason) => reason && CRITICAL_CONTAINER_WAITING_REASONS.has(reason));
 
   if (pod.status?.phase === "Failed" || criticalWaitingReason) return "critical";
+  if (pod.status?.phase === "Succeeded") return "healthy";
   if (ready) return "healthy";
   if (!pod.status?.phase || pod.status.phase === "Unknown") return "unknown";
   return "warning";

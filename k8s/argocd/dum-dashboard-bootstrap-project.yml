@@ -13,6 +13,8 @@ spec:
   destinations:
     - server: https://kubernetes.default.svc
       namespace: argocd
+    - server: https://kubernetes.default.svc
+      namespace: kube-system
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
@@ -21,6 +23,8 @@ spec:
     - group: rbac.authorization.k8s.io
       kind: ClusterRoleBinding
   namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
     - group: rbac.authorization.k8s.io
       kind: Role
     - group: rbac.authorization.k8s.io

@@ -126,6 +126,17 @@ describe("Kubernetes mappers", () => {
     expect(() => JSON.stringify(detail satisfies PodDetail)).not.toThrow();
   });
 
+  it("treats successfully completed job pods as healthy", () => {
+    const pod = structuredClone(fixturePod);
+    pod.status!.phase = "Succeeded";
+    pod.status!.conditions = [];
+    pod.status!.containerStatuses![0]!.state = {
+      terminated: { exitCode: 0, reason: "Completed" },
+    };
+
+    expect(mapPodDetail(pod).status).toBe("healthy");
+  });
+
   it("preserves every container image and does not present a sidecar as the pod image", () => {
     const inventory = structuredClone(kubernetesFixture);
     const pod = inventory.pods.items[0]!;

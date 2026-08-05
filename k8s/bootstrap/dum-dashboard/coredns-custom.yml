@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  doh.override: |
+    rewrite stop name regex ^.*[.]doh[.]lumilumi[.]xyz[.]$ traefik.kube-system.svc.cluster.local. answer auto

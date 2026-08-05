@@ -11,6 +11,60 @@ function jsonResponse(payload: unknown, status = 200): Response {
 }
 
 describe("GitHubProvider", () => {
+  it("reads a public repository anonymously and caches the result", async () => {
+    const fetchApi = vi.fn(async (url: string, _options: RequestInit) =>
+      jsonResponse(url.includes("/actions/") ? fixture.workflowRuns : fixture.commit),
+    );
+    const provider = new GitHubProvider({ fetchApi, environment: {} });
+
+    const [first, concurrent] = await Promise.all([
+      provider.collect(new AbortController().signal),
+      provider.collect(new AbortController().signal),
+    ]);
+    expect(first).toMatchObject({ repository: "Isolumi/youtube-mp3", conclusion: "success" });
+    expect(concurrent).toEqual(first);
+    await expect(provider.collect(new AbortController().signal)).resolves.toEqual(first);
+
+    expect(fetchApi).toHaveBeenCalledTimes(2);
+    expect(provider.observation()).toMatchObject({ stale: false });
+    expect(fetchApi.mock.calls[0]![1]).toMatchObject({
+      headers: {
+        accept: "application/vnd.github+json",
+        "user-agent": "dum-dashboard",
+        "x-github-api-version": "2022-11-28",
+      },
+    });
+    expect(fetchApi.mock.calls[0]![1]?.headers).not.toHaveProperty("authorization");
+  });
+
+  it("serves stale public evidence with bounded retry after an upstream failure", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-04T00:00:00.000Z"));
+    try {
+      const fetchApi = vi.fn(async (url: string, _options: RequestInit) =>
+        jsonResponse(url.includes("/actions/") ? fixture.workflowRuns : fixture.commit),
+      );
+      const provider = new GitHubProvider({ fetchApi, environment: {} });
+      const initial = await provider.collect(new AbortController().signal);
+
+      vi.advanceTimersByTime(5 * 60_000 + 1);
+      fetchApi.mockRejectedValueOnce(new Error("rate limited"));
+      await expect(provider.collect(new AbortController().signal)).resolves.toEqual(initial);
+      expect(provider.observation()).toEqual({
+        observedAt: "2026-08-04T00:00:00.000Z",
+        stale: true,
+        error: "GitHub observation is stale",
+      });
+      expect(fetchApi).toHaveBeenCalledTimes(3);
+
+      vi.advanceTimersByTime(10_000);
+      await expect(provider.collect(new AbortController().signal)).resolves.toEqual(initial);
+      expect(fetchApi).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("reads the latest workflow and commit metadata with read-only GitHub headers", async () => {
     const fetchApi = vi.fn(async (url: string, _options: RequestInit) =>
       jsonResponse(url.includes("/actions/") ? fixture.workflowRuns : fixture.commit),
@@ -157,8 +211,7 @@ describe("GitHubProvider", () => {
     );
   });
 
-  it("uses the configured repository and contains missing credentials or upstream secrets", async () => {
-    const missing = new GitHubProvider({ environment: {} });
+  it("uses the configured repository and contains upstream secrets", async () => {
     const failed = new GitHubProvider({
       token: "read-only-secret",
       fetchApi: vi.fn(async () => {
@@ -166,9 +219,6 @@ describe("GitHubProvider", () => {
       }),
     });
 
-    await expect(missing.collect(new AbortController().signal)).rejects.toThrow(
-      /^GitHub is not configured$/,
-    );
     await expect(failed.getLatestWorkflow("Isolumi/youtube-mp3", "development")).rejects.toThrow(
       /^GitHub request failed$/,
     );

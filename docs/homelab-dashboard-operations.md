@@ -9,8 +9,8 @@ hand.
 - `kubectl` points at dumachine.
 - Argo CD, cert-manager, `letsencrypt-prod`, Traefik, and private Tailscale DNS are working.
 - A classic GitHub PAT with `read:packages` for the `ghcr-pull` Secret.
-- The GitHub token is read-only: classic PAT `repo` scope for a private repository, or fine-grained
-  Contents read and Actions read access for only `Isolumi/dum-dashboard`.
+- Optional: a read-only GitHub token increases API limits. Public deployment evidence works without
+  one; private repositories require a fine-grained token with Contents read and Actions read.
 
 ## 1. Enforce the tailnet boundary
 
@@ -63,13 +63,11 @@ kubectl -n dum-dashboard create secret generic dum-dashboard-secrets \
   --from-literal=GOOGLE_TOKEN_ENCRYPTION_KEY="$GOOGLE_TOKEN_ENCRYPTION_KEY" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-read -s "GITHUB_READ_TOKEN?Read-only GitHub token: "; echo
 kubectl -n dum-dashboard create secret generic homelab-gateway-secrets \
-  --from-literal=GITHUB_READ_TOKEN="$GITHUB_READ_TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 unset GHCR_USER GHCR_PULL_TOKEN SUPABASE_URL SUPABASE_SECRET_KEY OWNER_USER_ID GOOGLE_CLIENT_ID \
-  GOOGLE_CLIENT_SECRET GOOGLE_TOKEN_ENCRYPTION_KEY GITHUB_READ_TOKEN
+  GOOGLE_CLIENT_SECRET GOOGLE_TOKEN_ENCRYPTION_KEY
 ```
 
 ## 3. Bootstrap the restricted Argo boundaries
@@ -87,14 +85,18 @@ kubectl -n argocd patch application dum-dashboard-bootstrap --type=merge \
 kubectl -n argocd wait application/dum-dashboard-bootstrap \
   --for=jsonpath='{.status.sync.status}'=Synced --timeout=120s
 
+# CoreDNS only discovers a newly created optional coredns-custom volume after its pod restarts.
+kubectl -n kube-system rollout restart deployment/coredns
+kubectl -n kube-system rollout status deployment/coredns --timeout=120s
+
 kubectl apply -f k8s/argocd/prometheus.yml
 kubectl apply -f k8s/argocd/dum-dashboard.yml
 ```
 
-The manually synchronized bootstrap application owns only the namespace and reviewed read-only
-RBAC. The normal dashboard and monitoring applications use separate restricted projects. Do not
-run `kubectl apply` against `k8s/base`, `k8s/overlays`, or `k8s/bootstrap/dum-dashboard`; Argo CD
-owns those resources.
+The manually synchronized bootstrap application owns the namespace, reviewed read-only RBAC, and
+the private CoreDNS route that sends `*.doh.lumilumi.xyz` to in-cluster Traefik. The normal
+dashboard and monitoring applications use separate restricted projects. Do not run `kubectl apply`
+against `k8s/base`, `k8s/overlays`, or `k8s/bootstrap/dum-dashboard`; Argo CD owns those resources.
 
 Watch all applications until they report `Synced` and `Healthy`:
 

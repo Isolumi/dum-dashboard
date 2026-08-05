@@ -220,6 +220,33 @@ describe("collectProviders", () => {
       { source: "github", ok: false, error: "GitHub unavailable" },
     ]);
   });
+
+  it("preserves a provider observation timestamp and stale state", async () => {
+    const providers: Provider<{ value: string }>[] = [
+      {
+        source: "github",
+        collect: async () => ({ value: "cached workflow" }),
+        observation: () => ({
+          observedAt: "2026-08-03T23:55:00.000Z",
+          stale: true,
+          error: "GitHub observation is stale",
+        }),
+      },
+    ];
+
+    await expect(collectProviders(providers, 1_000, now)).resolves.toMatchObject([
+      {
+        ok: true,
+        state: {
+          source: "github",
+          status: "unknown",
+          observedAt: "2026-08-03T23:55:00.000Z",
+          stale: true,
+          error: "GitHub observation is stale",
+        },
+      },
+    ]);
+  });
 });
 
 describe("collectClusterSnapshot", () => {

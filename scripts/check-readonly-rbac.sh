@@ -142,6 +142,7 @@ bun --eval '
       "ClusterRoleBinding//homelab-gateway-readonly",
       "Role/argocd/homelab-gateway-argocd-readonly",
       "RoleBinding/argocd/homelab-gateway-argocd-readonly",
+      "ConfigMap/kube-system/coredns-custom",
     ])
   ) {
     fail("Bootstrap renders resources beyond the reviewed namespace and RBAC set.");
@@ -306,11 +307,32 @@ bun --eval '
   ).map((entry) => `${entry.group}/${entry.kind}`);
   if (
     !same(allowedNamespaceKinds, [
+      "/ConfigMap",
       "rbac.authorization.k8s.io/Role",
       "rbac.authorization.k8s.io/RoleBinding",
     ])
   ) {
     fail("The bootstrap AppProject namespaced allowlist is broader than required.");
+  }
+  const bootstrapDestinations = bootstrapProject?.spec?.destinations ?? [];
+  if (
+    !same(
+      bootstrapDestinations.map((destination) => `${destination.server}/${destination.namespace}`),
+      [
+        "https://kubernetes.default.svc/argocd",
+        "https://kubernetes.default.svc/kube-system",
+      ],
+    )
+  ) {
+    fail("The bootstrap AppProject destinations are broader than required.");
+  }
+  const corednsCustom = find(bootstrap, "ConfigMap", "coredns-custom");
+  if (
+    corednsCustom?.metadata?.namespace !== "kube-system" ||
+    corednsCustom?.data?.["doh.override"] !==
+      "rewrite stop name regex ^.*[.]doh[.]lumilumi[.]xyz[.]$ traefik.kube-system.svc.cluster.local. answer auto\n"
+  ) {
+    fail("Bootstrap must route private doh hostnames to the in-cluster Traefik service.");
   }
 
   const bootstrapApplication = parse(

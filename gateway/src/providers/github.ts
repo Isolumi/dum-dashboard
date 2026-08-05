@@ -6,7 +6,7 @@ import {
   readOwnDataRecord,
   RUNTIME_COLLECTION_LIMITS,
 } from "../runtime-validation";
-import type { Provider } from "./provider";
+import type { Provider, ProviderObservation } from "./provider";
 
 const GITHUB_API_VERSION = "2022-11-28";
 const DEFAULT_REPOSITORY = "Isolumi/youtube-mp3";
@@ -15,6 +15,9 @@ const WORKFLOW_FILE = "build-images.yml";
 const REPOSITORY_COMPONENT = /^[A-Za-z0-9_.-]+$/;
 const COMMIT_SHA = /^[0-9a-f]{40}$/i;
 const RUN_ID = /^[1-9][0-9]*$/;
+const PUBLIC_CACHE_TTL_MS = 5 * 60_000;
+const PUBLIC_FRESH_FOR_MS = 30_000;
+const PUBLIC_FAILURE_BACKOFF_MS = 60_000;
 
 type FetchApi = (url: string, options: RequestInit) => Promise<Response>;
 
@@ -159,6 +162,9 @@ export class GitHubProvider implements Provider<WorkflowRun> {
   private readonly token: string | undefined;
   private readonly fetchApi: FetchApi;
   private readonly baseUrl: URL;
+  private cachedPublicWorkflow: { value: WorkflowRun; observedAt: number } | undefined;
+  private publicRequest: Promise<WorkflowRun> | undefined;
+  private publicRetryAt = 0;
 
   constructor(options: GitHubProviderOptions = {}) {
     this.token = options.token ?? (options.environment ?? process.env).GITHUB_READ_TOKEN;
@@ -167,14 +173,13 @@ export class GitHubProvider implements Provider<WorkflowRun> {
   }
 
   private async request(path: string, signal?: AbortSignal): Promise<unknown> {
-    if (!this.token) throw new Error("GitHub is not configured");
-
     try {
       const response = await this.fetchApi(new URL(path, this.baseUrl).toString(), {
         method: "GET",
         headers: {
           accept: "application/vnd.github+json",
-          authorization: `Bearer ${this.token}`,
+          ...(this.token ? { authorization: `Bearer ${this.token}` } : {}),
+          "user-agent": "dum-dashboard",
           "x-github-api-version": GITHUB_API_VERSION,
         },
         signal,
@@ -272,7 +277,47 @@ export class GitHubProvider implements Provider<WorkflowRun> {
     return this.latestWorkflow(repository, branch);
   }
 
+  observation(): ProviderObservation | undefined {
+    if (this.token || !this.cachedPublicWorkflow) return undefined;
+    const observedAt = this.cachedPublicWorkflow.observedAt;
+    const stale = Date.now() - observedAt > PUBLIC_FRESH_FOR_MS;
+    return {
+      observedAt: new Date(observedAt).toISOString(),
+      stale,
+      ...(stale ? { error: "GitHub observation is stale" } : {}),
+    };
+  }
+
   collect(signal: AbortSignal): Promise<WorkflowRun> {
-    return this.latestWorkflow(DEFAULT_REPOSITORY, DEFAULT_BRANCH, signal);
+    if (this.token) return this.latestWorkflow(DEFAULT_REPOSITORY, DEFAULT_BRANCH, signal);
+
+    const now = Date.now();
+    const cached = this.cachedPublicWorkflow;
+    if (cached && now - cached.observedAt < PUBLIC_CACHE_TTL_MS) {
+      return Promise.resolve(structuredClone(cached.value));
+    }
+    if (this.publicRequest) return this.publicRequest.then((value) => structuredClone(value));
+    if (now < this.publicRetryAt) {
+      return cached
+        ? Promise.resolve(structuredClone(cached.value))
+        : Promise.reject(new Error("GitHub request failed"));
+    }
+
+    const request = this.latestWorkflow(DEFAULT_REPOSITORY, DEFAULT_BRANCH, signal)
+      .then((value) => {
+        this.cachedPublicWorkflow = { value: structuredClone(value), observedAt: Date.now() };
+        this.publicRetryAt = 0;
+        return value;
+      })
+      .catch((error: unknown) => {
+        this.publicRetryAt = Date.now() + PUBLIC_FAILURE_BACKOFF_MS;
+        if (this.cachedPublicWorkflow) return structuredClone(this.cachedPublicWorkflow.value);
+        throw error;
+      })
+      .finally(() => {
+        this.publicRequest = undefined;
+      });
+    this.publicRequest = request;
+    return request.then((value) => structuredClone(value));
   }
 }
