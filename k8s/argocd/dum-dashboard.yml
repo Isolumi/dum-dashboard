@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dum-dashboard-dumachine
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: dum-dashboard
+    app.kubernetes.io/part-of: dum-dashboard
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Isolumi/dum-dashboard.git
+    targetRevision: v1
+    path: k8s/overlays/dumachine
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dum-dashboard
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

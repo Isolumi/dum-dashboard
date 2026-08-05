@@ -1,0 +1,15 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dum-dashboard-lumilumi
+  namespace: dum-dashboard
+  labels:
+    app.kubernetes.io/name: dum-dashboard
+    app.kubernetes.io/part-of: dum-dashboard
+spec:
+  secretName: dum-dashboard-lumilumi-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-prod
+  dnsNames:
+    - dashboard.doh.lumilumi.xyz
