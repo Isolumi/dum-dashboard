@@ -52,28 +52,33 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarMenu>
-            {/* Overview — hardcoded, always first */}
-            <SidebarMenuItem>
-              <NavItem
-                tool={{ label: "Overview", route: "/", icon: LayoutGrid }}
-                isActive={isOverviewActive}
-              />
-            </SidebarMenuItem>
+          <nav aria-label="Primary">
+            <SidebarMenu>
+              {/* Overview — hardcoded, always first */}
+              <SidebarMenuItem>
+                <NavItem
+                  tool={{ label: "Overview", route: "/", icon: LayoutGrid }}
+                  isActive={isOverviewActive}
+                />
+              </SidebarMenuItem>
 
-            {/* Tool entries — driven by registry (FOUN-03) */}
-            {tools
-              .filter((tool) => !tool.overviewOnly)
-              .map((tool: ToolEntry) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const isActive = Boolean(matchRoute({ to: tool.route as any }));
-                return (
-                  <SidebarMenuItem key={tool.id}>
-                    <NavItem tool={tool} isActive={isActive} />
-                  </SidebarMenuItem>
-                );
-              })}
-          </SidebarMenu>
+              {/* Tool entries — driven by registry (FOUN-03) */}
+              {tools
+                .filter((tool) => !tool.overviewOnly)
+                .map((tool: ToolEntry) => {
+                  // Grouped tools stay active while one of their child routes is open.
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const isActive = Boolean(
+                    matchRoute({ to: tool.route as any, fuzzy: Boolean(tool.children?.length) }),
+                  );
+                  return (
+                    <SidebarMenuItem key={tool.id}>
+                      <NavItem tool={tool} isActive={isActive} />
+                    </SidebarMenuItem>
+                  );
+                })}
+            </SidebarMenu>
+          </nav>
         </SidebarGroup>
       </SidebarContent>
       <SidebarRail />
