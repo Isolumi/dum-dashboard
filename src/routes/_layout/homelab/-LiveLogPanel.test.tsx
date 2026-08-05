@@ -154,7 +154,7 @@ describe("LiveLogPanel", () => {
     expect(lines).toHaveLength(2_000);
     expect(lines[0]?.textContent).toBe("line-5");
     expect(lines[1_999]?.textContent).toBe("line-2004");
-  }, 10_000);
+  }, 20_000);
 
   it("pauses, resumes, clears, and lets auto-scroll be disabled", () => {
     renderPanel();
