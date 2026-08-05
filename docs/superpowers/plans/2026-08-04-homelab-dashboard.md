@@ -30,6 +30,7 @@
 ### Task 1: Replace Visit-Time OAuth With a Single-Owner Server Boundary
 
 **Files:**
+
 - Create: `src/lib/runtime-env.ts`
 - Create: `src/hooks/usePollingRefresh.ts`
 - Create: `src/hooks/-usePollingRefresh.test.tsx`
@@ -58,6 +59,7 @@
 - Delete if no imports remain: `src/lib/supabase.ts`
 
 **Interfaces:**
+
 - Produces: `requireServerEnv(name: string): string`
 - Produces: `getOwnerUser(): { id: string }`
 - Produces: `assertSameOrigin(): void`
@@ -156,6 +158,7 @@ git commit -m "feat: use tailscale-only single-owner access"
 ### Task 2: Move the Dashboard Runtime From Cloudflare Worker to Node
 
 **Files:**
+
 - Create: `Dockerfile.dashboard`
 - Create: `.dockerignore`
 - Modify: `package.json`
@@ -169,6 +172,7 @@ git commit -m "feat: use tailscale-only single-owner access"
 - Delete: `wrangler.jsonc`
 
 **Interfaces:**
+
 - Produces: `bun run start` launching `.output/server/index.mjs` on `PORT`.
 - Produces: dashboard image listening on port `3000`.
 - Consumes: `requireServerEnv` from Task 1.
@@ -235,6 +239,7 @@ git commit -m "build: run dashboard on node"
 ### Task 3: Define Shared Snapshots and Deterministic Health Rules
 
 **Files:**
+
 - Create: `shared/homelab/contracts.ts`
 - Create: `shared/homelab/health-rules.ts`
 - Create: `shared/homelab/-health-rules.test.ts`
@@ -242,6 +247,7 @@ git commit -m "build: run dashboard on node"
 - Modify: `vitest.config.ts`
 
 **Interfaces:**
+
 - Produces: `HealthStatus`, `HealthIssue`, `SourceState`, `Snapshot<T>`, `ClusterSnapshot`, `DeploymentSnapshot`, `ServiceSnapshot`, and `OverviewSnapshot`.
 - Produces: `evaluateNode`, `evaluateWorkload`, `evaluateCertificate`, `evaluateResources`, `evaluateSourceFreshness`, and `rollUpStatus`.
 
@@ -256,8 +262,9 @@ it.each([
 });
 
 it("never reports stale source data as healthy", () => {
-  expect(evaluateSourceFreshness("2026-08-04T00:00:00Z", Date.parse("2026-08-04T00:00:31Z")))
-    .toMatchObject({ status: "unknown", ruleId: "source-stale" });
+  expect(
+    evaluateSourceFreshness("2026-08-04T00:00:00Z", Date.parse("2026-08-04T00:00:31Z")),
+  ).toMatchObject({ status: "unknown", ruleId: "source-stale" });
 });
 ```
 
@@ -314,6 +321,7 @@ git commit -m "feat: define homelab health contracts"
 ### Task 4: Build the Gateway Core and Partial-Failure Aggregator
 
 **Files:**
+
 - Create: `gateway/src/config.ts`
 - Create: `gateway/src/providers/provider.ts`
 - Create: `gateway/src/snapshot.ts`
@@ -327,6 +335,7 @@ git commit -m "feat: define homelab health contracts"
 - Modify: `vitest.config.ts`
 
 **Interfaces:**
+
 - Produces: `Provider<T> = { source: SourceName; collect(signal: AbortSignal): Promise<T> }`.
 - Produces: `collectProviders(providers, timeoutMs, now): Promise<SourceResult[]>`.
 - Produces: `createGateway(dependencies): Hono` with `/healthz`, `/overview`, `/cluster`, `/deployments`, and `/services`.
@@ -393,6 +402,7 @@ git commit -m "feat: add read-only homelab gateway"
 ### Task 5: Add Kubernetes Inventory, Events, Pod Detail, and Log Streaming
 
 **Files:**
+
 - Create: `gateway/src/providers/kubernetes.ts`
 - Create: `gateway/src/providers/kubernetes-mappers.ts`
 - Create: `gateway/src/providers/-kubernetes.test.ts`
@@ -403,6 +413,7 @@ git commit -m "feat: add read-only homelab gateway"
 - Modify: `bun.lock`
 
 **Interfaces:**
+
 - Produces: `KubernetesProvider.collect(): Promise<ClusterData>`.
 - Produces: `getPod(namespace: string, pod: string): Promise<PodDetail>`.
 - Produces: `streamPodLogs(namespace, pod, container, signal): AsyncIterable<string>`.
@@ -448,6 +459,7 @@ git commit -m "feat: read kubernetes health and pod logs"
 ### Task 6: Add Prometheus Resource History
 
 **Files:**
+
 - Create: `gateway/src/providers/prometheus.ts`
 - Create: `gateway/src/providers/-prometheus.test.ts`
 - Create: `gateway/src/providers/fixtures/prometheus.json`
@@ -455,6 +467,7 @@ git commit -m "feat: read kubernetes health and pod logs"
 - Modify: `gateway/src/snapshot.ts`
 
 **Interfaces:**
+
 - Produces: `PrometheusProvider.queryInstant(query: string): Promise<PrometheusVector>`.
 - Produces: `PrometheusProvider.queryRange(query, start, end, step): Promise<MetricSeries[]>`.
 - Produces: `getResourceHistory(window: "1h" | "6h" | "24h" | "7d"): Promise<ResourceHistory>`.
@@ -498,6 +511,7 @@ git commit -m "feat: add prometheus resource history"
 ### Task 7: Correlate GitHub, Argo CD, Images, and Live Workloads
 
 **Files:**
+
 - Create: `gateway/src/providers/github.ts`
 - Create: `gateway/src/providers/argocd.ts`
 - Create: `gateway/src/deployment-correlation.ts`
@@ -510,6 +524,7 @@ git commit -m "feat: add prometheus resource history"
 - Modify: `gateway/src/snapshot.ts`
 
 **Interfaces:**
+
 - Produces: `GitHubProvider.getLatestWorkflow(repo, branch): Promise<WorkflowRun>`.
 - Produces: `ArgoProvider.getApplication(name): Promise<ArgoApplicationState>`.
 - Produces: `correlateDeployment(input): DeploymentState`.
@@ -548,6 +563,7 @@ git commit -m "feat: correlate cicd deployment state"
 ### Task 8: Add the Explicit Service Catalog and Private HTTPS Probes
 
 **Files:**
+
 - Create: `config/homelab-services.yml`
 - Create: `gateway/src/service-catalog.ts`
 - Create: `gateway/src/service-probe.ts`
@@ -558,6 +574,7 @@ git commit -m "feat: correlate cicd deployment state"
 - Modify: `bun.lock`
 
 **Interfaces:**
+
 - Produces: `loadServiceCatalog(path: string): ServiceCatalogEntry[]`.
 - Produces: `probeService(entry, signal): Promise<ServiceProbeResult>`.
 
@@ -604,6 +621,7 @@ git commit -m "feat: monitor configured private services"
 ### Task 9: Add the Dashboard Homelab Data Layer and Log Proxy
 
 **Files:**
+
 - Create: `src/homelab/homelab.functions.ts`
 - Create: `src/homelab/-homelab.functions.test.ts`
 - Create: `src/homelab/useHomelabSnapshot.ts`
@@ -614,6 +632,7 @@ git commit -m "feat: monitor configured private services"
 - Modify: `vitest.config.ts`
 
 **Interfaces:**
+
 - Produces: `getHomelabOverview`, `getClusterSnapshot`, `getDeploymentSnapshot`, and `getServiceSnapshot` server functions.
 - Produces: `useHomelabSnapshot<T>(fetcher, initialData): { snapshot; refreshing; error }`.
 - Produces: same-origin SSE endpoint `/api/homelab/logs/:namespace/:pod?container=name`.
@@ -652,6 +671,7 @@ git commit -m "feat: add homelab dashboard data layer"
 ### Task 10: Add Grouped Navigation and the Homelab Overview
 
 **Files:**
+
 - Create: `src/routes/_layout/homelab/route.tsx`
 - Create: `src/routes/_layout/homelab/index.tsx`
 - Create: `src/routes/_layout/homelab/-HomelabTabs.tsx`
@@ -667,6 +687,7 @@ git commit -m "feat: add homelab dashboard data layer"
 - Modify: `src/styles.css`
 
 **Interfaces:**
+
 - Extends `ToolEntry` with `children?: Array<{ id; label; route }>`.
 - Produces Homelab routes `/homelab`, `/homelab/cluster`, `/homelab/deployments`, and `/homelab/services`.
 
@@ -718,6 +739,7 @@ git commit -m "feat: add homelab navigation and overview"
 ### Task 11: Build the Cluster View and Live Log Panel
 
 **Files:**
+
 - Create: `src/routes/_layout/homelab/cluster.tsx`
 - Create: `src/routes/_layout/homelab/-ClusterSummary.tsx`
 - Create: `src/routes/_layout/homelab/-PodTable.tsx`
@@ -727,6 +749,7 @@ git commit -m "feat: add homelab navigation and overview"
 - Create: `src/routes/_layout/homelab/-LiveLogPanel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `ClusterSnapshot` and `/api/homelab/logs/:namespace/:pod` from Task 9.
 - Produces: searchable pod table and an EventSource-backed live log panel.
 
@@ -760,6 +783,7 @@ git commit -m "feat: add cluster health and live logs"
 ### Task 12: Build Deployment and Service Views
 
 **Files:**
+
 - Create: `src/routes/_layout/homelab/deployments.tsx`
 - Create: `src/routes/_layout/homelab/services.tsx`
 - Create: `src/routes/_layout/homelab/-DeploymentPipeline.tsx`
@@ -768,6 +792,7 @@ git commit -m "feat: add cluster health and live logs"
 - Create: `src/routes/_layout/homelab/-ServicesView.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `DeploymentSnapshot` and `ServiceSnapshot` from Task 9.
 - Produces: commit-to-live pipeline and private service catalog UI.
 
@@ -801,6 +826,7 @@ git commit -m "feat: add deployments and services views"
 ### Task 13: Add K3s Manifests, Read-Only RBAC, and GitHub Image Builds
 
 **Files:**
+
 - Create: `.github/workflows/build-images.yml`
 - Create: `k8s/base/namespace.yml`
 - Create: `k8s/base/dashboard-deployment.yml`
@@ -818,6 +844,7 @@ git commit -m "feat: add deployments and services views"
 - Create: `scripts/check-readonly-rbac.sh`
 
 **Interfaces:**
+
 - Produces namespace `dum-dashboard`, images `ghcr.io/isolumi/dum-dashboard` and `ghcr.io/isolumi/homelab-gateway`, Argo app `dum-dashboard-dumachine`, and TLS secret `dum-dashboard-lumilumi-tls`.
 
 - [ ] **Step 1: Write the RBAC assertion script before manifests**
@@ -862,12 +889,14 @@ git commit -m "deploy: add dumachine gitops manifests"
 ### Task 14: Install Prometheus Through Argo CD and Complete End-to-End Verification
 
 **Files:**
+
 - Create: `k8s/argocd/prometheus.yml`
 - Create: `k8s/argocd/prometheus-values.yml`
 - Create: `docs/homelab-dashboard-operations.md`
 - Modify: `README.md`
 
 **Interfaces:**
+
 - Produces Argo app `kube-prometheus-stack` in namespace `monitoring` using chart `86.0.1`.
 - Produces a copyable operator runbook for secrets, bootstrap, verification, and rollback.
 

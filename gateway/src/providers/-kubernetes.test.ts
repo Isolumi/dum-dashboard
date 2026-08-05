@@ -48,7 +48,12 @@ async function readSseUntil(
 
 describe("Kubernetes mappers", () => {
   it("maps inventory and sorts only Warning events without losing image digests", () => {
-    const cluster = mapClusterData(kubernetesFixture);
+    const inventory = structuredClone(kubernetesFixture);
+    inventory.deployments.items[0]!.metadata!.creationTimestamp = new Date("2026-08-04T10:00:00Z");
+    inventory.deployments.items[0]!.metadata!.annotations = {
+      "deployment.kubernetes.io/revision": "7",
+    };
+    const cluster = mapClusterData(inventory);
 
     expect(cluster.nodes).toEqual([
       {
@@ -66,6 +71,8 @@ describe("Kubernetes mappers", () => {
           namespace: "homelab",
           desiredReplicas: 2,
           availableReplicas: 0,
+          createdAt: "2026-08-04T10:00:00.000Z",
+          revision: "7",
           status: "critical",
         }),
       ]),
@@ -142,7 +149,11 @@ describe("Kubernetes mappers", () => {
 
     const summary = mapClusterData(inventory).pods[0];
 
-    expect(summary).toMatchObject({ image: null, imageTag: null, imageDigest: null });
+    expect(summary).toMatchObject({
+      image: null,
+      imageTag: null,
+      imageDigest: null,
+    });
     expect(summary?.containerImages).toEqual([
       {
         name: "metrics",
@@ -247,6 +258,210 @@ describe("KubernetesProvider", () => {
     ).toBe(true);
   });
 
+  it("reports only aggregate workload restart increases observed within 15 minutes", async () => {
+    const inventory = structuredClone(kubernetesFixture);
+    const firstPod = inventory.pods.items.find((pod) => pod.metadata?.name === "prometheus-0")!;
+    const secondPod = structuredClone(firstPod);
+    secondPod.metadata!.name = "prometheus-1";
+    firstPod.status!.containerStatuses![0]!.restartCount = 5;
+    secondPod.status!.containerStatuses![0]!.restartCount = 0;
+    inventory.pods.items.push(secondPod);
+    let now = Date.parse("2026-08-04T12:00:00Z");
+    const coreApi = {
+      listNode: vi.fn(async () => inventory.nodes),
+      listNamespace: vi.fn(async () => inventory.namespaces),
+      listPodForAllNamespaces: vi.fn(async () => inventory.pods),
+      listEventForAllNamespaces: vi.fn(async () => inventory.events),
+      readNamespacedPod: vi.fn(),
+    };
+    const appsApi = {
+      listDeploymentForAllNamespaces: vi.fn(async () => inventory.deployments),
+      listStatefulSetForAllNamespaces: vi.fn(async () => inventory.statefulSets),
+      listDaemonSetForAllNamespaces: vi.fn(async () => inventory.daemonSets),
+    };
+    const provider = new KubernetesProvider({
+      coreApi,
+      appsApi,
+      now: () => now,
+    });
+    const prometheus = (cluster: ClusterData) =>
+      cluster.workloads.find((workload) => workload.name === "prometheus")!;
+
+    const first = await provider.collect(new AbortController().signal);
+
+    expect(prometheus(first)).toMatchObject({
+      restartIncrease15m: false,
+      status: "healthy",
+    });
+
+    now += 10_000;
+    firstPod.status!.containerStatuses![0]!.restartCount = 3;
+    secondPod.status!.containerStatuses![0]!.restartCount = 1;
+    const aggregateDecrease = await provider.collect(new AbortController().signal);
+
+    expect(prometheus(aggregateDecrease)).toMatchObject({
+      restartIncrease15m: false,
+      status: "healthy",
+    });
+
+    now += 10_000;
+    secondPod.status!.containerStatuses![0]!.restartCount = 3;
+    const aggregateIncrease = await provider.collect(new AbortController().signal);
+
+    expect(prometheus(aggregateIncrease)).toMatchObject({
+      restartIncrease15m: true,
+      status: "warning",
+    });
+
+    for (let index = 0; index < 100; index += 1) {
+      const rapidRefresh = await provider.collect(new AbortController().signal);
+      expect(prometheus(rapidRefresh).restartIncrease15m).toBe(true);
+    }
+  });
+
+  it("attributes restarts by workload selector instead of overlapping pod-name prefixes", async () => {
+    const inventory = structuredClone(kubernetesFixture);
+    const base = inventory.statefulSets.items[0]!;
+    const worker = structuredClone(base);
+    base.metadata!.name = "app";
+    base.spec!.selector!.matchLabels = { app: "app" };
+    worker.metadata!.name = "app-worker";
+    worker.spec!.selector!.matchLabels = { app: "app-worker" };
+    inventory.statefulSets.items = [base, worker];
+
+    const appPod = inventory.pods.items.find(
+      (candidate) => candidate.metadata?.name === "prometheus-0",
+    )!;
+    const workerPod = structuredClone(appPod);
+    appPod.metadata!.name = "app-0";
+    appPod.metadata!.labels = { app: "app" };
+    appPod.status!.containerStatuses![0]!.restartCount = 0;
+    workerPod.metadata!.name = "app-worker-0";
+    workerPod.metadata!.labels = { app: "app-worker" };
+    workerPod.status!.containerStatuses![0]!.restartCount = 0;
+    inventory.pods.items = [appPod, workerPod];
+
+    let now = Date.parse("2026-08-04T12:00:00Z");
+    const provider = new KubernetesProvider({
+      now: () => now,
+      coreApi: {
+        listNode: vi.fn(async () => inventory.nodes),
+        listNamespace: vi.fn(async () => inventory.namespaces),
+        listPodForAllNamespaces: vi.fn(async () => inventory.pods),
+        listEventForAllNamespaces: vi.fn(async () => inventory.events),
+        readNamespacedPod: vi.fn(),
+      },
+      appsApi: {
+        listDeploymentForAllNamespaces: vi.fn(async () => inventory.deployments),
+        listStatefulSetForAllNamespaces: vi.fn(async () => inventory.statefulSets),
+        listDaemonSetForAllNamespaces: vi.fn(async () => inventory.daemonSets),
+      },
+    });
+    const workload = (cluster: ClusterData, name: string) =>
+      cluster.workloads.find((candidate) => candidate.name === name)!;
+
+    await provider.collect(new AbortController().signal);
+    now += 10_000;
+    workerPod.status!.containerStatuses![0]!.restartCount = 1;
+    const restarted = await provider.collect(new AbortController().signal);
+
+    expect(workload(restarted, "app").restartIncrease15m).toBe(false);
+    expect(workload(restarted, "app-worker").restartIncrease15m).toBe(true);
+  });
+
+  it("clears a restart increase immediately after its baseline ages past 15 minutes", async () => {
+    const inventory = structuredClone(kubernetesFixture);
+    const pod = inventory.pods.items.find(
+      (candidate) => candidate.metadata?.name === "prometheus-0",
+    )!;
+    pod.status!.containerStatuses![0]!.restartCount = 0;
+    const startedAt = Date.parse("2026-08-04T12:00:00Z");
+    let now = startedAt;
+    const provider = new KubernetesProvider({
+      now: () => now,
+      coreApi: {
+        listNode: vi.fn(async () => inventory.nodes),
+        listNamespace: vi.fn(async () => inventory.namespaces),
+        listPodForAllNamespaces: vi.fn(async () => inventory.pods),
+        listEventForAllNamespaces: vi.fn(async () => inventory.events),
+        readNamespacedPod: vi.fn(),
+      },
+      appsApi: {
+        listDeploymentForAllNamespaces: vi.fn(async () => inventory.deployments),
+        listStatefulSetForAllNamespaces: vi.fn(async () => inventory.statefulSets),
+        listDaemonSetForAllNamespaces: vi.fn(async () => inventory.daemonSets),
+      },
+    });
+    const restartIncreased = async () => {
+      const cluster = await provider.collect(new AbortController().signal);
+      return cluster.workloads.find((workload) => workload.name === "prometheus")!
+        .restartIncrease15m;
+    };
+
+    await expect(restartIncreased()).resolves.toBe(false);
+    now += 10_000;
+    pod.status!.containerStatuses![0]!.restartCount = 1;
+    await expect(restartIncreased()).resolves.toBe(true);
+
+    now += 10_000;
+    pod.status!.containerStatuses![0]!.restartCount = 0;
+    await expect(restartIncreased()).resolves.toBe(true);
+
+    now = startedAt + 10_000 + 15 * 60_000;
+    await expect(restartIncreased()).resolves.toBe(true);
+
+    now += 1;
+    await expect(restartIncreased()).resolves.toBe(false);
+  });
+
+  it("forgets restart history when a workload is removed", async () => {
+    const inventory = structuredClone(kubernetesFixture);
+    const workload = inventory.statefulSets.items[0]!;
+    const pod = inventory.pods.items.find(
+      (candidate) => candidate.metadata?.name === "prometheus-0",
+    )!;
+    pod.status!.containerStatuses![0]!.restartCount = 0;
+    let now = Date.parse("2026-08-04T12:00:00Z");
+    const provider = new KubernetesProvider({
+      now: () => now,
+      coreApi: {
+        listNode: vi.fn(async () => inventory.nodes),
+        listNamespace: vi.fn(async () => inventory.namespaces),
+        listPodForAllNamespaces: vi.fn(async () => inventory.pods),
+        listEventForAllNamespaces: vi.fn(async () => inventory.events),
+        readNamespacedPod: vi.fn(),
+      },
+      appsApi: {
+        listDeploymentForAllNamespaces: vi.fn(async () => inventory.deployments),
+        listStatefulSetForAllNamespaces: vi.fn(async () => inventory.statefulSets),
+        listDaemonSetForAllNamespaces: vi.fn(async () => inventory.daemonSets),
+      },
+    });
+    const prometheus = (cluster: ClusterData) =>
+      cluster.workloads.find((candidate) => candidate.name === "prometheus");
+
+    expect(prometheus(await provider.collect(new AbortController().signal))).toMatchObject({
+      restartIncrease15m: false,
+    });
+
+    now += 10_000;
+    inventory.statefulSets.items = [];
+    inventory.pods.items = inventory.pods.items.filter(
+      (candidate) => candidate.metadata?.name !== "prometheus-0",
+    );
+    expect(prometheus(await provider.collect(new AbortController().signal))).toBeUndefined();
+
+    now += 10_000;
+    workload.status!.availableReplicas = 1;
+    pod.status!.containerStatuses![0]!.restartCount = 1;
+    inventory.statefulSets.items = [workload];
+    inventory.pods.items.push(pod);
+    expect(prometheus(await provider.collect(new AbortController().signal))).toMatchObject({
+      restartIncrease15m: false,
+      status: "healthy",
+    });
+  });
+
   it("returns typed pod detail from the read-only pod endpoint", async () => {
     const provider = new KubernetesProvider({
       coreApi: {
@@ -316,7 +531,9 @@ describe("KubernetesProvider", () => {
     let requestUrl: string | undefined;
     const fetchApi = vi.fn(async (url: string) => {
       requestUrl = url;
-      return new Response(Readable.from(["2026-08-04T12:00:01Z next line\n"]), { status: 200 });
+      return new Response(Readable.from(["2026-08-04T12:00:01Z next line\n"]), {
+        status: 200,
+      });
     });
     const provider = new KubernetesProvider({ kubeConfig, fetchApi });
     const cursor = "2026-08-04T12:00:00.123456789Z";
@@ -501,7 +718,9 @@ describe("pod gateway routes", () => {
     const logsResponse = await app.request("/pods/homelab/gateway-abc/logs?container=gateway");
 
     expect(podResponse.status).toBe(200);
-    await expect(podResponse.json()).resolves.toMatchObject({ name: "gateway-abc" });
+    await expect(podResponse.json()).resolves.toMatchObject({
+      name: "gateway-abc",
+    });
     expect(logsResponse.headers.get("content-type")).toContain("text/event-stream");
     expect(await logsResponse.text()).toBe(
       'event: ready\ndata: {"status":"ready"}\n\nevent: line\ndata: {"line":"2026-08-04T12:00:00Z request complete","cursor":"2026-08-04T12:00:00Z"}\n\n',

@@ -11,6 +11,7 @@ import type {
   ResourceWindow,
   ServiceSnapshot,
 } from "@shared/homelab/contracts";
+import { DeploymentSnapshotSchema } from "#/lib/homelab-schemas";
 import { requireServerEnv } from "#/lib/runtime-env";
 import { noStore } from "#/lib/server-auth";
 
@@ -280,6 +281,8 @@ const ClusterDataSchema = z
           availableReplicas: z.number().int().nonnegative(),
           failureReason: z.string().nullable(),
           restartIncrease15m: z.boolean(),
+          createdAt: TimestampSchema.nullable(),
+          revision: z.string().nullable(),
         })
         .strict(),
     ),
@@ -301,62 +304,6 @@ const ClusterDataSchema = z
   })
   .strict();
 
-const PipelineStageSchema = z
-  .object({
-    status: HealthStatusSchema,
-    summary: z.string(),
-    observedAt: TimestampSchema,
-    url: z.string().url().nullable(),
-  })
-  .strict();
-
-const DeploymentDataSchema = z
-  .object({
-    applications: z.array(
-      z
-        .object({
-          application: z.string(),
-          namespace: z.string(),
-          repository: z.string(),
-          branch: z.string(),
-          status: HealthStatusSchema,
-          commit: z
-            .object({
-              sha: z.string(),
-              message: z.string(),
-              author: z.string(),
-              committedAt: TimestampSchema,
-              url: z.string().url(),
-            })
-            .strict()
-            .nullable(),
-          argoRevision: z.string().nullable(),
-          workflow: PipelineStageSchema,
-          argo: PipelineStageSchema,
-          rollout: PipelineStageSchema,
-          workloads: z.array(
-            z
-              .object({
-                name: z.string(),
-                namespace: z.string(),
-                status: HealthStatusSchema,
-                desiredReplicas: z.number().int().nonnegative().nullable(),
-                availableReplicas: z.number().int().nonnegative().nullable(),
-                expectedImage: z.string().nullable(),
-                liveImage: z.string().nullable(),
-                liveDigests: z.array(z.string()),
-                tagMatches: z.boolean().nullable(),
-                digestMatches: z.boolean().nullable(),
-              })
-              .strict(),
-          ),
-          issues: z.array(HealthIssueSchema),
-        })
-        .strict(),
-    ),
-  })
-  .strict();
-
 const ServiceDataSchema = z.object({ services: z.array(ServiceSummarySchema) }).strict();
 
 function snapshotSchema<T extends z.ZodTypeAny>(dataSchema: T) {
@@ -374,8 +321,6 @@ function snapshotSchema<T extends z.ZodTypeAny>(dataSchema: T) {
 
 const OverviewSnapshotSchema: z.ZodType<OverviewSnapshot> = snapshotSchema(OverviewDataSchema);
 const ClusterSnapshotSchema: z.ZodType<ClusterSnapshot> = snapshotSchema(ClusterDataSchema);
-const DeploymentSnapshotSchema: z.ZodType<DeploymentSnapshot> =
-  snapshotSchema(DeploymentDataSchema);
 const ServiceSnapshotSchema: z.ZodType<ServiceSnapshot> = snapshotSchema(ServiceDataSchema);
 
 function unavailableError(): Error {

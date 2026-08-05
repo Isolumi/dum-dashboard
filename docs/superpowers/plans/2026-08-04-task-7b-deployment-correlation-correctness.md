@@ -24,12 +24,14 @@
 ### Task 1: Reject Blank Required Argo Evidence
 
 **Files:**
+
 - Modify: `gateway/src/providers/argocd.ts`
 - Modify: `gateway/src/providers/-argocd.test.ts`
 - Modify: `gateway/src/-snapshot.test.ts`
 - Modify: `gateway/src/-app.test.ts`
 
 **Interfaces:**
+
 - Consumes: `parseArgoApplicationState(value: unknown): ArgoApplicationState | null`.
 - Produces: the same interface, with every required Argo string constrained to `value.trim().length > 0`.
 - Preserves: optional string fields remain `string | null`; core API group and cluster-scoped namespace may remain empty where already optional.
@@ -128,6 +130,7 @@ git commit -m "fix: reject blank argo deployment evidence"
 ### Task 2: Share Strict Replica Validation Across Snapshot and Correlation
 
 **Files:**
+
 - Modify: `gateway/src/runtime-validation.ts`
 - Modify: `gateway/src/snapshot.ts`
 - Modify: `gateway/src/deployment-correlation.ts`
@@ -136,6 +139,7 @@ git commit -m "fix: reject blank argo deployment evidence"
 - Modify: `gateway/src/-app.test.ts`
 
 **Interfaces:**
+
 - Produces: `isNonNegativeInteger(value: unknown): value is number` from `gateway/src/runtime-validation.ts`.
 - Consumes: the same predicate in both `parseClusterData` and direct Kubernetes deployment evidence parsing.
 - Preserves: `0` is valid input; correlation decides that a present target with zero available replicas is Critical.

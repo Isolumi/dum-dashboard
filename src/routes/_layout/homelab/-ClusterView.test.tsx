@@ -89,6 +89,8 @@ function clusterSnapshot(overrides: Partial<ClusterSnapshot> = {}): ClusterSnaps
           availableReplicas: 1,
           failureReason: "Replica unavailable",
           restartIncrease15m: true,
+          createdAt: "2026-08-04T09:00:00.000Z",
+          revision: "7",
         },
         {
           kind: "Deployment",
@@ -99,6 +101,8 @@ function clusterSnapshot(overrides: Partial<ClusterSnapshot> = {}): ClusterSnaps
           availableReplicas: 1,
           failureReason: null,
           restartIncrease15m: false,
+          createdAt: "2026-08-04T09:05:00.000Z",
+          revision: "12",
         },
       ],
       pods: [

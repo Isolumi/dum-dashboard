@@ -27,6 +27,8 @@ spec:
     spec:
       serviceAccountName: homelab-gateway
       automountServiceAccountToken: true
+      imagePullSecrets:
+        - name: ghcr-pull
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

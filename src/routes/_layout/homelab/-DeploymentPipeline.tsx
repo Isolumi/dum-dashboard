@@ -14,8 +14,17 @@ import type {
   ApplicationPipelineSummary,
   HealthStatus,
   PipelineStage,
+  WorkflowPipelineStage,
 } from "@shared/homelab/contracts";
 import { StatusBadge } from "./-StatusBadge";
+
+const INCOMPLETE_IMAGE_EVIDENCE_RULES = new Set([
+  "deployment-expected-image-unavailable",
+  "deployment-expected-tag-unavailable",
+  "deployment-live-tag-unavailable",
+  "deployment-live-digest-unavailable",
+  "deployment-pod-unavailable",
+]);
 
 function safeHttpsUrl(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -29,6 +38,28 @@ function safeHttpsUrl(value: unknown): string | null {
 
 function shortSha(sha: string): string {
   return sha.slice(0, 7) || "Unknown";
+}
+
+function formatTimestamp(value: string | null | undefined): string {
+  if (!value || !Number.isFinite(Date.parse(value))) return "Unknown";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+    timeZoneName: "short",
+  }).format(new Date(value));
+}
+
+function formatDuration(durationMs: number | null | undefined): string {
+  if (durationMs === null || durationMs === undefined || durationMs < 0) return "Unknown";
+  const totalSeconds = Math.floor(durationMs / 1_000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
 
 function workloadStatus(application: ApplicationPipelineSummary): HealthStatus {
@@ -48,7 +79,20 @@ function imageStatus(application: ApplicationPipelineSummary): HealthStatus {
   ) {
     return "warning";
   }
-  if (application.workloads.some(({ expectedImage }) => expectedImage === null)) return "unknown";
+  if (application.issues.some(({ ruleId }) => INCOMPLETE_IMAGE_EVIDENCE_RULES.has(ruleId))) {
+    return "unknown";
+  }
+  if (
+    application.workloads.some(
+      ({ expectedImage, liveImage, liveDigests, tagMatches, digestMatches }) =>
+        expectedImage === null ||
+        liveImage === null ||
+        liveDigests.length === 0 ||
+        (expectedImage.includes("@sha256:") ? digestMatches === null : tagMatches === null),
+    )
+  ) {
+    return "unknown";
+  }
   return "healthy";
 }
 
@@ -111,6 +155,23 @@ function stageCard(title: string, icon: LucideIcon, stage: PipelineStage): React
   );
 }
 
+function workflowStageCard(stage: WorkflowPipelineStage): ReactNode {
+  return (
+    <PipelineStageCard
+      title="GitHub Actions"
+      icon={GitBranch}
+      status={stage.status}
+      summary={stage.summary}
+      url={stage.url}
+    >
+      <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+        <p>Conclusion: {stage.conclusion ?? "unknown"}</p>
+        <p>Duration: {formatDuration(stage.durationMs)}</p>
+      </div>
+    </PipelineStageCard>
+  );
+}
+
 export function DeploymentPipeline({ application }: { application: ApplicationPipelineSummary }) {
   const commitHref = safeHttpsUrl(application.commit?.url);
   const commitSummary = application.commit
@@ -124,6 +185,10 @@ export function DeploymentPipeline({ application }: { application: ApplicationPi
   const desiredReplicaCount = application.workloads.reduce(
     (total, workload) => total + (workload.desiredReplicas ?? 0),
     0,
+  );
+  const replicaEvidenceAvailable = application.workloads.every(
+    ({ desiredReplicas, availableReplicas }) =>
+      desiredReplicas !== null && availableReplicas !== null,
   );
 
   return (
@@ -162,10 +227,13 @@ export function DeploymentPipeline({ application }: { application: ApplicationPi
               <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                 {application.commit.message}
               </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {formatTimestamp(application.commit.committedAt)}
+              </p>
             </div>
           ) : null}
         </PipelineStageCard>
-        {stageCard("GitHub Actions", GitBranch, application.workflow)}
+        {workflowStageCard(application.workflow)}
         <PipelineStageCard
           title="GHCR image"
           icon={PackageCheck}
@@ -187,16 +255,37 @@ export function DeploymentPipeline({ application }: { application: ApplicationPi
             ))}
           </ul>
         </PipelineStageCard>
-        {stageCard("Argo CD", Boxes, application.argo)}
+        <PipelineStageCard
+          title="Argo CD"
+          icon={Boxes}
+          status={application.argo.status}
+          summary={application.argo.summary}
+          url={application.argo.url}
+        >
+          <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+            <p>
+              Sync: {application.argo.syncStatus ?? "unknown"} · Health:{" "}
+              {application.argo.healthStatus ?? "unknown"}
+            </p>
+            <p>Operation: {application.argo.operationResult ?? "unknown"}</p>
+            <p>
+              Revision:{" "}
+              {application.argo.revision ? shortSha(application.argo.revision) : "unknown"}
+            </p>
+            <p>Last transition: {formatTimestamp(application.argo.lastTransitionAt)}</p>
+          </div>
+        </PipelineStageCard>
         {stageCard("K3s rollout", Rocket, application.rollout)}
         <PipelineStageCard
           title="Live pods"
           icon={Container}
           status={liveStatus}
           summary={
-            application.workloads.length > 0
+            application.workloads.length > 0 && replicaEvidenceAvailable
               ? `${liveReplicaCount} of ${desiredReplicaCount} replicas available`
-              : "Live pod evidence unavailable"
+              : application.workloads.length > 0
+                ? "Replica evidence unavailable"
+                : "Live pod evidence unavailable"
           }
         >
           <ul className="mt-2 space-y-2" aria-label="Live workload images">
@@ -204,7 +293,21 @@ export function DeploymentPipeline({ application }: { application: ApplicationPi
               <li key={workload.name} className="min-w-0 text-[11px] text-muted-foreground">
                 <span className="font-medium text-foreground">{workload.name}</span>
                 <span className="mt-0.5 block break-all font-mono">
-                  {workload.liveImage ?? workload.liveDigests[0] ?? "Live image unknown"}
+                  {workload.liveImage ?? "Live image unknown"}
+                </span>
+                {workload.liveDigests.length > 0 ? (
+                  workload.liveDigests.map((digest) => (
+                    <span key={digest} className="mt-0.5 block break-all font-mono">
+                      {digest}
+                    </span>
+                  ))
+                ) : (
+                  <span className="mt-0.5 block">Live digest unknown</span>
+                )}
+                <span className="mt-0.5 block">
+                  {workload.revision
+                    ? `Kubernetes revision: ${workload.revision}`
+                    : "Kubernetes revision unknown"}
                 </span>
               </li>
             ))}

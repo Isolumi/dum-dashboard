@@ -7,6 +7,7 @@ import {
   Observable,
   type ConfigurationOptions,
   type CoreV1EventList,
+  type V1LabelSelector,
   type ObservableMiddleware,
   type RequestContext,
   type ResponseContext,
@@ -20,6 +21,7 @@ import {
 } from "@kubernetes/client-node";
 import fetch, { type RequestInit, type Response } from "node-fetch";
 import type { ClusterData, PodDetail } from "../../../shared/homelab/contracts";
+import { evaluateWorkload } from "../../../shared/homelab/health-rules";
 import { normalizePodLogCursor } from "../../../shared/homelab/log-cursor";
 import { getKubernetesConfigSource } from "../config";
 import type { Provider } from "./provider";
@@ -61,6 +63,7 @@ interface AppsReadApi {
 
 type LogFetch = (url: string, options: RequestInit) => Promise<Response>;
 
+const RESTART_WINDOW_MS = 15 * 60 * 1_000;
 export interface PodLogStream extends AsyncIterable<string> {
   ready: Promise<void>;
 }
@@ -82,6 +85,7 @@ export interface KubernetesProviderOptions {
   coreApi?: CoreReadApi;
   appsApi?: AppsReadApi;
   fetchApi?: LogFetch;
+  now?: () => number;
 }
 
 export function loadKubernetesConfig<T extends KubeConfigLoader>(
@@ -125,6 +129,66 @@ function linesFrom(output: PassThrough): AsyncIterable<string> {
   };
 }
 
+function workloadKey(kind: string, namespace: string, name: string): string {
+  return `${kind}\u0000${namespace}\u0000${name}`;
+}
+
+function podMatchesSelector(pod: V1Pod, namespace: string, selector?: V1LabelSelector): boolean {
+  if (pod.metadata?.namespace !== namespace || !selector) return false;
+  const labels = pod.metadata?.labels ?? {};
+  const matchLabels = Object.entries(selector.matchLabels ?? {});
+  const expressions = selector.matchExpressions ?? [];
+  if (matchLabels.length === 0 && expressions.length === 0) return false;
+  if (!matchLabels.every(([key, value]) => labels[key] === value)) return false;
+
+  return expressions.every((expression) => {
+    const present = Object.hasOwn(labels, expression.key);
+    const value = labels[expression.key];
+    const values = expression.values ?? [];
+    if (expression.operator === "In") return present && values.includes(value!);
+    if (expression.operator === "NotIn") return !present || !values.includes(value!);
+    if (expression.operator === "Exists") return present;
+    if (expression.operator === "DoesNotExist") return !present;
+    return false;
+  });
+}
+
+function restartCountsByWorkload(
+  deployments: V1DeploymentList,
+  statefulSets: V1StatefulSetList,
+  daemonSets: V1DaemonSetList,
+  pods: V1PodList,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  const groups = [
+    { kind: "Deployment", items: deployments.items },
+    { kind: "StatefulSet", items: statefulSets.items },
+    { kind: "DaemonSet", items: daemonSets.items },
+  ] as const;
+
+  for (const { kind, items } of groups) {
+    for (const workload of items) {
+      const name = workload.metadata?.name;
+      const namespace = workload.metadata?.namespace;
+      if (!name || !namespace) continue;
+      const count = pods.items
+        .filter((pod) => podMatchesSelector(pod, namespace, workload.spec?.selector))
+        .reduce(
+          (total, pod) =>
+            total +
+            (pod.status?.containerStatuses ?? []).reduce(
+              (podTotal, container) => podTotal + container.restartCount,
+              0,
+            ),
+          0,
+        );
+      counts.set(workloadKey(kind, namespace, name), count);
+    }
+  }
+
+  return counts;
+}
+
 export class KubernetesProvider implements KubernetesReader {
   readonly source = "kubernetes" as const;
 
@@ -133,6 +197,9 @@ export class KubernetesProvider implements KubernetesReader {
   private coreApi?: CoreReadApi;
   private appsApi?: AppsReadApi;
   private readonly fetchApi: LogFetch;
+  private readonly now: () => number;
+  private readonly previousRestartCounts = new Map<string, number>();
+  private readonly restartDetectedAt = new Map<string, number>();
 
   constructor(options: KubernetesProviderOptions = {}) {
     this.environment = options.environment ?? process.env;
@@ -140,6 +207,7 @@ export class KubernetesProvider implements KubernetesReader {
     this.coreApi = options.coreApi;
     this.appsApi = options.appsApi;
     this.fetchApi = options.fetchApi ?? fetch;
+    this.now = options.now ?? Date.now;
   }
 
   private getKubeConfig(): KubeConfig {
@@ -157,6 +225,46 @@ export class KubernetesProvider implements KubernetesReader {
     return this.appsApi;
   }
 
+  private applyRestartHistory(
+    cluster: ClusterData,
+    restartCounts: ReadonlyMap<string, number>,
+  ): ClusterData {
+    const observedAt = this.now();
+    const cutoff = observedAt - RESTART_WINDOW_MS;
+    const activeWorkloads = new Set<string>();
+    const workloads = cluster.workloads.map((workload) => {
+      const key = workloadKey(workload.kind, workload.namespace, workload.name);
+      activeWorkloads.add(key);
+      const restartCount = restartCounts.get(key) ?? 0;
+      const previousRestartCount = this.previousRestartCounts.get(key);
+      if (previousRestartCount !== undefined && restartCount > previousRestartCount) {
+        this.restartDetectedAt.set(key, observedAt);
+      }
+      this.previousRestartCounts.set(key, restartCount);
+      const detectedAt = this.restartDetectedAt.get(key);
+      const restartIncrease15m = detectedAt !== undefined && detectedAt >= cutoff;
+      const status = evaluateWorkload({
+        kind: workload.kind,
+        name: workload.name,
+        desiredReplicas: workload.desiredReplicas,
+        availableReplicas: workload.availableReplicas,
+        ...(workload.failureReason ? { failureReason: workload.failureReason } : {}),
+        restartIncrease15m,
+      }).status;
+
+      return { ...workload, status, restartIncrease15m };
+    });
+
+    for (const key of this.previousRestartCounts.keys()) {
+      if (!activeWorkloads.has(key)) {
+        this.previousRestartCounts.delete(key);
+        this.restartDetectedAt.delete(key);
+      }
+    }
+
+    return { ...cluster, workloads };
+  }
+
   async collect(signal: AbortSignal): Promise<ClusterData> {
     const coreApi = this.getCoreApi();
     const appsApi = this.getAppsApi();
@@ -172,7 +280,7 @@ export class KubernetesProvider implements KubernetesReader {
         coreApi.listEventForAllNamespaces({ fieldSelector: "type=Warning" }, options),
       ]);
 
-    return mapClusterData({
+    const cluster = mapClusterData({
       nodes,
       namespaces,
       deployments,
@@ -181,10 +289,17 @@ export class KubernetesProvider implements KubernetesReader {
       pods,
       events,
     });
+    return this.applyRestartHistory(
+      cluster,
+      restartCountsByWorkload(deployments, statefulSets, daemonSets, pods),
+    );
   }
 
   async getPod(namespace: string, pod: string): Promise<PodDetail> {
-    const detail = await this.getCoreApi().readNamespacedPod({ namespace, name: pod });
+    const detail = await this.getCoreApi().readNamespacedPod({
+      namespace,
+      name: pod,
+    });
     return mapPodDetail(detail);
   }
 

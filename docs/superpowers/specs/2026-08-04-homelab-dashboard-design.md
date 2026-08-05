@@ -146,12 +146,12 @@ Service discovery is configuration-assisted rather than inferred blindly. A smal
 
 Every monitored resource receives one of four statuses:
 
-| Status | Meaning |
-| --- | --- |
-| `Healthy` | Expected state is ready, synced, reachable, and within normal thresholds. |
-| `Warning` | Degraded or needing attention, but the current service is still usable. |
-| `Critical` | Unavailable, expired, or unable to satisfy its expected state. |
-| `Unknown` | Health cannot be established because source data is missing, stale, or unauthorized. |
+| Status     | Meaning                                                                              |
+| ---------- | ------------------------------------------------------------------------------------ |
+| `Healthy`  | Expected state is ready, synced, reachable, and within normal thresholds.            |
+| `Warning`  | Degraded or needing attention, but the current service is still usable.              |
+| `Critical` | Unavailable, expired, or unable to satisfy its expected state.                       |
+| `Unknown`  | Health cannot be established because source data is missing, stale, or unauthorized. |
 
 Each computed status includes:
 

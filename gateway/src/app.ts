@@ -6,6 +6,7 @@ import { getGatewayConfig } from "./config";
 import type { KubernetesReader, PodLogStream } from "./providers/kubernetes";
 import { isWindowedProvider, type Provider } from "./providers/provider";
 import {
+  CertificateActivityTracker,
   collectClusterSnapshot,
   collectDeploymentSnapshot,
   collectOverviewSnapshot,
@@ -55,6 +56,7 @@ export function createGateway(dependencies: GatewayDependencies = {}): Hono {
   const app = new Hono();
   const timeoutMs = dependencies.timeoutMs ?? getGatewayConfig().providerTimeoutMs;
   const now = dependencies.now ?? (() => new Date());
+  const certificateActivityTracker = new CertificateActivityTracker();
 
   app.get("/healthz", (context) => context.json({ status: "ok" }));
 
@@ -75,6 +77,7 @@ export function createGateway(dependencies: GatewayDependencies = {}): Hono {
         },
         timeoutMs,
         now,
+        certificateActivityTracker,
       ),
     ),
   );

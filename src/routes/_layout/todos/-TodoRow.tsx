@@ -1,6 +1,7 @@
 import { format, parseISO } from "date-fns";
 import { Circle, CircleCheck, CalendarIcon, GripVertical, Trash2 } from "lucide-react";
 import { memo, useRef, useState } from "react";
+import type { DraggableSyntheticListeners } from "@dnd-kit/core";
 
 import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
@@ -8,8 +9,6 @@ import { Input } from "#/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
 import type { Todo, TodoStatus } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
-
-type SyntheticListenerMap = Record<string, (event: Event) => void>;
 
 export interface TodoRowProps {
   todo: Todo;
@@ -21,7 +20,7 @@ export interface TodoRowProps {
     due_date?: string | null;
   }) => void;
   onDelete: (id: string) => void;
-  dragListeners?: SyntheticListenerMap;
+  dragListeners?: DraggableSyntheticListeners;
 }
 
 const STATUS_CYCLE: Record<TodoStatus, TodoStatus> = {

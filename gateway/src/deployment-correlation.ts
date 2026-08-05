@@ -1,10 +1,12 @@
 import type {
   ApplicationPipelineSummary,
+  ArgoPipelineStage,
   DeploymentWorkloadSummary,
   HealthIssue,
   HealthStatus,
   PipelineStage,
   PodContainerImageEvidence,
+  WorkflowPipelineStage,
 } from "../../shared/homelab/contracts";
 import { parseArgoApplicationState, type ArgoApplicationState } from "./providers/argocd";
 import { parseWorkflowRun, type WorkflowRun } from "./providers/github";
@@ -41,6 +43,8 @@ export interface KubernetesDeploymentEvidence {
     status: HealthStatus;
     desiredReplicas: number;
     availableReplicas: number;
+    createdAt?: string | null;
+    revision?: string | null;
   }>;
   pods: Array<{
     name: string;
@@ -80,6 +84,10 @@ interface NormalizedDeploymentCorrelationInput {
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
+}
+
+function isNullableTimestamp(value: unknown): value is string | null {
+  return value === null || (typeof value === "string" && Number.isFinite(Date.parse(value)));
 }
 
 function isHealthStatus(value: unknown): value is HealthStatus {
@@ -134,33 +142,31 @@ function parsePodContainerImageEvidence(value: unknown): PodContainerImageEviden
 function parseWorkloadEvidence(
   value: unknown,
 ): KubernetesDeploymentEvidence["workloads"][number] | null {
-  const properties = readOwnDataProperties(value, [
-    "kind",
-    "name",
-    "namespace",
-    "status",
-    "desiredReplicas",
-    "availableReplicas",
-  ]);
+  const properties = readOwnDataRecord(value);
   if (
     !properties ||
-    typeof properties.kind !== "string" ||
-    typeof properties.name !== "string" ||
-    typeof properties.namespace !== "string" ||
-    !isHealthStatus(properties.status) ||
-    !isNonNegativeInteger(properties.desiredReplicas) ||
-    !isNonNegativeInteger(properties.availableReplicas)
+    typeof properties.get("kind") !== "string" ||
+    typeof properties.get("name") !== "string" ||
+    typeof properties.get("namespace") !== "string" ||
+    !isHealthStatus(properties.get("status")) ||
+    !isNonNegativeInteger(properties.get("desiredReplicas")) ||
+    !isNonNegativeInteger(properties.get("availableReplicas"))
   ) {
     return null;
   }
+  const createdAt = properties.has("createdAt") ? properties.get("createdAt") : null;
+  const revision = properties.has("revision") ? properties.get("revision") : null;
+  if (!isNullableTimestamp(createdAt) || !isNullableString(revision)) return null;
 
   return {
-    kind: properties.kind,
-    name: properties.name,
-    namespace: properties.namespace,
-    status: properties.status,
-    desiredReplicas: properties.desiredReplicas,
-    availableReplicas: properties.availableReplicas,
+    kind: properties.get("kind") as string,
+    name: properties.get("name") as string,
+    namespace: properties.get("namespace") as string,
+    status: properties.get("status") as HealthStatus,
+    desiredReplicas: properties.get("desiredReplicas") as number,
+    availableReplicas: properties.get("availableReplicas") as number,
+    createdAt,
+    revision,
   };
 }
 
@@ -344,8 +350,8 @@ function workloadState(
   const liveImages = unique(targetContainers.map((container) => container.reference));
   const liveTags = unique(targetContainers.map((container) => container.tag));
   const liveDigests = unique(targetContainers.map((container) => container.digest));
-  const desiredReplicas = workload?.desiredReplicas ?? (input.kubernetes ? null : 0);
-  const availableReplicas = workload?.availableReplicas ?? (input.kubernetes ? null : 0);
+  const desiredReplicas = workload?.desiredReplicas ?? null;
+  const availableReplicas = workload?.availableReplicas ?? null;
   const issues: HealthIssue[] = [];
 
   if (!input.kubernetes) {
@@ -535,18 +541,22 @@ function workloadState(
       liveDigests,
       tagMatches,
       digestMatches,
+      revision: workload?.revision ?? null,
+      createdAt: workload?.createdAt ?? null,
     },
     issues,
   };
 }
 
-function workflowStage(workflow: WorkflowRun | null, observedAt: string): PipelineStage {
+function workflowStage(workflow: WorkflowRun | null, observedAt: string): WorkflowPipelineStage {
   if (!workflow) {
     return {
       status: "unknown",
       summary: "GitHub workflow evidence is unavailable.",
       observedAt,
       url: null,
+      conclusion: null,
+      durationMs: null,
     };
   }
   const succeeded = workflow.status === "completed" && workflow.conclusion === "success";
@@ -559,16 +569,26 @@ function workflowStage(workflow: WorkflowRun | null, observedAt: string): Pipeli
         : `Workflow ${workflow.name} is ${workflow.status}.`,
     observedAt: workflow.completedAt ?? workflow.startedAt,
     url: workflow.url,
+    conclusion: workflow.conclusion,
+    durationMs: workflow.durationMs,
   };
 }
 
-function argoStage(application: ArgoApplicationState | null, observedAt: string): PipelineStage {
+function argoStage(
+  application: ArgoApplicationState | null,
+  observedAt: string,
+): ArgoPipelineStage {
   if (!application) {
     return {
       status: "unknown",
       summary: "Argo CD application evidence is unavailable.",
       observedAt,
       url: null,
+      revision: null,
+      syncStatus: null,
+      healthStatus: null,
+      operationResult: null,
+      lastTransitionAt: null,
     };
   }
   const degraded = application.health.status === "Degraded";
@@ -587,6 +607,11 @@ function argoStage(application: ArgoApplicationState | null, observedAt: string)
       application.operation.startedAt ??
       observedAt,
     url: null,
+    revision: application.sync.revision,
+    syncStatus: application.sync.status,
+    healthStatus: application.health.status,
+    operationResult: application.operation.phase,
+    lastTransitionAt: application.health.lastTransitionAt,
   };
 }
 

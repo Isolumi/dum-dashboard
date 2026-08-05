@@ -126,6 +126,8 @@ function kubernetes(options?: {
         name: "yootoob-mp3-api",
         namespace: "yootoob-mp3",
         status: "healthy" as const,
+        createdAt: "2026-08-04T11:50:00Z",
+        revision: "7",
         desiredReplicas: 1,
         availableReplicas: apiAvailable,
       },
@@ -134,6 +136,8 @@ function kubernetes(options?: {
         name: "yootoob-mp3-frontend",
         namespace: "yootoob-mp3",
         status: "healthy" as const,
+        createdAt: "2026-08-04T11:51:00Z",
+        revision: "12",
         desiredReplicas: 1,
         availableReplicas: frontendAvailable,
       },
@@ -199,8 +203,8 @@ function expectInvalidKubernetesEvidence(
     status: "unknown",
     rollout: { status: "unknown" },
     workloads: [
-      { status: "unknown", desiredReplicas: 0, availableReplicas: 0 },
-      { status: "unknown", desiredReplicas: 0, availableReplicas: 0 },
+      { status: "unknown", desiredReplicas: null, availableReplicas: null },
+      { status: "unknown", desiredReplicas: null, availableReplicas: null },
     ],
   });
   expect(result.issues).toEqual(
@@ -219,6 +223,59 @@ function expectInvalidKubernetesEvidence(
 }
 
 describe("correlateDeployment", () => {
+  it("normalizes workflow, Argo, commit, and Kubernetes deployment evidence", () => {
+    const result = correlate();
+
+    expect(result.commit?.committedAt).toBe(githubFixture.commit.commit.author.date);
+    expect(result.workflow).toMatchObject({
+      conclusion: "success",
+      durationMs: 150000,
+    });
+    expect(result.argo).toMatchObject({
+      revision: ARGO_REVISION,
+      syncStatus: "Synced",
+      healthStatus: "Healthy",
+      operationResult: argoFixture.status.operationState.phase,
+      lastTransitionAt: argoFixture.status.health.lastTransitionTime,
+    });
+    expect(result.workloads).toEqual([
+      expect.objectContaining({
+        name: "yootoob-mp3-api",
+        revision: "7",
+        createdAt: "2026-08-04T11:50:00Z",
+      }),
+      expect.objectContaining({
+        name: "yootoob-mp3-frontend",
+        revision: "12",
+        createdAt: "2026-08-04T11:51:00Z",
+      }),
+    ]);
+  });
+
+  it("uses null, never fabricated zeroes, when Kubernetes evidence is unavailable", () => {
+    const result = correlateDeployment({
+      workflow: workflow(),
+      application: application(),
+      kubernetes: null,
+      observedAt: "2026-08-04T12:02:00Z",
+    });
+
+    expect(result.workloads).toEqual([
+      expect.objectContaining({
+        desiredReplicas: null,
+        availableReplicas: null,
+        revision: null,
+        createdAt: null,
+      }),
+      expect.objectContaining({
+        desiredReplicas: null,
+        availableReplicas: null,
+        revision: null,
+        createdAt: null,
+      }),
+    ]);
+  });
+
   it("is Healthy when source SHA, desired image tags, live tags/digests, Argo, and replicas match", () => {
     const result = correlate({
       application: application({ revision: ARGO_REVISION }),
@@ -495,6 +552,12 @@ describe("correlateDeployment", () => {
       expectedStatus: "unknown",
     },
     {
+      name: "invalid workload creation timestamp",
+      mutate: (evidence: MutableKubernetesEvidence) =>
+        (firstRecord(evidence.workloads).createdAt = "not-a-timestamp"),
+      expectedStatus: "unknown",
+    },
+    {
       name: "malformed pod record",
       mutate: (evidence: MutableKubernetesEvidence) => ((evidence.pods as unknown[])[0] = null),
       expectedStatus: "unknown",
@@ -623,8 +686,8 @@ describe("correlateDeployment", () => {
       status: "unknown",
       rollout: { status: "unknown" },
       workloads: [
-        { status: "unknown", desiredReplicas: 0, availableReplicas: 0 },
-        { status: "unknown", desiredReplicas: 0, availableReplicas: 0 },
+        { status: "unknown", desiredReplicas: null, availableReplicas: null },
+        { status: "unknown", desiredReplicas: null, availableReplicas: null },
       ],
     });
     expect(result?.issues).toEqual(

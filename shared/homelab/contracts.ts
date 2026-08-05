@@ -146,6 +146,8 @@ export interface WorkloadSummary {
   availableReplicas: number;
   failureReason: string | null;
   restartIncrease15m: boolean;
+  createdAt: string | null;
+  revision: string | null;
 }
 
 export interface PodContainerImageEvidence {
@@ -228,6 +230,19 @@ export interface PipelineStage {
   url: string | null;
 }
 
+export interface WorkflowPipelineStage extends PipelineStage {
+  conclusion: string | null;
+  durationMs: number | null;
+}
+
+export interface ArgoPipelineStage extends PipelineStage {
+  revision: string | null;
+  syncStatus: string | null;
+  healthStatus: string | null;
+  operationResult: string | null;
+  lastTransitionAt: string | null;
+}
+
 export interface DeploymentCommitSummary {
   sha: string;
   message: string;
@@ -247,6 +262,8 @@ export interface DeploymentWorkloadSummary {
   liveDigests: string[];
   tagMatches: boolean | null;
   digestMatches: boolean | null;
+  revision: string | null;
+  createdAt: string | null;
 }
 
 export interface ApplicationPipelineSummary {
@@ -257,8 +274,8 @@ export interface ApplicationPipelineSummary {
   status: HealthStatus;
   commit: DeploymentCommitSummary | null;
   argoRevision: string | null;
-  workflow: PipelineStage;
-  argo: PipelineStage;
+  workflow: WorkflowPipelineStage;
+  argo: ArgoPipelineStage;
   rollout: PipelineStage;
   workloads: DeploymentWorkloadSummary[];
   issues: HealthIssue[];

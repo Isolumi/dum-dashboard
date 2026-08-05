@@ -1,0 +1,51 @@
+name: Roll back deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_commit:
+        description: Full SHA of the deploy tag commit to revert
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out deploy branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: deploy
+          fetch-depth: 0
+          ssh-key: ${{ secrets.DEPLOY_BRANCH_SSH_KEY }}
+
+      - name: Revert reviewed deployment commit
+        env:
+          DEPLOY_COMMIT: ${{ inputs.deploy_commit }}
+        run: |
+          git remote set-url origin git@github.com:Isolumi/dum-dashboard.git
+          if [[ ! "${DEPLOY_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "deploy_commit must be a full lowercase commit SHA" >&2
+            exit 1
+          fi
+          git fetch origin deploy
+          git cat-file -e "${DEPLOY_COMMIT}^{commit}"
+          git merge-base --is-ancestor "${DEPLOY_COMMIT}" origin/deploy
+          if [[ "$(git rev-list --parents -n 1 "${DEPLOY_COMMIT}" | awk '{print NF - 1}')" -ne 1 ]]; then
+            echo "Only a non-merge deployment tag commit can be reverted" >&2
+            exit 1
+          fi
+          changed_paths="$(git diff-tree --no-commit-id --name-only -r "${DEPLOY_COMMIT}")"
+          if [[ "${changed_paths}" != "k8s/overlays/dumachine/kustomization.yml" ]]; then
+            echo "Selected commit is not an isolated deployment tag update" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git revert --no-edit "${DEPLOY_COMMIT}"
+          git push origin HEAD:deploy

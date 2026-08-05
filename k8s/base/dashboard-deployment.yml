@@ -26,6 +26,8 @@ spec:
         app.kubernetes.io/part-of: dum-dashboard
     spec:
       automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

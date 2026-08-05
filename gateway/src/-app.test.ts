@@ -81,6 +81,8 @@ function validClusterSource(): ClusterData {
     availableReplicas: 1,
     failureReason: null,
     restartIncrease15m: false,
+    createdAt: "2026-08-04T10:00:00.000Z",
+    revision: "1",
   });
   const pod = (name: "api" | "frontend", repository: string) => ({
     name: `yootoob-mp3-${name}-abc`,
@@ -214,7 +216,13 @@ describe("gateway routes", () => {
         workloads: { healthy: 2, warning: 0, critical: 0, unknown: 0, total: 2 },
         argo: { status: "healthy", syncedApplications: 1, totalApplications: 1 },
         activeIssues: expect.any(Array),
-        recentActivity: [],
+        recentActivity: [
+          expect.objectContaining({
+            resource: "Application/yootoob-mp3-dumachine",
+            source: "argocd",
+            status: "healthy",
+          }),
+        ],
         services: [
           expect.objectContaining({
             name: "yootoob-mp3",

@@ -144,6 +144,8 @@ function gatewayClusterData(): ClusterData {
     availableReplicas: 1,
     failureReason: null,
     restartIncrease15m: false,
+    createdAt: "2026-08-04T10:00:00.000Z",
+    revision: "1",
   });
   const pod = (name: "api" | "frontend", digest: string) => ({
     name: `yootoob-mp3-${name}-abc`,
@@ -375,6 +377,15 @@ describe("homelab server functions", () => {
             status: "healthy",
             occurredAt: "2026-08-04T12:01:00.000Z",
             source: "kubernetes",
+            url: null,
+          },
+          {
+            id: "argocd:yootoob-mp3-dumachine:2026-08-04T12:01:00.000Z",
+            resource: "Application/yootoob-mp3-dumachine",
+            message: "Argo CD reports yootoob-mp3-dumachine Synced and Healthy.",
+            status: "healthy",
+            occurredAt: "2026-08-04T12:01:00.000Z",
+            source: "argocd",
             url: null,
           },
         ],

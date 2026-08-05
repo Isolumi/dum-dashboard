@@ -5,6 +5,7 @@ import type {
   HealthIssue,
   HealthStatus,
   OverviewSnapshot,
+  RecentActivity,
   ResourceHistory,
   ResourceMetrics,
   ResourceName,
@@ -16,6 +17,7 @@ import type {
 } from "../../shared/homelab/contracts";
 import {
   evaluateResources,
+  evaluateSourceFreshness,
   rollUpStatus,
   type HealthEvaluation,
 } from "../../shared/homelab/health-rules";
@@ -77,6 +79,10 @@ function isString(value: unknown): value is string {
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || isString(value);
+}
+
+function isNullableTimestamp(value: unknown): value is string | null {
+  return value === null || (isString(value) && Number.isFinite(Date.parse(value)));
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -298,7 +304,12 @@ function parseClusterData(
         parseString,
       );
       return conditions
-        ? { name: fields.name, ready: fields.ready, status: fields.status, conditions }
+        ? {
+            name: fields.name,
+            ready: fields.ready,
+            status: fields.status,
+            conditions,
+          }
         : null;
     },
   );
@@ -342,6 +353,8 @@ function parseClusterData(
         "availableReplicas",
         "failureReason",
         "restartIncrease15m",
+        "createdAt",
+        "revision",
       ]);
       if (
         !fields ||
@@ -352,7 +365,9 @@ function parseClusterData(
         !isNonNegativeInteger(fields.desiredReplicas) ||
         !isNonNegativeInteger(fields.availableReplicas) ||
         !isNullableString(fields.failureReason) ||
-        typeof fields.restartIncrease15m !== "boolean"
+        typeof fields.restartIncrease15m !== "boolean" ||
+        !isNullableTimestamp(fields.createdAt) ||
+        !isNullableString(fields.revision)
       ) {
         return null;
       }
@@ -365,6 +380,8 @@ function parseClusterData(
         availableReplicas: fields.availableReplicas,
         failureReason: fields.failureReason,
         restartIncrease15m: fields.restartIncrease15m,
+        createdAt: fields.createdAt,
+        revision: fields.revision,
       };
     },
   );
@@ -675,29 +692,80 @@ export async function collectSnapshot(
   const hasFailures = results.some((result) => !result.ok);
   const resourceEvaluations = resourcesForHealth ? evaluateResourceMetrics(resourcesForHealth) : [];
   const resourceRollup = rollUpStatus(resourceEvaluations);
+  const freshnessEvaluations = (resourcesForHealth?.current ?? []).map((metric) => ({
+    metric,
+    evaluation: evaluateSourceFreshness(metric.observedAt, now().getTime()),
+  }));
+  const freshnessRollup = rollUpStatus(freshnessEvaluations.map(({ evaluation }) => evaluation));
+  const staleResources = freshnessRollup.status === "unknown";
   const status: HealthStatus =
     resourceRollup.status === "critical" || resourceRollup.status === "warning"
       ? resourceRollup.status
-      : hasFailures || results.length === 0 || resourceRollup.status === "unknown"
+      : hasFailures || results.length === 0 || resourceRollup.status === "unknown" || staleResources
         ? "unknown"
         : "healthy";
   const observedAt = timestamp(now);
-  const issues = resourceEvaluations
+  const resourceIssues = resourceEvaluations
     .filter(
-      (evaluation): evaluation is HealthEvaluation & { status: Exclude<HealthStatus, "healthy"> } =>
-        evaluation.status !== "healthy",
+      (
+        evaluation,
+      ): evaluation is HealthEvaluation & {
+        status: Exclude<HealthStatus, "healthy">;
+      } => evaluation.status !== "healthy",
     )
     .map((evaluation) =>
       healthIssue(evaluation, resourcesForHealth!, observedAt, resourceIssueSource),
     );
+  const freshnessIssues: HealthIssue[] = freshnessEvaluations
+    .filter(
+      (
+        result,
+      ): result is typeof result & {
+        evaluation: HealthEvaluation & { status: "unknown" };
+      } => result.evaluation.status === "unknown",
+    )
+    .map(({ metric, evaluation }) => ({
+      ...evaluation,
+      source: resourceIssueSource,
+      resource: metric.resource,
+      observedAt: metric.observedAt,
+    }));
+  const resourceSourceData = resourceResult?.sourceData ?? clusterResult?.sourceData;
+  const oldestResourceObservation = (resourcesForHealth?.current ?? []).reduce<
+    ResourceMetrics["current"][number] | null
+  >((oldest, metric) => {
+    if (!oldest) return metric;
+    const oldestTime = Date.parse(oldest.observedAt);
+    const metricTime = Date.parse(metric.observedAt);
+    if (Number.isNaN(oldestTime)) return oldest;
+    if (Number.isNaN(metricTime) || metricTime < oldestTime) return metric;
+    return oldest;
+  }, null);
+  const sources = results.map((result) => {
+    if (!result.ok || result.data !== resourceSourceData || oldestResourceObservation === null) {
+      return result.state;
+    }
+
+    return {
+      ...result.state,
+      status: staleResources ? ("unknown" as const) : result.state.status,
+      observedAt: oldestResourceObservation.observedAt,
+      stale: result.state.stale || staleResources,
+      ...(staleResources
+        ? {
+            error: `${sourceUnavailableMessage(result.source).replace(" unavailable", "")} observation is stale`,
+          }
+        : {}),
+    };
+  });
 
   return {
     data: successfulData.length > 0 ? successfulData : null,
     status,
     observedAt,
-    stale: hasFailures || results.length === 0,
-    issues,
-    sources: results.map((result) => result.state),
+    stale: hasFailures || results.length === 0 || staleResources,
+    issues: [...resourceIssues, ...freshnessIssues],
+    sources,
   };
 }
 
@@ -708,12 +776,77 @@ export async function collectClusterSnapshot(
 ): Promise<ClusterSnapshot> {
   const snapshot = await collectSnapshot(providers, timeoutMs, now);
   const data = snapshot.data?.map((value) => parseClusterData(value)).find(Boolean) ?? null;
+  const entityIssues: HealthIssue[] = data
+    ? [
+        ...data.nodes.flatMap((node) =>
+          node.status === "healthy"
+            ? []
+            : [
+                {
+                  ruleId: "cluster-node-unhealthy",
+                  status: node.status,
+                  reason: "Kubernetes node health needs attention.",
+                  source: "kubernetes" as const,
+                  resource: `Node/${node.name}`,
+                  observedAt: snapshot.observedAt,
+                  evidence: { name: node.name, ready: node.ready },
+                },
+              ],
+        ),
+        ...data.workloads.flatMap((workload) =>
+          workload.status === "healthy"
+            ? []
+            : [
+                {
+                  ruleId: "cluster-workload-unhealthy",
+                  status: workload.status,
+                  reason: "Kubernetes workload health needs attention.",
+                  source: "kubernetes" as const,
+                  resource: `${workload.kind}/${workload.namespace}/${workload.name}`,
+                  observedAt: snapshot.observedAt,
+                  evidence: {
+                    desiredReplicas: workload.desiredReplicas,
+                    availableReplicas: workload.availableReplicas,
+                    failureReason: workload.failureReason,
+                  },
+                },
+              ],
+        ),
+        ...data.pods.flatMap((pod) =>
+          pod.status === "healthy"
+            ? []
+            : [
+                {
+                  ruleId: "cluster-pod-unhealthy",
+                  status: pod.status,
+                  reason: "Kubernetes pod health needs attention.",
+                  source: "kubernetes" as const,
+                  resource: `Pod/${pod.namespace}/${pod.name}`,
+                  observedAt: snapshot.observedAt,
+                  evidence: {
+                    ready: pod.ready,
+                    restartCount: pod.restartCount,
+                    node: pod.node,
+                  },
+                },
+              ],
+        ),
+      ]
+    : [];
+  const entityStatuses = data
+    ? [
+        ...data.nodes.map(({ status }) => status),
+        ...data.workloads.map(({ status }) => status),
+        ...data.pods.map(({ status }) => status),
+      ]
+    : [];
 
   return {
     ...snapshot,
     data,
-    status: data ? snapshot.status : "unknown",
+    status: data ? highestPriorityStatus([snapshot.status, ...entityStatuses]) : "unknown",
     stale: snapshot.stale || data === null,
+    issues: [...snapshot.issues, ...entityIssues],
   };
 }
 
@@ -738,21 +871,36 @@ export async function collectDeploymentSnapshot(
       const parsed = parseWorkflowRun(result.data);
       if (parsed) {
         workflow ??= parsed;
-        results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+        results.push({
+          source: result.source,
+          ok: true,
+          data: parsed,
+          state: result.state,
+        });
         continue;
       }
     } else if (result.source === "argocd") {
       const parsed = parseArgoApplicationState(result.data);
       if (parsed) {
         application ??= parsed;
-        results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+        results.push({
+          source: result.source,
+          ok: true,
+          data: parsed,
+          state: result.state,
+        });
         continue;
       }
     } else if (result.source === "kubernetes") {
       const parsed = parseClusterData(result.data, invalidContainerTargets);
       if (parsed) {
         clusterData ??= parsed;
-        results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+        results.push({
+          source: result.source,
+          ok: true,
+          data: parsed,
+          state: result.state,
+        });
         continue;
       }
     } else {
@@ -833,21 +981,36 @@ export async function collectServiceSnapshot(
       const parsed = parseServiceProbeResults(result.data);
       if (parsed) {
         probes.push(...parsed);
-        results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+        results.push({
+          source: result.source,
+          ok: true,
+          data: parsed,
+          state: result.state,
+        });
         continue;
       }
     } else if (result.source === "kubernetes") {
       const parsed = parseClusterData(result.data);
       if (parsed) {
         cluster = parsed;
-        results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+        results.push({
+          source: result.source,
+          ok: true,
+          data: parsed,
+          state: result.state,
+        });
         continue;
       }
     } else if (result.source === "argocd") {
       const parsed = parseArgoApplicationState(result.data);
       if (parsed) {
         application = parsed;
-        results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+        results.push({
+          source: result.source,
+          ok: true,
+          data: parsed,
+          state: result.state,
+        });
         continue;
       }
     } else {
@@ -900,17 +1063,12 @@ export async function collectServiceSnapshot(
         ),
         ...pods.flatMap((pod) => pod.imageTag ?? pod.image ?? []),
       ].filter((version, index, all) => all.indexOf(version) === index);
-      const createdAt = pods
-        .map(({ createdAt }) => createdAt)
-        .filter((value) => Number.isFinite(Date.parse(value)))
-        .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
-
       return {
         kind: catalogWorkload.kind,
         name: catalogWorkload.name,
         status: workload?.status ?? "unknown",
         version: versions[0] ?? null,
-        createdAt: createdAt ?? null,
+        createdAt: workload?.createdAt ?? null,
         desiredReplicas: workload?.desiredReplicas ?? null,
         availableReplicas: workload?.availableReplicas ?? null,
         podCount: cluster ? pods.length : null,
@@ -939,12 +1097,12 @@ export async function collectServiceSnapshot(
     ]).status;
     const reason = !probe.reachable
       ? "The service endpoint is not currently reachable."
-      : argoStatus === "unknown" || workloads.some(({ status }) => status === "unknown")
-        ? "The endpoint is reachable, but deployment state is unavailable."
-        : status === "critical"
-          ? "The endpoint or deployment has a critical health problem."
-          : status === "warning"
-            ? "The endpoint is reachable, but the certificate or deployment needs attention."
+      : status === "critical"
+        ? "The endpoint or deployment has a critical health problem."
+        : status === "warning"
+          ? "The endpoint is reachable, but the certificate or deployment needs attention."
+          : argoStatus === "unknown" || workloads.some(({ status }) => status === "unknown")
+            ? "The endpoint is reachable, but deployment state is unavailable."
             : "Endpoint, certificate, Argo CD, and workloads are healthy.";
 
     return {
@@ -976,13 +1134,40 @@ export async function collectServiceSnapshot(
       evidence: { name: service.name },
     })),
   ).status;
+  const issues: HealthIssue[] = services.flatMap((service) =>
+    service.status === "healthy"
+      ? []
+      : [
+          {
+            ruleId: "service-unhealthy",
+            status: service.status,
+            reason: service.reason,
+            source: null,
+            resource: `Service/${service.name}`,
+            observedAt: service.observedAt,
+            evidence: {
+              reachable: service.reachable,
+              argoApplication: service.argoApplication,
+              argoStatus: service.argoStatus,
+            },
+          },
+        ],
+  );
+  const snapshotStatus: HealthStatus =
+    services.length === 0
+      ? "unknown"
+      : status === "critical" || status === "warning"
+        ? status
+        : hasFailures || missingDeploymentEvidence
+          ? "unknown"
+          : status;
 
   return {
     data: services.length > 0 ? { services } : null,
-    status: hasFailures || missingDeploymentEvidence || services.length === 0 ? "unknown" : status,
+    status: snapshotStatus,
     observedAt,
     stale: hasFailures || missingDeploymentEvidence || services.length === 0,
-    issues: [],
+    issues,
     sources: results.map((result) => result.state),
   };
 }
@@ -991,6 +1176,83 @@ export interface OverviewProviderGroups {
   cluster: readonly Provider<unknown>[];
   deployments: readonly Provider<unknown>[];
   services: readonly Provider<unknown>[];
+}
+
+interface CertificateObservation {
+  expiresAt: string | null;
+  status: HealthStatus;
+}
+
+const CERTIFICATE_WARNING_WINDOW_MS = 14 * 24 * 60 * 60 * 1_000;
+
+function certificateStatus(expiresAt: string | null, observedAt: string): HealthStatus {
+  if (expiresAt === null) return "unknown";
+  const expiryTime = Date.parse(expiresAt);
+  const observedTime = Date.parse(observedAt);
+  if (!Number.isFinite(expiryTime) || !Number.isFinite(observedTime)) return "unknown";
+  if (expiryTime <= observedTime) return "critical";
+  if (expiryTime - observedTime <= CERTIFICATE_WARNING_WINDOW_MS) return "warning";
+  return "healthy";
+}
+
+function certificateActivityMessage(
+  service: ServiceSummary,
+  previous: CertificateObservation,
+  current: CertificateObservation,
+): string {
+  if (
+    previous.expiresAt !== null &&
+    current.expiresAt !== null &&
+    Date.parse(current.expiresAt) > Date.parse(previous.expiresAt)
+  ) {
+    return `Certificate for ${service.name} was renewed; it now expires ${current.expiresAt}.`;
+  }
+  if (current.status === "critical") return `Certificate for ${service.name} has expired.`;
+  if (current.status === "warning") {
+    return `Certificate for ${service.name} expires within 14 days.`;
+  }
+  if (current.expiresAt === null) {
+    return `Certificate expiry for ${service.name} is unavailable.`;
+  }
+  return `Certificate expiry for ${service.name} changed to ${current.expiresAt}.`;
+}
+
+export class CertificateActivityTracker {
+  private readonly observations = new Map<string, CertificateObservation>();
+  private activity: RecentActivity[] = [];
+
+  observe(services: readonly ServiceSummary[], observedAt: string): RecentActivity[] {
+    const changes: RecentActivity[] = [];
+
+    for (const service of services) {
+      const key = service.url;
+      const current = {
+        expiresAt: service.certificateExpiresAt,
+        status: certificateStatus(service.certificateExpiresAt, observedAt),
+      };
+      const previous = this.observations.get(key);
+      this.observations.set(key, current);
+      if (
+        !previous ||
+        (previous.expiresAt === current.expiresAt && previous.status === current.status)
+      ) {
+        continue;
+      }
+
+      changes.push({
+        id: `certificate:${service.name}:${observedAt}`,
+        resource: `Certificate/${service.name}`,
+        message: certificateActivityMessage(service, previous, current),
+        status: current.status,
+        occurredAt: observedAt,
+        source: "service-probe",
+        url: service.url,
+      });
+    }
+
+    this.activity = [...changes, ...this.activity].slice(0, OVERVIEW_ACTIVITY_LIMIT);
+    return [...this.activity];
+  }
 }
 
 const OVERVIEW_ACTIVITY_LIMIT = 50;
@@ -1047,11 +1309,33 @@ export async function collectOverviewSnapshot(
   providers: OverviewProviderGroups,
   timeoutMs: number,
   now: Now = () => new Date(),
+  certificateActivityTracker = new CertificateActivityTracker(),
 ): Promise<OverviewSnapshot> {
+  const collections = new Map<Provider<unknown>, Promise<unknown>>();
+  const wrappers = new Map<Provider<unknown>, Provider<unknown>>();
+  const shareProvider = (provider: Provider<unknown>): Provider<unknown> => {
+    const existing = wrappers.get(provider);
+    if (existing) return existing;
+
+    const shared: Provider<unknown> = {
+      source: provider.source,
+      collect(signal) {
+        const pending = collections.get(provider);
+        if (pending) return pending;
+
+        const collection = Promise.resolve().then(() => provider.collect(signal));
+        collections.set(provider, collection);
+        return collection;
+      },
+    };
+    wrappers.set(provider, shared);
+    return shared;
+  };
+  const shareGroup = (group: readonly Provider<unknown>[]) => group.map(shareProvider);
   const [cluster, deployments, services] = await Promise.all([
-    collectClusterSnapshot(providers.cluster, timeoutMs, now),
-    collectDeploymentSnapshot(providers.deployments, timeoutMs, now),
-    collectServiceSnapshot(providers.services, timeoutMs, now),
+    collectClusterSnapshot(shareGroup(providers.cluster), timeoutMs, now),
+    collectDeploymentSnapshot(shareGroup(providers.deployments), timeoutMs, now),
+    collectServiceSnapshot(shareGroup(providers.services), timeoutMs, now),
   ]);
   const observedAt = timestamp(now);
   const clusterData = cluster.data;
@@ -1082,9 +1366,8 @@ export async function collectOverviewSnapshot(
     0,
     OVERVIEW_ISSUE_LIMIT,
   );
-  const recentActivity = (clusterData?.events ?? [])
-    .slice(0, OVERVIEW_ACTIVITY_LIMIT)
-    .map(({ id, resource, message, status, observedAt: occurredAt }) => ({
+  const clusterActivity = (clusterData?.events ?? []).map(
+    ({ id, resource, message, status, observedAt: occurredAt }) => ({
       id,
       resource,
       message,
@@ -1092,7 +1375,44 @@ export async function collectOverviewSnapshot(
       occurredAt,
       source: "kubernetes" as const,
       url: null,
-    }));
+    }),
+  );
+  const deploymentActivity = applications.flatMap((application) => {
+    const activity = [];
+    if (application.argo.status !== "unknown") {
+      activity.push({
+        id: `argocd:${application.application}:${application.argo.observedAt}`,
+        resource: `Application/${application.application}`,
+        message: application.argo.summary,
+        status: application.argo.status,
+        occurredAt: application.argo.observedAt,
+        source: "argocd" as const,
+        url: application.argo.url,
+      });
+    }
+    if (application.workflow.status === "warning" || application.workflow.status === "critical") {
+      activity.push({
+        id: `github:${application.application}:${application.workflow.observedAt}`,
+        resource: `Workflow/${application.repository}`,
+        message: application.workflow.summary,
+        status: application.workflow.status,
+        occurredAt: application.workflow.observedAt,
+        source: "github" as const,
+        url: application.workflow.url,
+      });
+    }
+    return activity;
+  });
+  const certificateActivity = certificateActivityTracker.observe(serviceData, observedAt);
+  const recentActivity = [...clusterActivity, ...deploymentActivity, ...certificateActivity]
+    .sort((left, right) => {
+      const leftTime = Date.parse(left.occurredAt);
+      const rightTime = Date.parse(right.occurredAt);
+      if (Number.isNaN(leftTime)) return Number.isNaN(rightTime) ? 0 : 1;
+      if (Number.isNaN(rightTime)) return -1;
+      return rightTime - leftTime;
+    })
+    .slice(0, OVERVIEW_ACTIVITY_LIMIT);
   const sources = mergeSourceStates([
     ...cluster.sources,
     ...deployments.sources,

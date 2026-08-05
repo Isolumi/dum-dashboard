@@ -144,19 +144,32 @@ function workloadFailureReason(workload: Workload): string | null {
   );
 }
 
+function workloadRevision(workload: Workload): string | null {
+  const annotated = workload.metadata?.annotations?.["deployment.kubernetes.io/revision"];
+  if (annotated) return annotated;
+  if (workload.kind === "StatefulSet") {
+    const statefulSet = workload as V1StatefulSet;
+    return statefulSet.status?.updateRevision ?? statefulSet.status?.currentRevision ?? null;
+  }
+  return null;
+}
+
 function mapWorkload(workload: Workload): WorkloadSummary {
   const kind = workload.kind ?? "Unknown";
   const name = workload.metadata?.name ?? "unknown";
   const namespace = workload.metadata?.namespace ?? "default";
   const { desiredReplicas, availableReplicas } = workloadReplicas(workload);
   const failureReason = workloadFailureReason(workload);
+  // Kubernetes inventory is point-in-time. A 15-minute increase requires a retained
+  // previous counter or a Prometheus range query; mapping the current total cannot prove it.
+  const restartIncrease15m = false;
   const evaluation = evaluateWorkload({
     kind,
     name,
     desiredReplicas,
     availableReplicas,
     ...(failureReason ? { failureReason } : {}),
-    restartIncrease15m: false,
+    restartIncrease15m,
   });
 
   return {
@@ -167,7 +180,9 @@ function mapWorkload(workload: Workload): WorkloadSummary {
     desiredReplicas,
     availableReplicas,
     failureReason,
-    restartIncrease15m: false,
+    restartIncrease15m,
+    createdAt: timestamp(workload.metadata?.creationTimestamp) || null,
+    revision: workloadRevision(workload),
   };
 }
 
