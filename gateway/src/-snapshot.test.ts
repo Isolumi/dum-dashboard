@@ -3,7 +3,7 @@ import type { ClusterData, DeploymentSnapshot } from "../../shared/homelab/contr
 import type { ArgoApplicationState } from "./providers/argocd";
 import type { WorkflowRun } from "./providers/github";
 import type { Provider } from "./providers/provider";
-import { collectDeploymentSnapshot, collectProviders } from "./snapshot";
+import { collectDeploymentSnapshot, collectProviders, collectServiceSnapshot } from "./snapshot";
 
 const now = () => new Date("2026-08-04T00:00:00.000Z");
 const SOURCE_SHA = "1829d6ba3b55e66a2134ae64161b9e48ad39a197";
@@ -205,6 +205,84 @@ describe("collectProviders", () => {
       { source: "prometheus", ok: true, data: { value: "metrics" } },
       { source: "github", ok: false, error: "GitHub unavailable" },
     ]);
+  });
+});
+
+describe("collectServiceSnapshot", () => {
+  const validServiceProbeResult = () => ({
+    entry: {
+      id: "yootoob-mp3",
+      name: "yootoob-mp3",
+      description: "Private YouTube MP3 downloader",
+      url: "https://yootoob.doh.lumilumi.xyz",
+      namespace: "yootoob-mp3",
+      argoApplication: "yootoob-mp3-dumachine",
+      workloads: [{ kind: "Deployment", name: "yootoob-mp3-api" }],
+    },
+    id: "yootoob-mp3",
+    reachable: true,
+    status: "healthy",
+    latencyMs: 42,
+    certificateExpiresAt: "2026-09-01T00:00:00.000Z",
+    consecutiveFailures: 0,
+  });
+
+  it("contains malformed service probe results as an unknown stale source", async () => {
+    const snapshot = await collectServiceSnapshot(
+      [
+        {
+          source: "service-probe",
+          collect: async () => [{ id: "service", credential: "private-value" }],
+        },
+      ],
+      1_000,
+      now,
+    );
+
+    expect(snapshot).toMatchObject({
+      data: null,
+      status: "unknown",
+      stale: true,
+      sources: [
+        {
+          source: "service-probe",
+          status: "unknown",
+          stale: true,
+          error: "Service probe unavailable",
+        },
+      ],
+    });
+    expect(JSON.stringify(snapshot)).not.toContain("private-value");
+  });
+
+  it("contains a malformed optional service probe field without exposing it", async () => {
+    const snapshot = await collectServiceSnapshot(
+      [
+        {
+          source: "service-probe",
+          collect: async () => [
+            { ...validServiceProbeResult(), error: { credential: "private-value" } },
+          ],
+        },
+      ],
+      1_000,
+      now,
+    );
+
+    expect(snapshot).toMatchObject({
+      data: null,
+      status: "unknown",
+      stale: true,
+      sources: [
+        {
+          source: "service-probe",
+          status: "unknown",
+          stale: true,
+          error: "Service probe unavailable",
+        },
+      ],
+    });
+    expect(JSON.stringify(snapshot)).not.toContain("private-value");
   });
 });
 

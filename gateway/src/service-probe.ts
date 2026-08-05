@@ -19,6 +19,10 @@ export interface ServiceProbeResult {
 const PROBE_TIMEOUT_MS = 5_000;
 const consecutiveFailures = new Map<string, number>();
 
+function cancellationError(): Error {
+  return new Error("Service probe cancelled");
+}
+
 function probeFailure(
   entry: ServiceCatalogEntry,
   latencyMs: number,
@@ -88,10 +92,15 @@ export async function probeService(
   entry: ServiceCatalogEntry,
   signal: AbortSignal,
 ): Promise<ServiceProbeResult> {
+  if (signal.aborted) throw cancellationError();
+
   const controller = new AbortController();
-  const abort = () => controller.abort(signal.reason);
-  if (signal.aborted) abort();
-  else signal.addEventListener("abort", abort, { once: true });
+  let callerCancelled = false;
+  const abort = () => {
+    callerCancelled = true;
+    controller.abort();
+  };
+  signal.addEventListener("abort", abort, { once: true });
 
   let timedOut = false;
   const timeoutId = setTimeout(() => {
@@ -99,15 +108,18 @@ export async function probeService(
     controller.abort(new Error("service probe timed out"));
   }, PROBE_TIMEOUT_MS);
   const startedAt = performance.now();
+  let response: PromiseSettledResult<Response> | undefined;
+  let certificate: PromiseSettledResult<string>;
 
   try {
     const url = new URL(entry.url);
-    const [response, certificate] = await Promise.allSettled([
+    [response, certificate] = await Promise.allSettled([
       fetch(url, { signal: controller.signal }),
       peerCertificateExpiry(url, controller.signal),
     ]);
     const latencyMs = Math.round(performance.now() - startedAt);
 
+    if (callerCancelled) throw cancellationError();
     if (timedOut) return probeFailure(entry, latencyMs, "Service probe timed out");
     if (
       response.status !== "fulfilled" ||
@@ -149,5 +161,7 @@ export async function probeService(
   } finally {
     clearTimeout(timeoutId);
     signal.removeEventListener("abort", abort);
+    if (response?.status === "fulfilled")
+      await response.value.body?.cancel().catch(() => undefined);
   }
 }

@@ -39,7 +39,20 @@ const serviceCatalogSchema = z
   .object({
     services: z.array(serviceCatalogEntrySchema).min(1),
   })
-  .strict();
+  .strict()
+  .superRefine(({ services }, context) => {
+    const ids = new Set<string>();
+    for (const [index, service] of services.entries()) {
+      if (ids.has(service.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "duplicate service ID",
+          path: ["services", index, "id"],
+        });
+      }
+      ids.add(service.id);
+    }
+  });
 
 export type ServiceCatalogEntry = z.infer<typeof serviceCatalogEntrySchema>;
 

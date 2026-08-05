@@ -59,4 +59,30 @@ services:
 
     await expect(loadServiceCatalog(path)).rejects.toThrow(/unrecognized key/i);
   });
+
+  it("rejects duplicate service IDs", async () => {
+    const path = await writeCatalog(`
+services:
+  - id: yootoob-mp3
+    name: yootoob-mp3
+    description: Private YouTube MP3 downloader
+    url: https://yootoob.doh.lumilumi.xyz
+    namespace: yootoob-mp3
+    argoApplication: yootoob-mp3-dumachine
+    workloads:
+      - kind: Deployment
+        name: yootoob-mp3-api
+  - id: yootoob-mp3
+    name: duplicate
+    description: Duplicate ID
+    url: https://duplicate.doh.lumilumi.xyz
+    namespace: duplicate
+    argoApplication: duplicate
+    workloads:
+      - kind: Deployment
+        name: duplicate
+`);
+
+    await expect(loadServiceCatalog(path)).rejects.toThrow(/duplicate service ID/i);
+  });
 });

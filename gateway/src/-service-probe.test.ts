@@ -37,6 +37,21 @@ function completeTlsHandshake(validTo = "Sep 01 2026 00:00:00 GMT") {
   connect.mockImplementation(() => certificateSocket(validTo));
 }
 
+function rejectsWhenAborted() {
+  return vi.fn(
+    (_url: URL, options: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        if (options.signal?.aborted) {
+          reject(options.signal.reason);
+          return;
+        }
+        options.signal?.addEventListener("abort", () => reject(options.signal?.reason), {
+          once: true,
+        });
+      }),
+  );
+}
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -81,6 +96,104 @@ describe("probeService", () => {
     });
     await expect(probeService(entry, new AbortController().signal)).resolves.toMatchObject({
       reachable: false,
+      status: "critical",
+      consecutiveFailures: 2,
+    });
+  });
+
+  it("rejects an already-aborted caller without advancing its failure history", async () => {
+    completeTlsHandshake();
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
+    const entry = service("already-cancelled");
+
+    await expect(probeService(entry, new AbortController().signal)).resolves.toMatchObject({
+      status: "warning",
+      consecutiveFailures: 1,
+    });
+
+    const controller = new AbortController();
+    controller.abort(new Error("credential=private cancellation"));
+    await expect(probeService(entry, controller.signal)).rejects.toThrow(
+      /^Service probe cancelled$/,
+    );
+
+    await expect(probeService(entry, new AbortController().signal)).resolves.toMatchObject({
+      status: "critical",
+      consecutiveFailures: 2,
+    });
+  });
+
+  it("rejects a mid-flight caller cancellation without advancing its failure history", async () => {
+    completeTlsHandshake();
+    vi.stubGlobal("fetch", rejectsWhenAborted());
+    const entry = service("midflight-cancelled");
+    const controller = new AbortController();
+    const probe = probeService(entry, controller.signal);
+
+    controller.abort(new Error("credential=private cancellation"));
+    await expect(probe).rejects.toThrow(/^Service probe cancelled$/);
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
+    await expect(probeService(entry, new AbortController().signal)).resolves.toMatchObject({
+      status: "warning",
+      consecutiveFailures: 1,
+    });
+  });
+
+  it("cancels response bodies after successful and non-2xx probes", async () => {
+    completeTlsHandshake();
+    const successfulBody = { cancel: vi.fn().mockResolvedValue(undefined) };
+    const failedBody = { cancel: vi.fn().mockResolvedValue(undefined) };
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, body: successfulBody })
+        .mockResolvedValueOnce({ ok: false, body: failedBody }),
+    );
+
+    await expect(
+      probeService(service("response-cleanup-success"), new AbortController().signal),
+    ).resolves.toMatchObject({
+      reachable: true,
+    });
+    await expect(
+      probeService(service("response-cleanup-failure"), new AbortController().signal),
+    ).resolves.toMatchObject({
+      reachable: false,
+    });
+
+    expect(successfulBody.cancel).toHaveBeenCalledOnce();
+    expect(failedBody.cancel).toHaveBeenCalledOnce();
+  });
+
+  it("resets failure history only after a reachable probe and keeps service IDs isolated", async () => {
+    completeTlsHandshake();
+    const first = service("failure-reset");
+    const second = service("separate-service");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
+
+    await expect(probeService(first, new AbortController().signal)).resolves.toMatchObject({
+      status: "warning",
+      consecutiveFailures: 1,
+    });
+    await expect(probeService(second, new AbortController().signal)).resolves.toMatchObject({
+      status: "warning",
+      consecutiveFailures: 1,
+    });
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+    await expect(probeService(first, new AbortController().signal)).resolves.toMatchObject({
+      status: "healthy",
+      consecutiveFailures: 0,
+    });
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
+    await expect(probeService(first, new AbortController().signal)).resolves.toMatchObject({
+      status: "warning",
+      consecutiveFailures: 1,
+    });
+    await expect(probeService(second, new AbortController().signal)).resolves.toMatchObject({
       status: "critical",
       consecutiveFailures: 2,
     });

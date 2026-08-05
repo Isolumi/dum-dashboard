@@ -18,6 +18,7 @@ import {
   type HealthEvaluation,
 } from "../../shared/homelab/health-rules";
 import type { Provider } from "./providers/provider";
+import type { ServiceCatalogEntry } from "./service-catalog";
 import type { ServiceProbeResult } from "./service-probe";
 import { correlateValidatedDeployment, type DeploymentTargetName } from "./deployment-correlation";
 import { parseArgoApplicationState } from "./providers/argocd";
@@ -107,6 +108,103 @@ function parseDenseArray<T>(
 
 function parseString(value: unknown): string | null {
   return isString(value) ? value : null;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return isString(value) && value.trim().length > 0;
+}
+
+function isPrivateHttpsUrl(value: unknown): value is string {
+  if (!isNonEmptyString(value)) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+function parseServiceCatalogEntry(value: unknown): ServiceCatalogEntry | null {
+  const properties = readOwnDataProperties(value, [
+    "id",
+    "name",
+    "description",
+    "url",
+    "namespace",
+    "argoApplication",
+    "workloads",
+  ]);
+  if (
+    !properties ||
+    !isNonEmptyString(properties.id) ||
+    !isNonEmptyString(properties.name) ||
+    !isNonEmptyString(properties.description) ||
+    !isPrivateHttpsUrl(properties.url) ||
+    !isNonEmptyString(properties.namespace) ||
+    !isNonEmptyString(properties.argoApplication)
+  ) {
+    return null;
+  }
+
+  const workloads = parseDenseArray(properties.workloads, 32, (workload) => {
+    const fields = readOwnDataProperties(workload, ["kind", "name"]);
+    if (!fields || !isNonEmptyString(fields.kind) || !isNonEmptyString(fields.name)) return null;
+    return { kind: fields.kind, name: fields.name };
+  });
+  if (!workloads || workloads.length === 0) return null;
+
+  return {
+    id: properties.id,
+    name: properties.name,
+    description: properties.description,
+    url: properties.url,
+    namespace: properties.namespace,
+    argoApplication: properties.argoApplication,
+    workloads,
+  };
+}
+
+function parseServiceProbeResult(value: unknown): ServiceProbeResult | null {
+  const record = readOwnDataRecord(value);
+  const properties = readOwnDataProperties(value, [
+    "entry",
+    "id",
+    "reachable",
+    "status",
+    "latencyMs",
+    "certificateExpiresAt",
+    "consecutiveFailures",
+  ]);
+  const entry = properties ? parseServiceCatalogEntry(properties.entry) : null;
+  if (
+    !record ||
+    !properties ||
+    !entry ||
+    properties.id !== entry.id ||
+    typeof properties.reachable !== "boolean" ||
+    !isHealthStatus(properties.status) ||
+    !isFiniteNumber(properties.latencyMs) ||
+    properties.latencyMs < 0 ||
+    !isNullableString(properties.certificateExpiresAt) ||
+    !isNonNegativeInteger(properties.consecutiveFailures)
+  ) {
+    return null;
+  }
+  if (record.has("error") && !isString(record.get("error"))) return null;
+
+  return {
+    entry,
+    id: entry.id,
+    reachable: properties.reachable,
+    status: properties.status,
+    latencyMs: properties.latencyMs,
+    certificateExpiresAt: properties.certificateExpiresAt,
+    consecutiveFailures: properties.consecutiveFailures,
+  };
+}
+
+function parseServiceProbeResults(value: unknown): ServiceProbeResult[] | null {
+  return parseDenseArray(value, 64, parseServiceProbeResult);
 }
 
 function parseMetricPoint(value: unknown): ResourceHistory["points"][number] | null {
@@ -702,13 +800,31 @@ export async function collectServiceSnapshot(
   timeoutMs: number,
   now: Now = () => new Date(),
 ): Promise<ServiceSnapshot> {
-  const results = await collectProviders(providers, timeoutMs, now);
+  const collected = await collectProviders(providers, timeoutMs, now);
+  const results: SourceResult<unknown>[] = [];
+  const probes: ServiceProbeResult[] = [];
+  for (const result of collected) {
+    if (!result.ok || result.source !== "service-probe") {
+      results.push(result);
+      continue;
+    }
+
+    const parsed = parseServiceProbeResults(result.data);
+    if (parsed) {
+      probes.push(...parsed);
+      results.push({ source: result.source, ok: true, data: parsed, state: result.state });
+      continue;
+    }
+
+    const error = sourceUnavailableMessage(result.source);
+    results.push({
+      source: result.source,
+      ok: false,
+      error,
+      state: { ...result.state, status: "unknown", stale: true, error },
+    });
+  }
   const observedAt = timestamp(now);
-  const probes = results.flatMap((result) =>
-    result.ok && result.source === "service-probe" && Array.isArray(result.data)
-      ? (result.data as ServiceProbeResult[])
-      : [],
-  );
   const services: ServiceSummary[] = probes.map((probe) => ({
     name: probe.entry.name,
     description: probe.entry.description,
