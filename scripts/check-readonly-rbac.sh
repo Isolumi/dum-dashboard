@@ -379,9 +379,13 @@ bun --eval '
   if (
     prometheusApplication?.spec?.project !== "dum-dashboard-monitoring" ||
     prometheusApplication?.spec?.destination?.server !== "https://kubernetes.default.svc" ||
-    prometheusApplication?.spec?.destination?.namespace !== "monitoring"
+    prometheusApplication?.spec?.destination?.namespace !== "monitoring" ||
+    !same(prometheusApplication?.spec?.syncPolicy?.syncOptions ?? [], [
+      "CreateNamespace=true",
+      "ServerSideApply=true",
+    ])
   ) {
-    fail("Prometheus Application must use the restricted monitoring project.");
+    fail("Prometheus Application must use the restricted project and server-side apply.");
   }
   const prometheusValues = parse(readFileSync(process.env.PROMETHEUS_VALUES_PATH, "utf8"));
   if (
@@ -450,6 +454,11 @@ bun --eval '
     .join("\n");
   if (!updateCommands.includes("git push origin HEAD:deploy")) {
     fail("The image workflow must update only the deploy branch.");
+  }
+  const mergeIndex = updateCommands.indexOf("git merge --no-edit");
+  const identityIndex = updateCommands.indexOf("git config user.name \"github-actions[bot]\"");
+  if (mergeIndex < 0 || identityIndex < 0 || identityIndex > mergeIndex) {
+    fail("The deploy workflow must configure its Git identity before a merge can commit.");
   }
   const updateCheckout = workflow?.jobs?.["update-tags"]?.steps?.find(
     (step) => typeof step?.uses === "string" && step.uses.startsWith("actions/checkout@"),
