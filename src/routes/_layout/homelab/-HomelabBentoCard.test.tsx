@@ -8,7 +8,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { OverviewSnapshot } from "@shared/homelab/contracts";
@@ -56,6 +56,16 @@ function overviewSnapshot(overrides: Partial<OverviewSnapshot> = {}): OverviewSn
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 async function renderCard(data: unknown) {
   const homelabTool = tools.find((tool) => tool.id === "homelab");
   if (!homelabTool) throw new Error("Homelab tool is not registered");
@@ -89,6 +99,33 @@ afterEach(() => {
 });
 
 describe("HomelabBentoCard", () => {
+  it("catches the production break where a missing initial snapshot never retries and recovers", async () => {
+    const firstRequest = deferred<OverviewSnapshot>();
+    const secondRequest = deferred<OverviewSnapshot>();
+    getHomelabOverviewMock
+      .mockReturnValueOnce(firstRequest.promise)
+      .mockReturnValueOnce(secondRequest.promise);
+
+    const view = await renderCard(null);
+
+    const loading = screen.getByRole("status", { name: "Loading Homelab overview" });
+    expect(loading.textContent).toContain("Loading Homelab overview");
+    for (const skeleton of view.container.querySelectorAll('[data-slot="skeleton"]')) {
+      expect(skeleton.className).toContain("motion-reduce:animate-none");
+    }
+    expect(getHomelabOverviewMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => firstRequest.reject(new Error("temporary gateway failure")));
+    expect(screen.getByText("Homelab snapshot unavailable")).toBeTruthy();
+
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    await act(async () => secondRequest.resolve(overviewSnapshot()));
+
+    expect(getHomelabOverviewMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("4 / 6")).toBeTruthy();
+    expect(screen.getByRole("status", { name: "Status: Warning" })).toBeTruthy();
+  });
+
   it("summarizes the validated snapshot and links the whole card to /homelab", async () => {
     await renderCard(overviewSnapshot());
 
@@ -112,8 +149,18 @@ describe("HomelabBentoCard", () => {
     expect(screen.getByText("4 / 6")).toBeTruthy();
   });
 
-  it("shows an explicit unavailable state when the dashboard loader has no snapshot", async () => {
+  it("catches the production break where stale freshness overwrites proven Warning health", async () => {
+    await renderCard(overviewSnapshot({ status: "warning", stale: true }));
+
+    expect(screen.getByRole("status", { name: "Status: Warning" })).toBeTruthy();
+    expect(screen.getByText("Stale snapshot")).toBeTruthy();
+  });
+
+  it("shows an explicit unavailable state after the initial dashboard request fails", async () => {
+    const request = deferred<OverviewSnapshot>();
+    getHomelabOverviewMock.mockReturnValueOnce(request.promise);
     await renderCard(null);
+    await act(async () => request.reject(new Error("gateway unavailable")));
 
     expect(screen.getByRole("status", { name: "Status: Unknown" })).toBeTruthy();
     expect(screen.getByText("Homelab snapshot unavailable")).toBeTruthy();

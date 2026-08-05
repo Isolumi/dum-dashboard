@@ -68,6 +68,16 @@ function formatUtcTime(timestamp: string): string {
   return `${new Date(parsed).toISOString().slice(11, 16)} UTC`;
 }
 
+function safeHttpsUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 function SummaryCard({
   title,
   summary,
@@ -121,8 +131,9 @@ function SourceNotices({ sources }: { sources: readonly SourceState[] }) {
                   (source.stale ? "Source data is stale." : "Source health is degraded.")}
               </p>
             </div>
-            <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-health-unknown">
-              {source.stale ? "Stale" : getHealthStatusLabel(source.status)}
+            <span className="flex shrink-0 items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-health-unknown">
+              <span>{getHealthStatusLabel(source.status)}</span>
+              {source.stale ? <span>Stale</span> : null}
             </span>
           </li>
         ))}
@@ -132,6 +143,7 @@ function SourceNotices({ sources }: { sources: readonly SourceState[] }) {
 }
 
 function ActivityRow({ item }: { item: RecentActivity }) {
+  const href = safeHttpsUrl(item.url);
   const content = (
     <>
       <div className="min-w-0 flex-1">
@@ -144,15 +156,15 @@ function ActivityRow({ item }: { item: RecentActivity }) {
         <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{item.message}</p>
       </div>
       <StatusBadge status={item.status} className="min-h-5 px-1.5 py-0 text-[10px]" />
-      {item.url ? (
+      {href ? (
         <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       ) : null}
     </>
   );
 
-  return item.url ? (
+  return href ? (
     <a
-      href={item.url}
+      href={href}
       target="_blank"
       rel="noreferrer"
       aria-label={`Open activity for ${item.resource} in a new tab`}
@@ -182,27 +194,40 @@ function RecentActivityList({ items }: { items: readonly RecentActivity[] }) {
 }
 
 function ServiceLink({ service }: { service: ServiceSummary }) {
+  const href = safeHttpsUrl(service.url);
+  const content = (
+    <>
+      <StatusBadge status={service.status} className="min-h-5 px-1.5 py-0 text-[10px]" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-foreground">{service.name}</p>
+        <p className="truncate text-xs text-muted-foreground">{service.description}</p>
+      </div>
+      {service.probeLatencyMs !== null ? (
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+          {Math.round(service.probeLatencyMs)} ms
+        </span>
+      ) : null}
+      {href ? (
+        <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      ) : null}
+    </>
+  );
+
   return (
     <li>
-      <a
-        href={service.url}
-        target="_blank"
-        rel="noreferrer"
-        aria-label={`Open ${service.name} in a new tab`}
-        className="flex min-h-11 items-center gap-3 rounded-md px-2 py-2 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
-      >
-        <StatusBadge status={service.status} className="min-h-5 px-1.5 py-0 text-[10px]" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-foreground">{service.name}</p>
-          <p className="truncate text-xs text-muted-foreground">{service.description}</p>
-        </div>
-        {service.probeLatencyMs !== null ? (
-          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-            {Math.round(service.probeLatencyMs)} ms
-          </span>
-        ) : null}
-        <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Open ${service.name} in a new tab`}
+          className="flex min-h-11 items-center gap-3 rounded-md px-2 py-2 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+        >
+          {content}
+        </a>
+      ) : (
+        <div className="flex min-h-11 items-center gap-3 px-2 py-2">{content}</div>
+      )}
     </li>
   );
 }
@@ -230,7 +255,7 @@ function HomelabOverviewContent({
   refreshing: boolean;
   error: string | null;
 }) {
-  const displayStatus = error || snapshot.stale ? "unknown" : snapshot.status;
+  const displayStatus = error ? "unknown" : snapshot.status;
   const data = snapshot.data;
 
   return (
@@ -432,18 +457,20 @@ function HomelabOverviewRoute() {
 export function HomelabOverviewLoading() {
   return (
     <div
+      role="status"
       aria-label="Loading Homelab overview"
       className="mx-auto flex w-full max-w-7xl flex-col gap-4 p-4 sm:p-6"
     >
-      <Skeleton className="h-36 w-full rounded-lg" />
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <span className="sr-only">Loading Homelab overview</span>
+      <Skeleton className="h-36 w-full rounded-lg motion-reduce:animate-none" aria-hidden="true" />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-hidden="true">
         {Array.from({ length: 4 }).map((_, index) => (
-          <Skeleton key={index} className="h-28 w-full rounded-lg" />
+          <Skeleton key={index} className="h-28 w-full rounded-lg motion-reduce:animate-none" />
         ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-12">
-        <Skeleton className="h-72 w-full rounded-lg lg:col-span-7" />
-        <Skeleton className="h-72 w-full rounded-lg lg:col-span-5" />
+      <div className="grid gap-4 lg:grid-cols-12" aria-hidden="true">
+        <Skeleton className="h-72 w-full rounded-lg motion-reduce:animate-none lg:col-span-7" />
+        <Skeleton className="h-72 w-full rounded-lg motion-reduce:animate-none lg:col-span-5" />
       </div>
     </div>
   );

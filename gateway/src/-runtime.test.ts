@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ClusterData, Snapshot } from "../../shared/homelab/contracts";
 import { createGateway } from "./app";
 import { createProductionGatewayDependencies } from "./runtime";
+import type { ServiceCatalogEntry, ServiceProbeResult } from "./service-probe";
 
 const emptyCluster: ClusterData = {
   nodes: [],
@@ -13,6 +14,40 @@ const emptyCluster: ClusterData = {
 };
 
 describe("production gateway dependencies", () => {
+  it("catches the production break where catalog-backed service probes are not wired", async () => {
+    const entry: ServiceCatalogEntry = {
+      id: "yootoob-mp3",
+      name: "yootoob-mp3",
+      description: "Private YouTube MP3 downloader",
+      url: "https://yootoob.doh.lumilumi.xyz",
+      namespace: "yootoob-mp3",
+      argoApplication: "yootoob-mp3-dumachine",
+      workloads: [{ kind: "Deployment", name: "yootoob-mp3-api" }],
+    };
+    const probeResult: ServiceProbeResult = {
+      entry,
+      id: entry.id,
+      reachable: true,
+      status: "healthy",
+      latencyMs: 42,
+      certificateExpiresAt: "2026-09-01T00:00:00.000Z",
+      consecutiveFailures: 0,
+    };
+    const dependencies = createProductionGatewayDependencies(
+      { NODE_ENV: "production" },
+      {
+        loadServiceCatalog: async () => [entry],
+        probeService: async () => probeResult,
+      },
+    );
+
+    const serviceProviders = dependencies.providers.services;
+    expect(serviceProviders.map(({ source }) => source)).toEqual(["service-probe"]);
+    await expect(serviceProviders[0]!.collect(new AbortController().signal)).resolves.toEqual([
+      probeResult,
+    ]);
+  });
+
   it("uses Kubernetes for pod routes and both Kubernetes and Prometheus for cluster snapshots", () => {
     const dependencies = createProductionGatewayDependencies({
       NODE_ENV: "production",

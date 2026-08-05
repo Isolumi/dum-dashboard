@@ -1,8 +1,10 @@
 import type {
   ClusterData,
+  ClusterSnapshot,
   DeploymentSnapshot,
   HealthIssue,
   HealthStatus,
+  OverviewSnapshot,
   ResourceHistory,
   ResourceMetrics,
   ResourceName,
@@ -699,6 +701,22 @@ export async function collectSnapshot(
   };
 }
 
+export async function collectClusterSnapshot(
+  providers: readonly Provider<unknown>[],
+  timeoutMs: number,
+  now: Now = () => new Date(),
+): Promise<ClusterSnapshot> {
+  const snapshot = await collectSnapshot(providers, timeoutMs, now);
+  const data = snapshot.data?.map((value) => parseClusterData(value)).find(Boolean) ?? null;
+
+  return {
+    ...snapshot,
+    data,
+    status: data ? snapshot.status : "unknown",
+    stale: snapshot.stale || data === null,
+  };
+}
+
 export async function collectDeploymentSnapshot(
   providers: readonly Provider<unknown>[],
   timeoutMs: number,
@@ -854,5 +872,146 @@ export async function collectServiceSnapshot(
     stale: hasFailures || services.length === 0,
     issues: [],
     sources: results.map((result) => result.state),
+  };
+}
+
+export interface OverviewProviderGroups {
+  cluster: readonly Provider<unknown>[];
+  deployments: readonly Provider<unknown>[];
+  services: readonly Provider<unknown>[];
+}
+
+const OVERVIEW_ACTIVITY_LIMIT = 50;
+const OVERVIEW_ISSUE_LIMIT = 128;
+const OVERVIEW_SERVICE_LIMIT = 64;
+const SOURCE_ORDER: readonly SourceName[] = [
+  "kubernetes",
+  "argocd",
+  "prometheus",
+  "github",
+  "service-probe",
+];
+const STATUS_PRIORITY: Record<HealthStatus, number> = {
+  critical: 0,
+  warning: 1,
+  unknown: 2,
+  healthy: 3,
+};
+
+function highestPriorityStatus(statuses: readonly HealthStatus[]): HealthStatus {
+  return (
+    [...statuses].sort((left, right) => STATUS_PRIORITY[left] - STATUS_PRIORITY[right])[0] ??
+    "unknown"
+  );
+}
+
+function mergeSourceStates(sources: readonly SourceState[]): SourceState[] {
+  const merged = new Map<SourceName, SourceState>();
+
+  for (const source of sources) {
+    const current = merged.get(source.source);
+    if (!current) {
+      merged.set(source.source, { ...source });
+      continue;
+    }
+
+    const status = highestPriorityStatus([current.status, source.status]);
+    merged.set(source.source, {
+      source: source.source,
+      status,
+      observedAt: source.observedAt > current.observedAt ? source.observedAt : current.observedAt,
+      stale: current.stale || source.stale,
+      ...(current.error || source.error ? { error: current.error ?? source.error } : {}),
+    });
+  }
+
+  return SOURCE_ORDER.flatMap((source) => {
+    const state = merged.get(source);
+    return state ? [state] : [];
+  });
+}
+
+export async function collectOverviewSnapshot(
+  providers: OverviewProviderGroups,
+  timeoutMs: number,
+  now: Now = () => new Date(),
+): Promise<OverviewSnapshot> {
+  const [cluster, deployments, services] = await Promise.all([
+    collectClusterSnapshot(providers.cluster, timeoutMs, now),
+    collectDeploymentSnapshot(providers.deployments, timeoutMs, now),
+    collectServiceSnapshot(providers.services, timeoutMs, now),
+  ]);
+  const observedAt = timestamp(now);
+  const clusterData = cluster.data;
+  const applications = deployments.data?.applications ?? [];
+  const serviceData = services.data?.services ?? [];
+  const hasData = Boolean(clusterData || deployments.data || services.data);
+  const workloadCounts = {
+    healthy: 0,
+    warning: 0,
+    critical: 0,
+    unknown: 0,
+    total: clusterData?.workloads.length ?? 0,
+  };
+  for (const workload of clusterData?.workloads ?? []) workloadCounts[workload.status] += 1;
+
+  const clusterStatus = clusterData
+    ? highestPriorityStatus([
+        cluster.status,
+        ...clusterData.nodes.map(({ status }) => status),
+        ...clusterData.workloads.map(({ status }) => status),
+      ])
+    : "unknown";
+  const argoStatus =
+    applications.length > 0
+      ? highestPriorityStatus(applications.map(({ argo }) => argo.status))
+      : "unknown";
+  const activeIssues = [...cluster.issues, ...deployments.issues, ...services.issues].slice(
+    0,
+    OVERVIEW_ISSUE_LIMIT,
+  );
+  const recentActivity = (clusterData?.events ?? [])
+    .slice(0, OVERVIEW_ACTIVITY_LIMIT)
+    .map(({ id, resource, message, status, observedAt: occurredAt }) => ({
+      id,
+      resource,
+      message,
+      status,
+      occurredAt,
+      source: "kubernetes" as const,
+      url: null,
+    }));
+  const sources = mergeSourceStates([
+    ...cluster.sources,
+    ...deployments.sources,
+    ...services.sources,
+  ]);
+  const status = highestPriorityStatus([clusterStatus, deployments.status, services.status]);
+
+  return {
+    data: hasData
+      ? {
+          cluster: {
+            status: clusterStatus,
+            readyNodes: clusterData?.nodes.filter(({ ready }) => ready).length ?? 0,
+            totalNodes: clusterData?.nodes.length ?? 0,
+          },
+          workloads: workloadCounts,
+          argo: {
+            status: argoStatus,
+            syncedApplications: applications.filter(({ argo }) => argo.status === "healthy").length,
+            totalApplications: applications.length,
+          },
+          resources: clusterData?.resources ?? { current: [], history: [] },
+          activeIssues,
+          recentActivity,
+          services: serviceData.slice(0, OVERVIEW_SERVICE_LIMIT),
+        }
+      : null,
+    status,
+    observedAt,
+    stale: cluster.stale || deployments.stale || services.stale,
+    issues: activeIssues,
+    sources,
   };
 }

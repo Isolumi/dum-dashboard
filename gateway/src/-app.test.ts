@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ClusterData } from "../../shared/homelab/contracts";
 import { createGateway } from "./app";
 
 const SOURCE_SHA = "1829d6ba3b55e66a2134ae64161b9e48ad39a197";
@@ -70,12 +71,12 @@ function withLeadingHole<T>(values: readonly T[]): T[] {
   return sparse;
 }
 
-function validClusterSource() {
+function validClusterSource(): ClusterData {
   const workload = (name: string) => ({
     kind: "Deployment",
     name,
     namespace: "yootoob-mp3",
-    status: "healthy",
+    status: "healthy" as const,
     desiredReplicas: 1,
     availableReplicas: 1,
     failureReason: null,
@@ -84,7 +85,7 @@ function validClusterSource() {
   const pod = (name: "api" | "frontend", repository: string) => ({
     name: `yootoob-mp3-${name}-abc`,
     namespace: "yootoob-mp3",
-    status: "healthy",
+    status: "healthy" as const,
     ready: true,
     restartCount: 0,
     node: "dumachine",
@@ -113,6 +114,31 @@ function validClusterSource() {
   };
 }
 
+function validServiceProbeSource() {
+  return [
+    {
+      entry: {
+        id: "yootoob-mp3",
+        name: "yootoob-mp3",
+        description: "Private YouTube MP3 downloader",
+        url: "https://yootoob.doh.lumilumi.xyz",
+        namespace: "yootoob-mp3",
+        argoApplication: "yootoob-mp3-dumachine",
+        workloads: [
+          { kind: "Deployment", name: "yootoob-mp3-api" },
+          { kind: "Deployment", name: "yootoob-mp3-frontend" },
+        ],
+      },
+      id: "yootoob-mp3",
+      reachable: true,
+      status: "healthy",
+      latencyMs: 42,
+      certificateExpiresAt: "2026-09-01T00:00:00.000Z",
+      consecutiveFailures: 0,
+    },
+  ];
+}
+
 type DeploymentSource = "github" | "argocd" | "kubernetes";
 
 function hostileDeploymentApp(source: DeploymentSource, value: unknown) {
@@ -139,7 +165,7 @@ describe("gateway routes", () => {
     let calls = 0;
     const app = createGateway({
       providers: {
-        overview: [
+        cluster: [
           {
             source: "kubernetes",
             collect: async () => {
@@ -158,40 +184,104 @@ describe("gateway routes", () => {
     expect(calls).toBe(0);
   });
 
-  it("returns a partial snapshot from the overview aggregator", async () => {
+  it("catches the production break where /overview does not compose structured partial contracts", async () => {
     const app = createGateway({
       now: () => new Date("2026-08-04T00:00:00.000Z"),
       providers: {
-        overview: [
-          { source: "kubernetes", collect: async () => ({ value: "cluster" }) },
+        cluster: [{ source: "kubernetes", collect: async () => validClusterSource() }],
+        deployments: [
           {
             source: "github",
             collect: async () => {
               throw new Error("credential=private");
             },
           },
+          { source: "argocd", collect: async () => validArgoSource() },
+          { source: "kubernetes", collect: async () => validClusterSource() },
         ],
+        services: [{ source: "service-probe", collect: async () => validServiceProbeSource() }],
       },
     });
 
     const response = await app.request("/overview");
+    const body = await response.text();
+    const snapshot = JSON.parse(body);
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      data: [{ value: "cluster" }],
+    expect(snapshot).toMatchObject({
+      data: {
+        cluster: { readyNodes: 0, totalNodes: 0 },
+        workloads: { healthy: 2, warning: 0, critical: 0, unknown: 0, total: 2 },
+        argo: { status: "healthy", syncedApplications: 1, totalApplications: 1 },
+        activeIssues: expect.any(Array),
+        recentActivity: [],
+        services: [
+          expect.objectContaining({
+            name: "yootoob-mp3",
+            url: "https://yootoob.doh.lumilumi.xyz",
+          }),
+        ],
+      },
       status: "unknown",
       stale: true,
-      issues: [],
-      sources: [
-        { source: "kubernetes", status: "healthy", stale: false },
-        {
+      sources: expect.arrayContaining([
+        expect.objectContaining({ source: "kubernetes", status: "healthy", stale: false }),
+        expect.objectContaining({
           source: "github",
           status: "unknown",
           stale: true,
           error: "GitHub unavailable",
-        },
-      ],
+        }),
+        expect.objectContaining({ source: "argocd", status: "healthy", stale: false }),
+        expect.objectContaining({ source: "service-probe", status: "healthy", stale: false }),
+      ]),
     });
+    expect(body).not.toContain("credential=private");
+  });
+
+  it("catches the production break where /overview does not bound recent activity", async () => {
+    const cluster = validClusterSource();
+    cluster.events = Array.from({ length: 75 }, (_, index) => ({
+      id: `event-${index}`,
+      namespace: "yootoob-mp3",
+      resource: `Deployment/workload-${index}`,
+      status: "healthy",
+      reason: "Reconciled",
+      message: `Workload ${index} reconciled.`,
+      observedAt: `2026-08-04T00:${String(index % 60).padStart(2, "0")}:00.000Z`,
+    }));
+    const app = createGateway({
+      now: () => new Date("2026-08-04T01:00:00.000Z"),
+      providers: {
+        cluster: [{ source: "kubernetes", collect: async () => cluster }],
+      },
+    });
+
+    const response = await app.request("/overview");
+    const snapshot = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(snapshot.data?.recentActivity).toHaveLength(50);
+  });
+
+  it("catches the production break where critical cluster data is hidden by unknown sources", async () => {
+    const cluster = validClusterSource();
+    cluster.workloads[0]!.status = "critical";
+    cluster.workloads[0]!.availableReplicas = 0;
+    cluster.workloads[0]!.failureReason = "No replicas are available.";
+    const app = createGateway({
+      now: () => new Date("2026-08-04T01:00:00.000Z"),
+      providers: {
+        cluster: [{ source: "kubernetes", collect: async () => cluster }],
+      },
+    });
+
+    const response = await app.request("/overview");
+    const snapshot = await response.json();
+
+    expect(snapshot.status).toBe("critical");
+    expect(snapshot.data?.cluster.status).toBe("critical");
+    expect(snapshot.data?.workloads).toMatchObject({ critical: 1, healthy: 1, total: 2 });
   });
 
   it("returns a safe partial deployment snapshot for a legacy Kubernetes pod", async () => {

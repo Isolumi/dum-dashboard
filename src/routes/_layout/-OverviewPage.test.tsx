@@ -1,0 +1,99 @@
+/**
+ * @vitest-environment jsdom
+ */
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from "@tanstack/react-router";
+import { cleanup, render, screen } from "@testing-library/react";
+import type { ComponentType, ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { getCalendarEventsMock, getHomelabOverviewMock, getTodosMock } = vi.hoisted(() => ({
+  getCalendarEventsMock: vi.fn(),
+  getHomelabOverviewMock: vi.fn(),
+  getTodosMock: vi.fn(),
+}));
+
+vi.mock("#/homelab/homelab.functions", () => ({
+  getHomelabOverview: getHomelabOverviewMock,
+}));
+
+vi.mock("#/routes/todos/todos.functions", () => ({
+  getTodos: getTodosMock,
+}));
+
+vi.mock("#/routes/_layout/calendar/-calendar.functions", () => ({
+  getCalendarEvents: getCalendarEventsMock,
+}));
+
+import { Route } from "./index";
+
+async function renderInsideLayout(content: ReactNode) {
+  const rootRoute = createRootRoute({ component: () => <main>{content}</main> });
+  const routes = ["todos", "calendar", "homelab"].map((path) =>
+    createRoute({ getParentRoute: () => rootRoute, path }),
+  );
+  const router = createRouter({
+    routeTree: rootRoute.addChildren(routes),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
+
+  await router.load();
+  return render(<RouterProvider router={router} />);
+}
+
+beforeEach(() => {
+  getTodosMock.mockResolvedValue([]);
+  getCalendarEventsMock.mockResolvedValue({ status: "ready", events: [] });
+  getHomelabOverviewMock.mockReturnValue(new Promise(() => undefined));
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+describe("main dashboard composition", () => {
+  it("catches the production break where a stalled Homelab request blocks static dashboard cards", async () => {
+    const loader = Route.options.loader as ((context: never) => unknown) | undefined;
+    if (!loader) throw new Error("Dashboard loader is missing");
+
+    const outcome = loader({} as never);
+
+    expect(outcome).toEqual({});
+    expect(getHomelabOverviewMock).not.toHaveBeenCalled();
+  });
+
+  it("catches the production break where the success wrapper nests a second main landmark", async () => {
+    vi.spyOn(Route, "useLoaderData").mockReturnValue({});
+    const OverviewPage = Route.options.component as ComponentType;
+
+    await renderInsideLayout(<OverviewPage />);
+
+    expect(screen.getAllByRole("main")).toHaveLength(1);
+  });
+
+  it("catches the production break where the dashboard has no Overview page heading", async () => {
+    vi.spyOn(Route, "useLoaderData").mockReturnValue({});
+    const OverviewPage = Route.options.component as ComponentType;
+
+    await renderInsideLayout(<OverviewPage />);
+
+    expect(screen.getByRole("heading", { level: 1, name: "Overview" })).toBeTruthy();
+  });
+
+  it("catches the production break where the error wrapper nests a second main landmark", async () => {
+    const OverviewError = Route.options.errorComponent as ComponentType<{
+      error: Error;
+      reset: () => void;
+    }>;
+
+    await renderInsideLayout(<OverviewError error={new Error("failed")} reset={() => undefined} />);
+
+    expect(screen.getAllByRole("main")).toHaveLength(1);
+  });
+});

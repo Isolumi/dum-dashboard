@@ -344,8 +344,57 @@ describe("Homelab Overview", () => {
     expect(screen.getByText("68.1%")).toBeTruthy();
     expect(screen.getByText("Rollout is waiting for one replica.")).toBeTruthy();
     expect(screen.getByText("Metrics source did not respond.")).toBeTruthy();
+    const activityLink = screen.getByRole("link", { name: /Open activity for dum-dashboard/ });
+    expect(activityLink.getAttribute("href")).toBe(
+      "https://argocd.doh.lumilumi.xyz/applications/dum-dashboard",
+    );
     const grafanaLink = screen.getByRole("link", { name: /Open Grafana/ });
     expect(grafanaLink.getAttribute("href")).toBe("https://grafana.doh.lumilumi.xyz");
+  });
+
+  it("catches the production break where defensive activity and service rows link unsafe schemes", () => {
+    const unsafeUrls = [
+      "javascript:alert(1)",
+      "data:text/html,<script>alert(1)</script>",
+      "ftp://private-host/file",
+    ];
+    const snapshot = overviewSnapshot();
+    snapshot.data!.recentActivity = unsafeUrls.map((url, index) => ({
+      id: `unsafe-activity-${index}`,
+      resource: `unsafe-activity-${index}`,
+      message: "Unsafe activity URL",
+      status: "unknown",
+      occurredAt: OBSERVED_AT,
+      source: "argocd",
+      url,
+    }));
+    snapshot.data!.services = unsafeUrls.map((url, index) => ({
+      name: `unsafe-service-${index}`,
+      description: "Unsafe service URL",
+      status: "unknown",
+      url,
+      certificateExpiresAt: null,
+      probeLatencyMs: null,
+      namespace: null,
+      workload: null,
+      image: null,
+      observedAt: OBSERVED_AT,
+    }));
+
+    render(<HomelabOverview initialSnapshot={snapshot} fetcher={getHomelabOverviewMock} />);
+
+    for (const [index] of unsafeUrls.entries()) {
+      expect(screen.getByText(`unsafe-activity-${index}`)).toBeTruthy();
+      expect(screen.getByText(`unsafe-service-${index}`)).toBeTruthy();
+      expect(
+        screen.queryByRole("link", {
+          name: `Open activity for unsafe-activity-${index} in a new tab`,
+        }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole("link", { name: `Open unsafe-service-${index} in a new tab` }),
+      ).toBeNull();
+    }
   });
 
   it("shows an explicit stale Unknown state while preserving the last good values", () => {
@@ -365,6 +414,33 @@ describe("Homelab Overview", () => {
     expect(screen.getByText("1 of 2 nodes ready")).toBeTruthy();
   });
 
+  it("catches the production break where stale freshness overwrites proven Warning health", () => {
+    render(
+      <HomelabOverview
+        initialSnapshot={overviewSnapshot({ status: "warning", stale: true })}
+        fetcher={getHomelabOverviewMock}
+      />,
+    );
+
+    const systemStatus = screen
+      .getByRole("heading", { name: "Some systems need attention." })
+      .closest("section");
+    expect(systemStatus).not.toBeNull();
+    expect(within(systemStatus!).getByRole("status", { name: "Status: Warning" })).toBeTruthy();
+    expect(within(systemStatus!).getByText("Stale")).toBeTruthy();
+  });
+
+  it("catches the production break where stale source freshness replaces Unknown health", () => {
+    render(
+      <HomelabOverview initialSnapshot={overviewSnapshot()} fetcher={getHomelabOverviewMock} />,
+    );
+
+    const sourceNotice = screen.getByText("prometheus").closest("li");
+    expect(sourceNotice).not.toBeNull();
+    expect(within(sourceNotice!).getByText("Unknown")).toBeTruthy();
+    expect(within(sourceNotice!).getByText("Stale")).toBeTruthy();
+  });
+
   it("explains an unavailable snapshot instead of rendering zeroes as healthy", () => {
     render(
       <HomelabOverview
@@ -382,9 +458,13 @@ describe("Homelab Overview", () => {
     expect(screen.getByRole("status", { name: "Status: Unknown" })).toBeTruthy();
   });
 
-  it("provides a labelled pending state while the route loader is waiting", () => {
-    render(<HomelabOverviewLoading />);
+  it("catches the production break where pending skeletons are not announced or reduced-motion safe", () => {
+    const view = render(<HomelabOverviewLoading />);
 
-    expect(screen.getByLabelText("Loading Homelab overview")).toBeTruthy();
+    const loading = screen.getByRole("status", { name: "Loading Homelab overview" });
+    expect(loading.textContent).toContain("Loading Homelab overview");
+    for (const skeleton of view.container.querySelectorAll('[data-slot="skeleton"]')) {
+      expect(skeleton.className).toContain("motion-reduce:animate-none");
+    }
   });
 });

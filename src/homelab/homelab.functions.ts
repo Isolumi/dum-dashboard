@@ -16,6 +16,16 @@ const HealthStatusSchema = z.enum(["healthy", "warning", "critical", "unknown"])
 const SourceNameSchema = z.enum(["kubernetes", "argocd", "prometheus", "github", "service-probe"]);
 const TimestampSchema = z.string().datetime({ offset: true });
 const EvidenceSchema = z.record(z.union([z.string(), z.number(), z.boolean(), z.null()]));
+const HttpsUrlSchema = z
+  .string()
+  .url()
+  .refine(
+    (value) => {
+      const url = new URL(value);
+      return url.protocol === "https:" && !url.username && !url.password;
+    },
+    { message: "must be an HTTPS URL without credentials" },
+  );
 
 const HealthIssueSchema = z
   .object({
@@ -68,7 +78,7 @@ const ServiceSummarySchema = z
     name: z.string(),
     description: z.string(),
     status: HealthStatusSchema,
-    url: z.string().url(),
+    url: HttpsUrlSchema,
     certificateExpiresAt: TimestampSchema.nullable(),
     probeLatencyMs: z.number().finite().nonnegative().nullable(),
     namespace: z.string().nullable(),
@@ -114,7 +124,7 @@ const OverviewDataSchema = z
           status: HealthStatusSchema,
           occurredAt: TimestampSchema,
           source: SourceNameSchema.nullable(),
-          url: z.string().url().nullable(),
+          url: HttpsUrlSchema.nullable(),
         })
         .strict(),
     ),

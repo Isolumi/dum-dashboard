@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Clock3, Server } from "lucide-react";
 
 import type { OverviewSnapshot } from "@shared/homelab/contracts";
+import { Skeleton } from "#/components/ui/skeleton";
 import { getHomelabOverview } from "#/homelab/homelab.functions";
 import { useHomelabSnapshot } from "#/homelab/useHomelabSnapshot";
 import type { ToolEntry } from "#/tools/registry";
@@ -71,9 +72,36 @@ function UnavailableHomelabCard() {
   );
 }
 
-function LiveHomelabCard({ initialSnapshot }: { initialSnapshot: OverviewSnapshot }) {
+function LoadingHomelabCard() {
+  return (
+    <CardFrame>
+      <div role="status" aria-label="Loading Homelab overview">
+        <span className="sr-only">Loading Homelab overview</span>
+        <div className="flex items-center justify-between gap-3" aria-hidden="true">
+          <div className="flex items-center gap-2.5">
+            <Skeleton className="size-8 motion-reduce:animate-none" />
+            <div className="grid gap-1.5">
+              <Skeleton className="h-4 w-20 motion-reduce:animate-none" />
+              <Skeleton className="h-3 w-32 motion-reduce:animate-none" />
+            </div>
+          </div>
+          <Skeleton className="h-6 w-16 rounded-full motion-reduce:animate-none" />
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-3" aria-hidden="true">
+          <Skeleton className="h-10 motion-reduce:animate-none" />
+          <Skeleton className="h-10 motion-reduce:animate-none" />
+          <Skeleton className="h-10 motion-reduce:animate-none" />
+        </div>
+      </div>
+    </CardFrame>
+  );
+}
+
+function LiveHomelabCard({ initialSnapshot }: { initialSnapshot: OverviewSnapshot | null }) {
   const { snapshot, refreshing, error } = useHomelabSnapshot(getHomelabOverview, initialSnapshot);
-  const displayStatus = error || snapshot.stale ? "unknown" : snapshot.status;
+  if (!snapshot) return refreshing && !error ? <LoadingHomelabCard /> : <UnavailableHomelabCard />;
+
+  const displayStatus = error ? "unknown" : snapshot.status;
   const data = snapshot.data;
 
   return (
@@ -127,9 +155,5 @@ function LiveHomelabCard({ initialSnapshot }: { initialSnapshot: OverviewSnapsho
 }
 
 export function HomelabBentoCard({ data }: { tool: ToolEntry; data: unknown }) {
-  return isOverviewSnapshot(data) ? (
-    <LiveHomelabCard initialSnapshot={data} />
-  ) : (
-    <UnavailableHomelabCard />
-  );
+  return <LiveHomelabCard initialSnapshot={isOverviewSnapshot(data) ? data : null} />;
 }

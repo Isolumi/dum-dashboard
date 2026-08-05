@@ -44,6 +44,28 @@ afterEach(() => {
 });
 
 describe("useHomelabSnapshot", () => {
+  it("catches the production break where an absent initial snapshot is never retried while mounted", async () => {
+    const recovered = serviceSnapshot("2026-08-04T12:00:10.000Z");
+    const fetcher = vi
+      .fn<() => Promise<ServiceSnapshot>>()
+      .mockRejectedValueOnce(new Error("temporary gateway failure"))
+      .mockResolvedValueOnce(recovered);
+    const { result } = renderHook(() => useHomelabSnapshot<ServiceSnapshot>(fetcher, null));
+
+    await act(async () => Promise.resolve());
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.current.snapshot).toBeNull();
+    expect(result.current.error).toBe("Could not refresh homelab data");
+
+    await act(async () => vi.advanceTimersByTimeAsync(9_999));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(result.current.snapshot).toEqual(recovered);
+    expect(result.current.error).toBeNull();
+  });
+
   it("refreshes after ten seconds and never overlaps an in-flight refresh", async () => {
     const first = deferred<ServiceSnapshot>();
     const second = deferred<ServiceSnapshot>();

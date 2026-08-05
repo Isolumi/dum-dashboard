@@ -3,9 +3,15 @@ import { streamSSE } from "hono/streaming";
 import { getGatewayConfig } from "./config";
 import type { KubernetesReader, PodLogStream } from "./providers/kubernetes";
 import type { Provider } from "./providers/provider";
-import { collectDeploymentSnapshot, collectSnapshot, type Now } from "./snapshot";
+import {
+  collectClusterSnapshot,
+  collectDeploymentSnapshot,
+  collectOverviewSnapshot,
+  collectServiceSnapshot,
+  type Now,
+} from "./snapshot";
 
-type SnapshotRoute = "overview" | "cluster" | "deployments" | "services";
+type SnapshotRoute = "cluster" | "deployments" | "services";
 
 const DNS_LABEL = /^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/;
 
@@ -31,19 +37,35 @@ export function createGateway(dependencies: GatewayDependencies = {}): Hono {
 
   app.get("/healthz", (context) => context.json({ status: "ok" }));
 
-  for (const route of ["overview", "cluster", "deployments", "services"] as const) {
-    const providers =
-      route === "cluster" && dependencies.kubernetesProvider && !dependencies.providers?.cluster
-        ? [dependencies.kubernetesProvider]
-        : (dependencies.providers?.[route] ?? []);
-    app.get(`/${route}`, async (context) => {
-      const snapshot =
-        route === "deployments"
-          ? await collectDeploymentSnapshot(providers, timeoutMs, now)
-          : await collectSnapshot(providers, timeoutMs, now);
-      return context.json(snapshot);
-    });
-  }
+  const clusterProviders =
+    dependencies.kubernetesProvider && !dependencies.providers?.cluster
+      ? [dependencies.kubernetesProvider]
+      : (dependencies.providers?.cluster ?? []);
+  const deploymentProviders = dependencies.providers?.deployments ?? [];
+  const serviceProviders = dependencies.providers?.services ?? [];
+
+  app.get("/overview", async (context) =>
+    context.json(
+      await collectOverviewSnapshot(
+        {
+          cluster: clusterProviders,
+          deployments: deploymentProviders,
+          services: serviceProviders,
+        },
+        timeoutMs,
+        now,
+      ),
+    ),
+  );
+  app.get("/cluster", async (context) =>
+    context.json(await collectClusterSnapshot(clusterProviders, timeoutMs, now)),
+  );
+  app.get("/deployments", async (context) =>
+    context.json(await collectDeploymentSnapshot(deploymentProviders, timeoutMs, now)),
+  );
+  app.get("/services", async (context) =>
+    context.json(await collectServiceSnapshot(serviceProviders, timeoutMs, now)),
+  );
 
   app.get("/pods/:namespace/:pod", async (context) => {
     if (!dependencies.kubernetesProvider) {
