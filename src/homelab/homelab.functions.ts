@@ -1,16 +1,20 @@
 import { createServerFn } from "@tanstack/react-start";
+import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 import type {
   ClusterSnapshot,
   DeploymentSnapshot,
+  JsonValue,
   OverviewSnapshot,
+  PodDetail,
   ServiceSnapshot,
 } from "@shared/homelab/contracts";
 import { requireServerEnv } from "#/lib/runtime-env";
 import { noStore } from "#/lib/server-auth";
 
 const SNAPSHOT_TIMEOUT_MS = 5_000;
+const DNS_LABEL = /^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/;
 
 const HealthStatusSchema = z.enum(["healthy", "warning", "critical", "unknown"]);
 const SourceNameSchema = z.enum(["kubernetes", "argocd", "prometheus", "github", "service-probe"]);
@@ -155,6 +159,64 @@ const PodSummarySchema = z
         .strict(),
     ),
     createdAt: TimestampSchema,
+  })
+  .strict();
+
+const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(JsonValueSchema),
+    z.record(JsonValueSchema),
+  ]),
+);
+
+const PodDetailSchema: z.ZodType<PodDetail> = PodSummarySchema.extend({
+  containers: z.array(
+    z
+      .object({
+        name: z.string(),
+        image: z.string().nullable(),
+        imageId: z.string().nullable(),
+        ready: z.boolean(),
+        restartCount: z.number().int().nonnegative(),
+        state: z.enum(["running", "waiting", "terminated", "unknown"]),
+        reason: z.string().nullable(),
+      })
+      .strict(),
+  ),
+  conditions: z.array(
+    z
+      .object({
+        type: z.string(),
+        status: z.string(),
+        reason: z.string().nullable(),
+        message: z.string().nullable(),
+        lastTransitionAt: TimestampSchema.nullable(),
+      })
+      .strict(),
+  ),
+  rawStatus: z.record(JsonValueSchema),
+}).strict();
+
+const KubernetesLabelSchema = z
+  .string()
+  .min(1)
+  .max(63)
+  .regex(DNS_LABEL, "Invalid Kubernetes label");
+const KubernetesSubdomainSchema = z
+  .string()
+  .min(1)
+  .max(253)
+  .refine((value) => value.split(".").every((label) => DNS_LABEL.test(label)), {
+    message: "Invalid Kubernetes subdomain",
+  });
+const PodDetailInputSchema = z
+  .object({
+    namespace: KubernetesLabelSchema,
+    pod: KubernetesSubdomainSchema,
   })
   .strict();
 
@@ -303,14 +365,18 @@ function gatewayEndpointUrl(endpoint: string): URL {
   return url;
 }
 
-async function requestSnapshot<T>(endpoint: string, schema: z.ZodType<T>): Promise<T> {
+function podDetailEndpointUrl(namespace: string, pod: string): URL {
+  return gatewayEndpointUrl(`pods/${encodeURIComponent(namespace)}/${encodeURIComponent(pod)}`);
+}
+
+async function requestGateway<T>(url: URL, schema: z.ZodType<T>): Promise<T> {
   const controller = new AbortController();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   try {
     noStore();
     timeoutId = setTimeout(() => controller.abort(), SNAPSHOT_TIMEOUT_MS);
-    const response = await fetch(gatewayEndpointUrl(endpoint), {
+    const response = await fetch(url, {
       cache: "no-store",
       headers: {
         Accept: "application/json",
@@ -330,6 +396,10 @@ async function requestSnapshot<T>(endpoint: string, schema: z.ZodType<T>): Promi
   }
 }
 
+async function requestSnapshot<T>(endpoint: string, schema: z.ZodType<T>): Promise<T> {
+  return requestGateway(gatewayEndpointUrl(endpoint), schema);
+}
+
 async function loadHomelabOverview(): Promise<OverviewSnapshot> {
   return requestSnapshot("overview", OverviewSnapshotSchema);
 }
@@ -344,6 +414,10 @@ async function loadDeploymentSnapshot(): Promise<DeploymentSnapshot> {
 
 async function loadServiceSnapshot(): Promise<ServiceSnapshot> {
   return requestSnapshot("services", ServiceSnapshotSchema);
+}
+
+async function loadPodDetail(input: z.infer<typeof PodDetailInputSchema>): Promise<PodDetail> {
+  return requestGateway(podDetailEndpointUrl(input.namespace, input.pod), PodDetailSchema);
 }
 
 export const getHomelabOverview = createServerFn({ method: "GET" }).handler(
@@ -361,3 +435,7 @@ export const getDeploymentSnapshot = createServerFn({ method: "GET" }).handler(
 export const getServiceSnapshot = createServerFn({ method: "GET" }).handler(
   async (): Promise<ServiceSnapshot> => loadServiceSnapshot(),
 );
+
+export const getPodDetail = createServerFn({ method: "GET" })
+  .inputValidator(zodValidator(PodDetailInputSchema))
+  .handler(async ({ data }): Promise<PodDetail> => loadPodDetail(data));

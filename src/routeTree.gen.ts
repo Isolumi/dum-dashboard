@@ -17,6 +17,7 @@ import { Route as LayoutTodosIndexRouteImport } from './routes/_layout/todos/ind
 import { Route as LayoutHomelabIndexRouteImport } from './routes/_layout/homelab/index'
 import { Route as LayoutCalendarIndexRouteImport } from './routes/_layout/calendar/index'
 import { Route as CalendarOauthCallbackRouteImport } from './routes/calendar/oauth/callback'
+import { Route as LayoutHomelabClusterRouteImport } from './routes/_layout/homelab/cluster'
 import { Route as ApiHomelabLogsNamespacePodRouteImport } from './routes/api/homelab/logs.$namespace.$pod'
 
 const LayoutRoute = LayoutRouteImport.update({
@@ -58,6 +59,11 @@ const CalendarOauthCallbackRoute = CalendarOauthCallbackRouteImport.update({
   path: '/calendar/oauth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LayoutHomelabClusterRoute = LayoutHomelabClusterRouteImport.update({
+  id: '/cluster',
+  path: '/cluster',
+  getParentRoute: () => LayoutHomelabRouteRoute,
+} as any)
 const ApiHomelabLogsNamespacePodRoute =
   ApiHomelabLogsNamespacePodRouteImport.update({
     id: '/api/homelab/logs/$namespace/$pod',
@@ -69,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
   '/homelab': typeof LayoutHomelabRouteRouteWithChildren
   '/dev-colours': typeof LayoutDevColoursRoute
+  '/homelab/cluster': typeof LayoutHomelabClusterRoute
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/calendar/': typeof LayoutCalendarIndexRoute
   '/homelab/': typeof LayoutHomelabIndexRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/dev-colours': typeof LayoutDevColoursRoute
   '/': typeof LayoutIndexRoute
+  '/homelab/cluster': typeof LayoutHomelabClusterRoute
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/calendar': typeof LayoutCalendarIndexRoute
   '/homelab': typeof LayoutHomelabIndexRoute
@@ -90,6 +98,7 @@ export interface FileRoutesById {
   '/_layout/homelab': typeof LayoutHomelabRouteRouteWithChildren
   '/_layout/dev-colours': typeof LayoutDevColoursRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/homelab/cluster': typeof LayoutHomelabClusterRoute
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/_layout/calendar/': typeof LayoutCalendarIndexRoute
   '/_layout/homelab/': typeof LayoutHomelabIndexRoute
@@ -102,6 +111,7 @@ export interface FileRouteTypes {
     | '/'
     | '/homelab'
     | '/dev-colours'
+    | '/homelab/cluster'
     | '/calendar/oauth/callback'
     | '/calendar/'
     | '/homelab/'
@@ -111,6 +121,7 @@ export interface FileRouteTypes {
   to:
     | '/dev-colours'
     | '/'
+    | '/homelab/cluster'
     | '/calendar/oauth/callback'
     | '/calendar'
     | '/homelab'
@@ -122,6 +133,7 @@ export interface FileRouteTypes {
     | '/_layout/homelab'
     | '/_layout/dev-colours'
     | '/_layout/'
+    | '/_layout/homelab/cluster'
     | '/calendar/oauth/callback'
     | '/_layout/calendar/'
     | '/_layout/homelab/'
@@ -193,6 +205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CalendarOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_layout/homelab/cluster': {
+      id: '/_layout/homelab/cluster'
+      path: '/cluster'
+      fullPath: '/homelab/cluster'
+      preLoaderRoute: typeof LayoutHomelabClusterRouteImport
+      parentRoute: typeof LayoutHomelabRouteRoute
+    }
     '/api/homelab/logs/$namespace/$pod': {
       id: '/api/homelab/logs/$namespace/$pod'
       path: '/api/homelab/logs/$namespace/$pod'
@@ -204,10 +223,12 @@ declare module '@tanstack/react-router' {
 }
 
 interface LayoutHomelabRouteRouteChildren {
+  LayoutHomelabClusterRoute: typeof LayoutHomelabClusterRoute
   LayoutHomelabIndexRoute: typeof LayoutHomelabIndexRoute
 }
 
 const LayoutHomelabRouteRouteChildren: LayoutHomelabRouteRouteChildren = {
+  LayoutHomelabClusterRoute: LayoutHomelabClusterRoute,
   LayoutHomelabIndexRoute: LayoutHomelabIndexRoute,
 }
 

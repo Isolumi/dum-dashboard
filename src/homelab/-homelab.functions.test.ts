@@ -5,6 +5,7 @@ import type {
   ClusterSnapshot,
   DeploymentSnapshot,
   OverviewSnapshot,
+  PodDetail,
   ServiceSnapshot,
 } from "@shared/homelab/contracts";
 import { createGateway } from "../../gateway/src/app";
@@ -15,13 +16,29 @@ vi.mock("#/lib/server-auth", () => ({
 }));
 
 vi.mock("@tanstack/react-start", () => ({
-  createServerFn: vi.fn(() => ({
-    handler: (handler: () => unknown) => handler,
-  })),
+  createServerFn: vi.fn(() => {
+    let validator: { parse: (input: unknown) => unknown } | undefined;
+    const builder = {
+      inputValidator(nextValidator: { parse: (input: unknown) => unknown }) {
+        validator = nextValidator;
+        return builder;
+      },
+      handler(handler: (context: { data: unknown }) => unknown) {
+        return (options?: { data?: unknown }) =>
+          handler({ data: validator ? validator.parse(options?.data) : options?.data });
+      },
+    };
+    return builder;
+  }),
 }));
 
-const { getClusterSnapshot, getDeploymentSnapshot, getHomelabOverview, getServiceSnapshot } =
-  await import("./homelab.functions");
+const {
+  getClusterSnapshot,
+  getDeploymentSnapshot,
+  getHomelabOverview,
+  getPodDetail,
+  getServiceSnapshot,
+} = await import("./homelab.functions");
 const { noStore } = await import("#/lib/server-auth");
 
 const OBSERVED_AT = "2026-08-04T12:00:00.000Z";
@@ -68,6 +85,52 @@ const deployments: DeploymentSnapshot = {
 const services: ServiceSnapshot = {
   ...envelope,
   data: { services: [] },
+};
+
+const detail: PodDetail = {
+  name: "yootoob-mp3-api-7c9d8",
+  namespace: "yootoob-mp3",
+  status: "warning",
+  ready: false,
+  restartCount: 3,
+  node: "dumachine",
+  image: "ghcr.io/isolumi/yootoob-mp3-api:development",
+  imageTag: "development",
+  imageDigest: `sha256:${"a".repeat(64)}`,
+  containerImages: [
+    {
+      name: "api",
+      repository: "ghcr.io/isolumi/yootoob-mp3-api",
+      reference: "ghcr.io/isolumi/yootoob-mp3-api:development",
+      tag: "development",
+      digest: `sha256:${"a".repeat(64)}`,
+    },
+  ],
+  createdAt: "2026-08-04T11:30:00.000Z",
+  containers: [
+    {
+      name: "api",
+      image: "ghcr.io/isolumi/yootoob-mp3-api:development",
+      imageId: `docker-pullable://ghcr.io/isolumi/yootoob-mp3-api@sha256:${"a".repeat(64)}`,
+      ready: false,
+      restartCount: 3,
+      state: "waiting",
+      reason: "CrashLoopBackOff",
+    },
+  ],
+  conditions: [
+    {
+      type: "Ready",
+      status: "False",
+      reason: "ContainersNotReady",
+      message: "containers with unready status: [api]",
+      lastTransitionAt: "2026-08-04T11:58:00.000Z",
+    },
+  ],
+  rawStatus: {
+    phase: "Running",
+    containerStatuses: [{ name: "api", restartCount: 3 }],
+  },
 };
 
 function gatewayClusterData(): ClusterData {
@@ -349,6 +412,44 @@ describe("homelab server functions", () => {
       expect(options).toMatchObject({ cache: "no-store" });
       expect(new Headers(options?.headers).get("Cache-Control")).toBe("no-store");
     }
+  });
+
+  it("validates and proxies pod detail through the server-only gateway boundary", async () => {
+    vi.mocked(fetch).mockResolvedValue(Response.json(detail));
+
+    await expect(
+      getPodDetail({
+        data: { namespace: "yootoob-mp3", pod: "yootoob-mp3-api-7c9d8" },
+      }),
+    ).resolves.toEqual(detail);
+
+    expect(noStore).toHaveBeenCalledTimes(1);
+    expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toBe(
+      "http://gateway.internal:8080/pods/yootoob-mp3/yootoob-mp3-api-7c9d8",
+    );
+    expect(vi.mocked(fetch).mock.calls[0]?.[1]).toMatchObject({ cache: "no-store" });
+  });
+
+  it("rejects unsafe pod detail identifiers before contacting the gateway", () => {
+    expect(() =>
+      getPodDetail({
+        data: { namespace: "../../secrets", pod: "api/../../token" },
+      }),
+    ).toThrow();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed pod detail without exposing the gateway response", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      Response.json({ ...detail, credential: "private-gateway-token" }),
+    );
+
+    const error = await getPodDetail({
+      data: { namespace: "yootoob-mp3", pod: "yootoob-mp3-api-7c9d8" },
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ message: "Homelab data unavailable", stack: undefined });
+    expect(JSON.stringify(error)).not.toContain("private-gateway-token");
   });
 
   it.each(["javascript:alert(1)", "data:text/html,<script>alert(1)</script>", "ftp://host/file"])(
