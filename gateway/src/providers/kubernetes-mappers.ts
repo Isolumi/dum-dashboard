@@ -40,6 +40,7 @@ export interface KubernetesInventory {
 }
 
 type Workload = V1Deployment | V1StatefulSet | V1DaemonSet;
+type WorkloadKind = "Deployment" | "StatefulSet" | "DaemonSet";
 
 const CRITICAL_CONTAINER_WAITING_REASONS = new Set([
   "CrashLoopBackOff",
@@ -120,11 +121,14 @@ function mapNode(node: V1Node): NodeSummary {
   };
 }
 
-function workloadReplicas(workload: Workload): {
+function workloadReplicas(
+  workload: Workload,
+  kind: WorkloadKind,
+): {
   desiredReplicas: number;
   availableReplicas: number;
 } {
-  if (workload.kind === "DaemonSet") {
+  if (kind === "DaemonSet") {
     const daemonSet = workload as V1DaemonSet;
     return {
       desiredReplicas: daemonSet.status?.desiredNumberScheduled ?? 0,
@@ -145,21 +149,20 @@ function workloadFailureReason(workload: Workload): string | null {
   );
 }
 
-function workloadRevision(workload: Workload): string | null {
+function workloadRevision(workload: Workload, kind: WorkloadKind): string | null {
   const annotated = workload.metadata?.annotations?.["deployment.kubernetes.io/revision"];
   if (annotated) return annotated;
-  if (workload.kind === "StatefulSet") {
+  if (kind === "StatefulSet") {
     const statefulSet = workload as V1StatefulSet;
     return statefulSet.status?.updateRevision ?? statefulSet.status?.currentRevision ?? null;
   }
   return null;
 }
 
-function mapWorkload(workload: Workload): WorkloadSummary {
-  const kind = workload.kind ?? "Unknown";
+function mapWorkload(workload: Workload, kind: WorkloadKind): WorkloadSummary {
   const name = workload.metadata?.name ?? "unknown";
   const namespace = workload.metadata?.namespace ?? "default";
-  const { desiredReplicas, availableReplicas } = workloadReplicas(workload);
+  const { desiredReplicas, availableReplicas } = workloadReplicas(workload, kind);
   const failureReason = workloadFailureReason(workload);
   // Kubernetes inventory is point-in-time. A 15-minute increase requires a retained
   // previous counter or a Prometheus range query; mapping the current total cannot prove it.
@@ -183,7 +186,7 @@ function mapWorkload(workload: Workload): WorkloadSummary {
     failureReason,
     restartIncrease15m,
     createdAt: timestamp(workload.metadata?.creationTimestamp) || null,
-    revision: workloadRevision(workload),
+    revision: workloadRevision(workload, kind),
   };
 }
 
@@ -310,10 +313,10 @@ function mapNamespace(
 
 export function mapClusterData(inventory: KubernetesInventory): ClusterData {
   const workloads = [
-    ...inventory.deployments.items,
-    ...inventory.statefulSets.items,
-    ...inventory.daemonSets.items,
-  ].map(mapWorkload);
+    ...inventory.deployments.items.map((workload) => mapWorkload(workload, "Deployment")),
+    ...inventory.statefulSets.items.map((workload) => mapWorkload(workload, "StatefulSet")),
+    ...inventory.daemonSets.items.map((workload) => mapWorkload(workload, "DaemonSet")),
+  ];
   const pods = inventory.pods.items.map(mapPod);
 
   return {

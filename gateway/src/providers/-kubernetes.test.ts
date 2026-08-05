@@ -137,6 +137,23 @@ describe("Kubernetes mappers", () => {
     expect(mapPodDetail(pod).status).toBe("healthy");
   });
 
+  it("infers workload kinds when Kubernetes list items omit type metadata", () => {
+    const inventory = structuredClone(kubernetesFixture);
+    for (const workload of [
+      inventory.deployments.items[0],
+      inventory.statefulSets.items[0],
+      inventory.daemonSets.items[0],
+    ]) {
+      if (workload) delete workload.kind;
+    }
+
+    expect(mapClusterData(inventory).workloads.map(({ kind }) => kind)).toEqual([
+      "Deployment",
+      "StatefulSet",
+      "DaemonSet",
+    ]);
+  });
+
   it("preserves every container image and does not present a sidecar as the pod image", () => {
     const inventory = structuredClone(kubernetesFixture);
     const pod = inventory.pods.items[0]!;
