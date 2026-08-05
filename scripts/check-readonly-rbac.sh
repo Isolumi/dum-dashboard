@@ -5,9 +5,11 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 normal_overlay="$repo_root/k8s/overlays/dumachine"
 bootstrap_overlay="$repo_root/k8s/bootstrap/dum-dashboard"
+dns_overlay="$repo_root/k8s/bootstrap/cluster-dns"
 normal_rendered="$(mktemp)"
 bootstrap_rendered="$(mktemp)"
-trap 'rm -f "$normal_rendered" "$bootstrap_rendered"' EXIT
+dns_rendered="$(mktemp)"
+trap 'rm -f "$normal_rendered" "$bootstrap_rendered" "$dns_rendered"' EXIT
 
 if ! command -v kubectl >/dev/null 2>&1; then
   echo "kubectl is required to render and inspect the gateway RBAC." >&2
@@ -29,15 +31,23 @@ if ! kubectl kustomize "$bootstrap_overlay" >"$bootstrap_rendered"; then
   exit 1
 fi
 
+if ! kubectl kustomize "$dns_overlay" >"$dns_rendered"; then
+  echo "Failed to render $dns_overlay." >&2
+  exit 1
+fi
+
 cd "$repo_root"
 NORMAL_RENDERED="$normal_rendered" \
 BOOTSTRAP_RENDERED="$bootstrap_rendered" \
+DNS_RENDERED="$dns_rendered" \
 WORKFLOW_PATH="$repo_root/.github/workflows/build-images.yml" \
 ROLLBACK_WORKFLOW_PATH="$repo_root/.github/workflows/rollback-deploy.yml" \
 NORMAL_PROJECT_PATH="$repo_root/k8s/argocd/dum-dashboard-project.yml" \
 NORMAL_APPLICATION_PATH="$repo_root/k8s/argocd/dum-dashboard.yml" \
 BOOTSTRAP_PROJECT_PATH="$repo_root/k8s/argocd/dum-dashboard-bootstrap-project.yml" \
 BOOTSTRAP_APPLICATION_PATH="$repo_root/k8s/argocd/dum-dashboard-bootstrap.yml" \
+DNS_PROJECT_PATH="$repo_root/k8s/argocd/dum-dashboard-dns-project.yml" \
+DNS_APPLICATION_PATH="$repo_root/k8s/argocd/dum-dashboard-dns.yml" \
 PROMETHEUS_PROJECT_PATH="$repo_root/k8s/argocd/prometheus-project.yml" \
 PROMETHEUS_APPLICATION_PATH="$repo_root/k8s/argocd/prometheus.yml" \
 PROMETHEUS_VALUES_PATH="$repo_root/k8s/argocd/prometheus-values.yml" \
@@ -77,6 +87,7 @@ bun --eval '
 
   const normal = loadDocuments(process.env.NORMAL_RENDERED);
   const bootstrap = loadDocuments(process.env.BOOTSTRAP_RENDERED);
+  const dns = loadDocuments(process.env.DNS_RENDERED);
   const clusterScopedKinds = new Set([
     "ClusterRole",
     "ClusterRoleBinding",
@@ -312,6 +323,17 @@ bun --eval '
   ) {
     fail("The bootstrap AppProject namespaced allowlist is broader than required.");
   }
+  const bootstrapDestinations = bootstrapProject?.spec?.destinations ?? [];
+  if (
+    !same(
+      bootstrapDestinations.map((destination) => `${destination.server}/${destination.namespace}`),
+      [
+        "https://kubernetes.default.svc/argocd",
+      ],
+    )
+  ) {
+    fail("The bootstrap AppProject destinations are broader than required.");
+  }
 
   const bootstrapApplication = parse(
     readFileSync(process.env.BOOTSTRAP_APPLICATION_PATH, "utf8"),
@@ -329,6 +351,55 @@ bun --eval '
   }
   if (bootstrapApplication?.spec?.syncPolicy?.automated) {
     fail("The privileged bootstrap Application must require a manual sync.");
+  }
+
+  const dnsIdentities = dns.map(
+    (document) => `${document?.kind}/${document?.metadata?.namespace ?? ""}/${document?.metadata?.name}`,
+  );
+  if (!same(dnsIdentities, ["ConfigMap/kube-system/coredns-custom"])) {
+    fail("The DNS bootstrap must render only the reviewed CoreDNS ConfigMap.");
+  }
+  const dnsProject = parse(readFileSync(process.env.DNS_PROJECT_PATH, "utf8"));
+  if (
+    dnsProject?.metadata?.name !== "dum-dashboard-dns" ||
+    !same(dnsProject?.spec?.sourceRepos ?? [], [
+      "https://github.com/Isolumi/dum-dashboard.git",
+    ]) ||
+    (dnsProject?.spec?.clusterResourceWhitelist ?? []).length !== 0 ||
+    !same(
+      (dnsProject?.spec?.namespaceResourceWhitelist ?? []).map(
+        (entry) => `${entry.group}/${entry.kind}`,
+      ),
+      ["/ConfigMap"],
+    ) ||
+    !same(
+      (dnsProject?.spec?.destinations ?? []).map(
+        (destination) => `${destination.server}/${destination.namespace}`,
+      ),
+      ["https://kubernetes.default.svc/kube-system"],
+    )
+  ) {
+    fail("The DNS AppProject must allow only ConfigMaps in kube-system.");
+  }
+  const dnsApplication = parse(readFileSync(process.env.DNS_APPLICATION_PATH, "utf8"));
+  if (
+    dnsApplication?.spec?.project !== "dum-dashboard-dns" ||
+    dnsApplication?.spec?.source?.repoURL !==
+      "https://github.com/Isolumi/dum-dashboard.git" ||
+    dnsApplication?.spec?.source?.targetRevision !== "v1" ||
+    dnsApplication?.spec?.source?.path !== "k8s/bootstrap/cluster-dns" ||
+    dnsApplication?.spec?.destination?.server !== "https://kubernetes.default.svc" ||
+    dnsApplication?.spec?.destination?.namespace !== "kube-system" ||
+    dnsApplication?.spec?.syncPolicy?.automated
+  ) {
+    fail("The DNS Application must remain a manually synchronized dedicated boundary.");
+  }
+  const corednsCustom = find(dns, "ConfigMap", "coredns-custom");
+  if (
+    corednsCustom?.data?.["doh.override"] !==
+      "template IN A doh.lumilumi.xyz {\n  match ^.*[.]doh[.]lumilumi[.]xyz[.]$\n  answer \"{{ .Name }} 30 IN A 10.43.18.31\"\n  fallthrough\n}\ntemplate IN AAAA doh.lumilumi.xyz {\n  match ^.*[.]doh[.]lumilumi[.]xyz[.]$\n  rcode NOERROR\n  fallthrough\n}\n"
+  ) {
+    fail("Private DNS must route only A lookups through in-cluster Traefik.");
   }
 
   const prometheusProject = parse(

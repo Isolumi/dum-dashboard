@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  doh.override: |
+    template IN A doh.lumilumi.xyz {
+      match ^.*[.]doh[.]lumilumi[.]xyz[.]$
+      answer "{{ .Name }} 30 IN A 10.43.18.31"
+      fallthrough
+    }
+    template IN AAAA doh.lumilumi.xyz {
+      match ^.*[.]doh[.]lumilumi[.]xyz[.]$
+      rcode NOERROR
+      fallthrough
+    }

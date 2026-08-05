@@ -1,8 +1,15 @@
 import type { ResourceWindow, SourceName } from "../../../shared/homelab/contracts";
 
+export interface ProviderObservation {
+  observedAt: string;
+  stale: boolean;
+  error?: string;
+}
+
 export interface Provider<T> {
   source: SourceName;
   collect(signal: AbortSignal): Promise<T>;
+  observation?(): ProviderObservation | undefined;
 }
 
 export interface WindowedProvider<T> extends Provider<T> {
