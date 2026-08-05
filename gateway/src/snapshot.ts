@@ -6,6 +6,8 @@ import type {
   ResourceHistory,
   ResourceMetrics,
   ResourceName,
+  ServiceSnapshot,
+  ServiceSummary,
   Snapshot,
   SourceName,
   SourceState,
@@ -16,6 +18,7 @@ import {
   type HealthEvaluation,
 } from "../../shared/homelab/health-rules";
 import type { Provider } from "./providers/provider";
+import type { ServiceProbeResult } from "./service-probe";
 import { correlateValidatedDeployment, type DeploymentTargetName } from "./deployment-correlation";
 import { parseArgoApplicationState } from "./providers/argocd";
 import { parseWorkflowRun } from "./providers/github";
@@ -690,6 +693,50 @@ export async function collectDeploymentSnapshot(
     observedAt,
     stale: hasFailures || state.status === "unknown",
     issues: state.issues,
+    sources: results.map((result) => result.state),
+  };
+}
+
+export async function collectServiceSnapshot(
+  providers: readonly Provider<unknown>[],
+  timeoutMs: number,
+  now: Now = () => new Date(),
+): Promise<ServiceSnapshot> {
+  const results = await collectProviders(providers, timeoutMs, now);
+  const observedAt = timestamp(now);
+  const probes = results.flatMap((result) =>
+    result.ok && result.source === "service-probe" && Array.isArray(result.data)
+      ? (result.data as ServiceProbeResult[])
+      : [],
+  );
+  const services: ServiceSummary[] = probes.map((probe) => ({
+    name: probe.entry.name,
+    description: probe.entry.description,
+    status: probe.status,
+    url: probe.entry.url,
+    certificateExpiresAt: probe.certificateExpiresAt,
+    probeLatencyMs: probe.latencyMs,
+    namespace: probe.entry.namespace,
+    workload: probe.entry.workloads.map(({ kind, name }) => `${kind}/${name}`).join(", "),
+    image: null,
+    observedAt,
+  }));
+  const hasFailures = results.some((result) => !result.ok);
+  const status = rollUpStatus(
+    services.map((service) => ({
+      status: service.status,
+      ruleId: "service-probe",
+      reason: "Service probe completed.",
+      evidence: { name: service.name },
+    })),
+  ).status;
+
+  return {
+    data: services.length > 0 ? { services } : null,
+    status: hasFailures || services.length === 0 ? "unknown" : status,
+    observedAt,
+    stale: hasFailures || services.length === 0,
+    issues: [],
     sources: results.map((result) => result.state),
   };
 }

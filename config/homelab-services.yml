@@ -1,0 +1,12 @@
+services:
+  - id: yootoob-mp3
+    name: yootoob-mp3
+    description: Private YouTube MP3 downloader
+    url: https://yootoob.doh.lumilumi.xyz
+    namespace: yootoob-mp3
+    argoApplication: yootoob-mp3-dumachine
+    workloads:
+      - kind: Deployment
+        name: yootoob-mp3-api
+      - kind: Deployment
+        name: yootoob-mp3-frontend
