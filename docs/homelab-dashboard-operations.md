@@ -11,6 +11,9 @@ hand.
 - A classic GitHub PAT with `read:packages` for the `ghcr-pull` Secret.
 - Optional: a read-only GitHub token increases API limits. Public deployment evidence works without
   one; private repositories require a fine-grained token with Contents read and Actions read.
+- Optional Google Calendar OAuth: add the exact authorized redirect URI
+  `https://doh.lumilumi.xyz/calendar/oauth/callback` to the Google web client before setting
+  `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
 ## 1. Enforce the tailnet boundary
 

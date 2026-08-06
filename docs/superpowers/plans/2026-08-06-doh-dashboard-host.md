@@ -13,6 +13,8 @@
 - Brief downtime during certificate reissuance is acceptable.
 - `dashboard.doh.lumilumi.xyz` must not redirect or serve the dashboard after cutover.
 - Access remains Tailscale-only with no application login.
+- A configured Google web client must allow
+  `https://doh.lumilumi.xyz/calendar/oauth/callback` as an exact authorized redirect URI.
 - Do not modify the user's dirty main checkout; use the existing isolated worktree.
 
 ---
@@ -75,6 +77,10 @@ In `k8s/overlays/dumachine/ingress.yml`, replace both the TLS host and rule host
 Replace active dashboard URL examples in the operations runbook and request-origin fixtures with
 `https://doh.lumilumi.xyz`. Keep the cutover design document's references to the retired hostname
 because they document the intentional removal.
+
+Assert that Calendar OAuth generated from the new request origin contains the exact redirect URI
+`https://doh.lumilumi.xyz/calendar/oauth/callback`, and document that URI as a Google web-client
+prerequisite.
 
 - [ ] **Step 5: Verify GREEN and run the complete local gate**
 

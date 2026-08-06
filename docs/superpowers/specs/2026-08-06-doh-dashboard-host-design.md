@@ -18,6 +18,10 @@ Traefik will route the apex hostname to the dashboard. The removed hostname will
 Ingress and will return Traefik's 404 response after accepting its expected invalid/default TLS
 certificate for this negative-route check.
 
+Calendar OAuth derives its callback from the request origin. Any configured Google web client must
+allow the exact redirect URI `https://doh.lumilumi.xyz/calendar/oauth/callback`; the retired URI is
+not retained.
+
 ## Failure Behavior
 
 The existing TLS Secret initially contains a certificate for the old hostname. During cert-manager
@@ -29,6 +33,8 @@ be Ready for the new hostname.
 
 - Render the Kustomize overlay and assert only `doh.lumilumi.xyz` appears in the active Ingress and
   Certificate.
+- Assert Calendar OAuth generated from the new request origin uses
+  `https://doh.lumilumi.xyz/calendar/oauth/callback`.
 - Run the complete tests, lint, formatting, TypeScript, security-boundary validation, and builds.
 - Merge through the protected `v1` branch and wait for the image/tag workflow and Argo sync.
 - Verify the certificate is Ready, `https://doh.lumilumi.xyz/homelab` renders without browser

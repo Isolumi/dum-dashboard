@@ -57,6 +57,9 @@ describe("calendar oauth helpers", () => {
       vi.mocked(getSupabaseAdmin).mock.results[0]?.value.from.mock.results[0]?.value.insert;
     expect(stateInsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: "owner-user-id" }));
     expect(result.authorizationUrl).toContain("accounts.google.com");
+    expect(new URL(result.authorizationUrl).searchParams.get("redirect_uri")).toBe(
+      "https://doh.lumilumi.xyz/calendar/oauth/callback",
+    );
   });
 
   it("builds a Google OAuth URL for offline read-only calendar access", () => {
