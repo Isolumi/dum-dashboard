@@ -27,15 +27,15 @@ describe("single-owner server boundary", () => {
   });
 
   it("rejects a mutation from another origin", () => {
-    mockHeaders({ origin: "https://evil.example", host: "dashboard.doh.lumilumi.xyz" });
+    mockHeaders({ origin: "https://evil.example", host: "doh.lumilumi.xyz" });
 
     expect(() => assertSameOrigin()).toThrow("Cross-origin request rejected");
   });
 
   it("accepts a mutation from the dashboard origin", () => {
     mockHeaders({
-      origin: "https://dashboard.doh.lumilumi.xyz",
-      host: "dashboard.doh.lumilumi.xyz",
+      origin: "https://doh.lumilumi.xyz",
+      host: "doh.lumilumi.xyz",
     });
 
     expect(() => assertSameOrigin()).not.toThrow();
