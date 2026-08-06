@@ -113,16 +113,21 @@ bun --eval '
     }
   }
   const dashboardHost = "doh.lumilumi.xyz";
+  const retiredDashboardHost = "dashboard.doh.lumilumi.xyz";
+  const dashboardTlsSecret = "dum-dashboard-lumilumi-tls";
   const dashboardIngressResource = find(normal, "Ingress", "dum-dashboard");
   const dashboardCertificate = find(normal, "Certificate", "dum-dashboard-lumilumi");
   if (
+    JSON.stringify(normal).includes(retiredDashboardHost) ||
     dashboardIngressResource?.spec?.rules?.length !== 1 ||
     dashboardIngressResource.spec.rules[0]?.host !== dashboardHost ||
     dashboardIngressResource?.spec?.tls?.length !== 1 ||
     !same(dashboardIngressResource.spec.tls[0]?.hosts ?? [], [dashboardHost]) ||
-    !same(dashboardCertificate?.spec?.dnsNames ?? [], [dashboardHost])
+    dashboardIngressResource.spec.tls[0]?.secretName !== dashboardTlsSecret ||
+    !same(dashboardCertificate?.spec?.dnsNames ?? [], [dashboardHost]) ||
+    dashboardCertificate?.spec?.secretName !== dashboardTlsSecret
   ) {
-    fail("Dashboard Ingress and Certificate must use only doh.lumilumi.xyz.");
+    fail("Dashboard Ingress and Certificate must use only the approved host and TLS Secret.");
   }
   const dashboardPolicy = find(normal, "NetworkPolicy", "dum-dashboard-traefik-only");
   const dashboardIngress = dashboardPolicy?.spec?.ingress ?? [];

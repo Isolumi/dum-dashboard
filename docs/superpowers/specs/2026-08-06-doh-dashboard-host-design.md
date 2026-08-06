@@ -15,7 +15,8 @@ no application code or deployment wiring changes.
 
 Public DNS already resolves `doh.lumilumi.xyz` to dumachine's Tailscale address. After Argo syncs,
 Traefik will route the apex hostname to the dashboard. The removed hostname will have no matching
-Ingress and will return Traefik's 404 response.
+Ingress and will return Traefik's 404 response after accepting its expected invalid/default TLS
+certificate for this negative-route check.
 
 ## Failure Behavior
 
@@ -31,6 +32,7 @@ be Ready for the new hostname.
 - Run the complete tests, lint, formatting, TypeScript, security-boundary validation, and builds.
 - Merge through the protected `v1` branch and wait for the image/tag workflow and Argo sync.
 - Verify the certificate is Ready, `https://doh.lumilumi.xyz/homelab` renders without browser
-  errors over Tailscale, and `https://dashboard.doh.lumilumi.xyz` returns 404.
+  errors over Tailscale, and an insecure request to `https://dashboard.doh.lumilumi.xyz` returns
+  exactly 404 without following redirects.
 - Re-run the tailnet boundary check so the dashboard remains unavailable through dumachine's LAN
   address.

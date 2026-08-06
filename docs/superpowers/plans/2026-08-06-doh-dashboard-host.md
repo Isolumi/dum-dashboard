@@ -40,16 +40,21 @@ Extend the Bun validation inside `scripts/check-readonly-rbac.sh` after the Clus
 
 ```ts
 const dashboardHost = "doh.lumilumi.xyz";
+const retiredDashboardHost = "dashboard.doh.lumilumi.xyz";
+const dashboardTlsSecret = "dum-dashboard-lumilumi-tls";
 const dashboardIngressResource = find(normal, "Ingress", "dum-dashboard");
 const dashboardCertificate = find(normal, "Certificate", "dum-dashboard-lumilumi");
 if (
+  JSON.stringify(normal).includes(retiredDashboardHost) ||
   dashboardIngressResource?.spec?.rules?.length !== 1 ||
   dashboardIngressResource.spec.rules[0]?.host !== dashboardHost ||
   dashboardIngressResource?.spec?.tls?.length !== 1 ||
   !same(dashboardIngressResource.spec.tls[0]?.hosts ?? [], [dashboardHost]) ||
-  !same(dashboardCertificate?.spec?.dnsNames ?? [], [dashboardHost])
+  dashboardIngressResource.spec.tls[0]?.secretName !== dashboardTlsSecret ||
+  !same(dashboardCertificate?.spec?.dnsNames ?? [], [dashboardHost]) ||
+  dashboardCertificate?.spec?.secretName !== dashboardTlsSecret
 ) {
-  fail("Dashboard Ingress and Certificate must use only doh.lumilumi.xyz.");
+  fail("Dashboard Ingress and Certificate must use only the approved host and TLS Secret.");
 }
 ```
 
@@ -57,7 +62,7 @@ if (
 
 Run: `bash scripts/check-readonly-rbac.sh`
 
-Expected: exit 1 with `Dashboard Ingress and Certificate must use only doh.lumilumi.xyz.` because the rendered manifests still use `dashboard.doh.lumilumi.xyz`.
+Expected: exit 1 with `Dashboard Ingress and Certificate must use only the approved host and TLS Secret.` because the rendered manifests still use `dashboard.doh.lumilumi.xyz`.
 
 - [ ] **Step 3: Change the active Kubernetes hostname**
 
@@ -140,12 +145,13 @@ kubectl -n dum-dashboard wait certificate/dum-dashboard-lumilumi \
   --for=condition=Ready --timeout=300s
 scripts/check-tailnet-boundary.sh doh.lumilumi.xyz
 curl --fail --show-error https://doh.lumilumi.xyz/homelab
-curl --silent --output /dev/null --write-out '%{http_code}\n' \
-  https://dashboard.doh.lumilumi.xyz
+test "$(curl --insecure --silent --output /dev/null --write-out '%{http_code}' \
+  --max-redirs 0 https://dashboard.doh.lumilumi.xyz)" = "404"
 ```
 
 Expected: the new route succeeds through Tailscale and is blocked through the LAN address; the old
-route returns HTTP 404.
+route returns exactly HTTP 404 without following redirects. `--insecure` is intentional for this
+negative check because the retired hostname is no longer included in the dashboard certificate.
 
 - [ ] **Step 5: Verify in a real browser**
 
