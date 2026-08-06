@@ -30,7 +30,7 @@ describe("pod log proxy", () => {
       }),
     );
     const request = new Request(
-      "https://dashboard.doh.lumilumi.xyz/api/homelab/logs/monitoring/prometheus-0?container=prometheus",
+      "https://doh.lumilumi.xyz/api/homelab/logs/monitoring/prometheus-0?container=prometheus",
     );
 
     const response = await proxyPodLogs(request, "monitoring", "prometheus-0");
@@ -66,7 +66,7 @@ describe("pod log proxy", () => {
         }),
     );
     const request = new Request(
-      "https://dashboard.doh.lumilumi.xyz/api/homelab/logs/default/api-0?container=api",
+      "https://doh.lumilumi.xyz/api/homelab/logs/default/api-0?container=api",
       { signal: downstream.signal },
     );
 
@@ -86,7 +86,7 @@ describe("pod log proxy", () => {
       }),
     );
     const request = new Request(
-      `https://dashboard.doh.lumilumi.xyz/api/homelab/logs/default/api-0?container=api&since=${encodeURIComponent(cursor)}`,
+      `https://doh.lumilumi.xyz/api/homelab/logs/default/api-0?container=api&since=${encodeURIComponent(cursor)}`,
     );
 
     const response = await proxyPodLogs(request, "default", "api-0");
@@ -101,7 +101,7 @@ describe("pod log proxy", () => {
     "rejects malformed resume cursor %s before gateway access",
     async (since) => {
       const request = new Request(
-        `https://dashboard.doh.lumilumi.xyz/api/homelab/logs/default/api-0?container=api&since=${encodeURIComponent(since)}`,
+        `https://doh.lumilumi.xyz/api/homelab/logs/default/api-0?container=api&since=${encodeURIComponent(since)}`,
       );
 
       const response = await proxyPodLogs(request, "default", "api-0");
@@ -118,7 +118,7 @@ describe("pod log proxy", () => {
     const secretBody = "pod-line=secret credential=private stack=/gateway/provider.ts:42";
     vi.mocked(fetch).mockResolvedValue(new Response(secretBody, { status: 502 }));
     const request = new Request(
-      "https://dashboard.doh.lumilumi.xyz/api/homelab/logs/default/api-0?container=api",
+      "https://doh.lumilumi.xyz/api/homelab/logs/default/api-0?container=api",
     );
 
     const response = await proxyPodLogs(request, "default", "api-0");
@@ -132,9 +132,7 @@ describe("pod log proxy", () => {
   });
 
   it("rejects a missing container without contacting the gateway", async () => {
-    const request = new Request(
-      "https://dashboard.doh.lumilumi.xyz/api/homelab/logs/default/api-0",
-    );
+    const request = new Request("https://doh.lumilumi.xyz/api/homelab/logs/default/api-0");
 
     const response = await proxyPodLogs(request, "default", "api-0");
 

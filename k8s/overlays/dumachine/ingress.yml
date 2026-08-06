@@ -12,10 +12,10 @@ spec:
   ingressClassName: traefik
   tls:
     - hosts:
-        - dashboard.doh.lumilumi.xyz
+        - doh.lumilumi.xyz
       secretName: dum-dashboard-lumilumi-tls
   rules:
-    - host: dashboard.doh.lumilumi.xyz
+    - host: doh.lumilumi.xyz
       http:
         paths:
           - path: /

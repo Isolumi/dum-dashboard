@@ -11,6 +11,9 @@ hand.
 - A classic GitHub PAT with `read:packages` for the `ghcr-pull` Secret.
 - Optional: a read-only GitHub token increases API limits. Public deployment evidence works without
   one; private repositories require a fine-grained token with Contents read and Actions read.
+- Optional Google Calendar OAuth: add the exact authorized redirect URI
+  `https://doh.lumilumi.xyz/calendar/oauth/callback` to the Google web client before setting
+  `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
 ## 1. Enforce the tailnet boundary
 
@@ -125,8 +128,8 @@ Start with Argo, private DNS/HTTPS, and a direct cluster comparison:
 
 ```zsh
 kubectl -n argocd get applications dum-dashboard-dumachine kube-prometheus-stack
-dig +short dashboard.doh.lumilumi.xyz
-curl --fail --show-error https://dashboard.doh.lumilumi.xyz
+dig +short doh.lumilumi.xyz
+curl --fail --show-error https://doh.lumilumi.xyz
 kubectl get nodes
 kubectl -n yootoob-mp3 get deployments,pods
 ```
@@ -143,7 +146,7 @@ kubectl -n dum-dashboard get certificate dum-dashboard-lumilumi \
   -o jsonpath='{.spec.issuerRef.name}{"\n"}{.status.conditions[?(@.type=="Ready")].status}{"\n"}'
 kubectl -n dum-dashboard get secret dum-dashboard-lumilumi-tls \
   -o jsonpath='{.data.tls\.crt}' | base64 --decode | openssl x509 -noout -issuer -enddate
-scripts/check-tailnet-boundary.sh dashboard.doh.lumilumi.xyz
+scripts/check-tailnet-boundary.sh doh.lumilumi.xyz
 ```
 
 `homelab-gateway` must say `ClusterIP`. The certificate issuer must be `letsencrypt-prod` and its
@@ -184,7 +187,7 @@ kubectl auth can-i get applications.argoproj.io/yootoob-mp3-dumachine \
 
 ## 6. Browser acceptance
 
-Open `https://dashboard.doh.lumilumi.xyz` on a device connected to your tailnet and confirm:
+Open `https://doh.lumilumi.xyz` on a device connected to your tailnet and confirm:
 
 - there is no login prompt;
 - Overview, Cluster, Deployments, and Services open;
