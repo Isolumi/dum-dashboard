@@ -28,7 +28,7 @@ export function HomelabTabs() {
                 to={child.route as any}
                 aria-current={isActive ? "page" : undefined}
                 data-active={isActive || undefined}
-                className="flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[active]:bg-accent data-[active]:text-foreground motion-reduce:transition-none"
+                className="flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[active]:bg-accent data-[active]:text-foreground data-[active]:hover:bg-accent data-[active]:hover:text-foreground motion-reduce:transition-none"
               >
                 {child.label}
               </Link>
