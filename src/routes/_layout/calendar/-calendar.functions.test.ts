@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-start/server", () => ({
   getRequestHeader: vi.fn((name: string) =>
-    name === "origin" ? "https://dashboard.doh.lumilumi.xyz" : null,
+    name === "origin" ? "https://doh.lumilumi.xyz" : null,
   ),
   setResponseHeader: vi.fn(),
 }));

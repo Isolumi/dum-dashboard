@@ -112,6 +112,18 @@ bun --eval '
       fail(`${serviceName} must remain ClusterIP-only.`);
     }
   }
+  const dashboardHost = "doh.lumilumi.xyz";
+  const dashboardIngressResource = find(normal, "Ingress", "dum-dashboard");
+  const dashboardCertificate = find(normal, "Certificate", "dum-dashboard-lumilumi");
+  if (
+    dashboardIngressResource?.spec?.rules?.length !== 1 ||
+    dashboardIngressResource.spec.rules[0]?.host !== dashboardHost ||
+    dashboardIngressResource?.spec?.tls?.length !== 1 ||
+    !same(dashboardIngressResource.spec.tls[0]?.hosts ?? [], [dashboardHost]) ||
+    !same(dashboardCertificate?.spec?.dnsNames ?? [], [dashboardHost])
+  ) {
+    fail("Dashboard Ingress and Certificate must use only doh.lumilumi.xyz.");
+  }
   const dashboardPolicy = find(normal, "NetworkPolicy", "dum-dashboard-traefik-only");
   const dashboardIngress = dashboardPolicy?.spec?.ingress ?? [];
   const dashboardSource = dashboardIngress[0]?.from?.[0];

@@ -125,8 +125,8 @@ Start with Argo, private DNS/HTTPS, and a direct cluster comparison:
 
 ```zsh
 kubectl -n argocd get applications dum-dashboard-dumachine kube-prometheus-stack
-dig +short dashboard.doh.lumilumi.xyz
-curl --fail --show-error https://dashboard.doh.lumilumi.xyz
+dig +short doh.lumilumi.xyz
+curl --fail --show-error https://doh.lumilumi.xyz
 kubectl get nodes
 kubectl -n yootoob-mp3 get deployments,pods
 ```
@@ -143,7 +143,7 @@ kubectl -n dum-dashboard get certificate dum-dashboard-lumilumi \
   -o jsonpath='{.spec.issuerRef.name}{"\n"}{.status.conditions[?(@.type=="Ready")].status}{"\n"}'
 kubectl -n dum-dashboard get secret dum-dashboard-lumilumi-tls \
   -o jsonpath='{.data.tls\.crt}' | base64 --decode | openssl x509 -noout -issuer -enddate
-scripts/check-tailnet-boundary.sh dashboard.doh.lumilumi.xyz
+scripts/check-tailnet-boundary.sh doh.lumilumi.xyz
 ```
 
 `homelab-gateway` must say `ClusterIP`. The certificate issuer must be `letsencrypt-prod` and its
@@ -184,7 +184,7 @@ kubectl auth can-i get applications.argoproj.io/yootoob-mp3-dumachine \
 
 ## 6. Browser acceptance
 
-Open `https://dashboard.doh.lumilumi.xyz` on a device connected to your tailnet and confirm:
+Open `https://doh.lumilumi.xyz` on a device connected to your tailnet and confirm:
 
 - there is no login prompt;
 - Overview, Cluster, Deployments, and Services open;
