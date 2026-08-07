@@ -41,11 +41,11 @@ describe("CreateTodoSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("uses default priority of medium when omitted", () => {
+  it("uses default priority of low when omitted", () => {
     const result = CreateTodoSchema.safeParse({ name: "Test todo" });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.priority).toBe("medium");
+      expect(result.data.priority).toBe("low");
     }
   });
 
@@ -58,7 +58,7 @@ describe("CreateTodoSchema", () => {
   });
 
   it("accepts valid priority values", () => {
-    const priorities = ["high", "medium", "low"] as const;
+    const priorities = ["high", "low"] as const;
     for (const priority of priorities) {
       const result = CreateTodoSchema.safeParse({ name: "Test", priority });
       expect(result.success).toBe(true);
@@ -68,6 +68,11 @@ describe("CreateTodoSchema", () => {
   it("rejects invalid priority value", () => {
     const result = CreateTodoSchema.safeParse({ name: "Test", priority: "urgent" });
     expect(result.success).toBe(false);
+  });
+
+  it("rejects the retired medium priority", () => {
+    expect(CreateTodoSchema.safeParse({ name: "Test", priority: "medium" }).success).toBe(false);
+    expect(UpdateTodoSchema.safeParse({ id: TODO_ID, priority: "medium" }).success).toBe(false);
   });
 
   it("accepts valid status values", () => {

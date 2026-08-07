@@ -7,7 +7,7 @@ import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
 import { Input } from "#/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
-import type { Todo, TodoStatus } from "#/lib/database.types";
+import type { Todo, TodoPriority, TodoStatus } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
 
 export interface TodoRowProps {
@@ -15,12 +15,15 @@ export interface TodoRowProps {
   onUpdate: (fields: {
     id: string;
     name?: string;
-    priority?: "high" | "medium" | "low";
+    priority?: "high" | "low";
     status?: "not_started" | "started" | "complete";
     due_date?: string | null;
   }) => void;
   onDelete: (id: string) => void;
   dragListeners?: DraggableSyntheticListeners;
+  compact?: boolean;
+  isPending?: boolean;
+  dragDisabled?: boolean;
 }
 
 const STATUS_CYCLE: Record<TodoStatus, TodoStatus> = {
@@ -57,7 +60,30 @@ const STATUS_NEXT_LABEL: Record<TodoStatus, string> = {
   complete: "not started",
 };
 
-function TodoRowComponent({ todo, onUpdate, onDelete, dragListeners }: TodoRowProps) {
+const PRIORITY_NEXT: Record<TodoPriority, TodoPriority> = {
+  high: "low",
+  low: "high",
+};
+
+const PRIORITY_LABEL: Record<TodoPriority, string> = {
+  high: "High",
+  low: "Low",
+};
+
+const PRIORITY_STYLES: Record<TodoPriority, string> = {
+  high: "text-destructive hover:text-destructive",
+  low: "text-muted-foreground",
+};
+
+function TodoRowComponent({
+  todo,
+  onUpdate,
+  onDelete,
+  dragListeners,
+  compact = false,
+  isPending = false,
+  dragDisabled = false,
+}: TodoRowProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(todo.name);
   const [isDateOpen, setIsDateOpen] = useState(false);
@@ -104,16 +130,17 @@ function TodoRowComponent({ todo, onUpdate, onDelete, dragListeners }: TodoRowPr
     <div
       role="listitem"
       className={cn(
-        "group flex min-h-[44px] items-center gap-2 px-4 transition-colors hover:bg-accent",
+        "group flex min-h-[44px] items-center transition-colors motion-reduce:transition-none hover:bg-accent",
+        compact ? "flex-wrap gap-x-1 gap-y-0.5 px-2 py-1" : "gap-2 px-4",
         todo.status === "complete" && "opacity-60",
       )}
     >
       {/* Drag handle */}
       <button
         {...dragListeners}
-        className="shrink-0 cursor-grab opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground active:cursor-grabbing"
+        disabled={dragDisabled || isPending}
+        className="min-h-11 min-w-11 shrink-0 cursor-grab rounded-md text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing disabled:cursor-default"
         aria-label={`Drag to reorder "${todo.name}"`}
-        tabIndex={-1}
       >
         <GripVertical className="size-4" />
       </button>
@@ -123,8 +150,9 @@ function TodoRowComponent({ todo, onUpdate, onDelete, dragListeners }: TodoRowPr
         variant="ghost"
         size="icon"
         onClick={() => onUpdate({ id: todo.id, status: STATUS_CYCLE[todo.status] })}
+        disabled={isPending}
         aria-label={`Mark "${todo.name}" as ${STATUS_NEXT_LABEL[todo.status]}`}
-        className="shrink-0"
+        className="size-11 shrink-0"
       >
         {STATUS_ICONS[todo.status]}
       </Button>
@@ -138,40 +166,71 @@ function TodoRowComponent({ todo, onUpdate, onDelete, dragListeners }: TodoRowPr
           onChange={(e) => setNameValue(e.target.value)}
           onKeyDown={handleNameKeyDown}
           onBlur={handleNameBlur}
+          disabled={isPending}
           aria-label="Edit todo name"
-          className="h-auto flex-1 border-0 p-0 text-base shadow-none focus-visible:ring-1 focus-visible:ring-ring/50"
+          className={cn(
+            "min-h-11 flex-1 border-0 p-0 shadow-none focus-visible:ring-1 focus-visible:ring-ring/50",
+            compact
+              ? "min-w-0 text-sm max-[480px]:order-last max-[480px]:basis-full max-[480px]:flex-none"
+              : "text-base",
+          )}
         />
       ) : (
-        <span
-          className={cn(
-            "flex-1 cursor-pointer text-base",
-            todo.status === "complete" && "text-muted-foreground line-through",
-          )}
+        <button
+          type="button"
+          className={`flex min-h-11 min-w-0 flex-1 cursor-pointer items-center overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${compact ? "text-sm max-[480px]:order-last max-[480px]:basis-full max-[480px]:flex-none" : "text-base"} ${todo.status === "complete" ? "text-muted-foreground line-through" : ""}`}
           onClick={() => setIsEditingName(true)}
+          disabled={isPending}
+          aria-label={isPending ? `${todo.name} (saving)` : undefined}
         >
-          {todo.name}
-        </span>
+          <span className="truncate">{todo.name}</span>
+          {isPending && (
+            <span className="ml-2 shrink-0 text-xs text-muted-foreground">Saving…</span>
+          )}
+        </button>
       )}
 
+      {/* Priority switcher */}
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => onUpdate({ id: todo.id, priority: PRIORITY_NEXT[todo.priority] })}
+        disabled={isPending}
+        aria-label={`Change "${todo.name}" priority to ${PRIORITY_LABEL[PRIORITY_NEXT[todo.priority]]}`}
+        className={cn(
+          "min-h-11 min-w-11 shrink-0 px-2 font-medium",
+          compact ? "text-xs" : "text-sm",
+          PRIORITY_STYLES[todo.priority],
+        )}
+      >
+        {PRIORITY_LABEL[todo.priority]}
+      </Button>
+
       {/* Due date — calendar popover */}
-      <div className="w-24 shrink-0 text-right">
+      <div className={cn("shrink-0 text-right", compact ? "w-20" : "w-24")}>
         <Popover open={isDateOpen} onOpenChange={setIsDateOpen}>
           <PopoverTrigger
             render={
-              <button
+              <Button
+                type="button"
+                variant="ghost"
                 aria-label={`Edit due date for "${todo.name}"`}
-                className="w-full text-right"
+                disabled={isPending}
+                className="group/date min-h-11 w-full justify-end px-2 text-right"
               />
             }
           >
             {todo.due_date ? (
               <span
-                className={cn("text-sm", isOverdue ? "text-destructive" : "text-muted-foreground")}
+                className={cn(
+                  compact ? "text-xs" : "text-sm",
+                  isOverdue ? "text-destructive" : "text-muted-foreground",
+                )}
               >
                 {format(parseISO(todo.due_date), "MMM d")}
               </span>
             ) : (
-              <CalendarIcon className="ml-auto size-4 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground" />
+              <CalendarIcon className="ml-auto size-4 text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-visible/date:opacity-100 [@media(pointer:coarse)]:opacity-100" />
             )}
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="end">
@@ -195,8 +254,9 @@ function TodoRowComponent({ todo, onUpdate, onDelete, dragListeners }: TodoRowPr
         variant="ghost"
         size="icon"
         onClick={() => onDelete(todo.id)}
+        disabled={isPending}
         aria-label={`Delete "${todo.name}"`}
-        className="shrink-0 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+        className="size-11 shrink-0 opacity-0 transition-opacity motion-reduce:transition-none hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100"
       >
         <Trash2 />
       </Button>

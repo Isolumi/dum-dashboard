@@ -10,7 +10,7 @@ const TODO_COLUMNS = "id,name,status,priority,due_date,sort_order,created_at" as
 
 export const CreateTodoSchema = z.object({
   name: z.string().trim().min(1).max(200),
-  priority: z.enum(["high", "medium", "low"] as const).default("medium"),
+  priority: z.enum(["high", "low"] as const).default("low"),
   status: z.enum(["not_started", "started", "complete"] as const).default("not_started"),
   due_date: z.string().date().nullable().optional(),
 });
@@ -18,7 +18,7 @@ export const CreateTodoSchema = z.object({
 export const UpdateTodoSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(200).optional(),
-  priority: z.enum(["high", "medium", "low"] as const).optional(),
+  priority: z.enum(["high", "low"] as const).optional(),
   status: z.enum(["not_started", "started", "complete"] as const).optional(),
   due_date: z.string().date().nullable().optional(),
   sort_order: z.number().int().nonnegative().optional(),
