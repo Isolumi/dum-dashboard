@@ -11,17 +11,49 @@ afterEach(() => {
   cleanup();
 });
 
-vi.mock("#/components/ui/popover", () => ({
-  Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  PopoverTrigger: ({
-    render: trigger,
-    children,
-  }: {
-    render: React.ReactElement;
-    children: React.ReactNode;
-  }) => React.cloneElement(trigger, undefined, children),
-  PopoverContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
+vi.mock("#/components/ui/popover", () => {
+  const PopoverContext = React.createContext<{
+    open: boolean;
+    onOpenChange?: (open: boolean) => void;
+  } | null>(null);
+
+  return {
+    Popover: ({
+      open = false,
+      onOpenChange,
+      children,
+    }: {
+      open?: boolean;
+      onOpenChange?: (open: boolean) => void;
+      children: React.ReactNode;
+    }) => (
+      <PopoverContext.Provider value={{ open, onOpenChange }}>{children}</PopoverContext.Provider>
+    ),
+    PopoverTrigger: ({
+      render: trigger,
+      children,
+    }: {
+      render: React.ReactElement<{ onClick?: React.MouseEventHandler<HTMLElement> }>;
+      children: React.ReactNode;
+    }) => {
+      const context = React.useContext(PopoverContext);
+      return React.cloneElement(
+        trigger,
+        {
+          onClick: (event: React.MouseEvent<HTMLElement>) => {
+            trigger.props.onClick?.(event);
+            if (!event.defaultPrevented) context?.onOpenChange?.(!context.open);
+          },
+        },
+        children,
+      );
+    },
+    PopoverContent: ({ children }: { children: React.ReactNode }) => {
+      const context = React.useContext(PopoverContext);
+      return context?.open ? <>{children}</> : null;
+    },
+  };
+});
 
 vi.mock("#/components/ui/calendar", () => ({
   Calendar: ({ onSelect }: { onSelect: (date: Date) => void }) => (
@@ -81,10 +113,12 @@ describe("TodoRow", () => {
   it("sends the selected due date when its date control is used", () => {
     const { onUpdate } = renderTodoRow();
 
+    expect(screen.queryByRole("button", { name: /december 25, 2026/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));
     fireEvent.click(screen.getByRole("button", { name: /december 25, 2026/i }));
 
     expect(onUpdate).toHaveBeenCalledWith({ id: "todo-high", due_date: "2026-12-25" });
+    expect(screen.queryByRole("button", { name: /december 25, 2026/i })).toBeNull();
   });
 
   it("sends the todo id when its delete control is clicked", () => {
@@ -113,5 +147,35 @@ describe("TodoRow", () => {
 
     priorityControl.focus();
     expect(document.activeElement).toBe(priorityControl);
+  });
+
+  it("keeps the priority control at least 44px wide", () => {
+    renderTodoRow();
+
+    expect(
+      screen.getByRole("button", { name: /change "deploy app" priority to low/i }).className,
+    ).toContain("min-w-11");
+  });
+
+  it("makes drag and delete controls discoverable for coarse pointers", () => {
+    renderTodoRow();
+
+    expect(
+      screen.getByRole("button", { name: /drag to reorder "deploy app"/i }).className,
+    ).toContain("[@media(pointer:coarse)]:opacity-100");
+    expect(screen.getByRole("button", { name: /delete "deploy app"/i }).className).toContain(
+      "[@media(pointer:coarse)]:opacity-100",
+    );
+  });
+
+  it("reveals the empty date icon when its focusable trigger receives focus", () => {
+    renderTodoRow({ todo: { ...highTodo, due_date: null } });
+
+    const dateTrigger = screen.getByRole("button", { name: /edit due date for "deploy app"/i });
+    const emptyDateIcon = dateTrigger.querySelector("svg");
+    dateTrigger.focus();
+
+    expect(document.activeElement).toBe(dateTrigger);
+    expect(emptyDateIcon?.className.baseVal).toContain("group-focus-visible/date:opacity-100");
   });
 });

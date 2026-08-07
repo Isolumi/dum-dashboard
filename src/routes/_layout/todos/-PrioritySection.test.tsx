@@ -3,7 +3,6 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import React from "react";
 
 import type { Todo } from "#/lib/database.types";
 

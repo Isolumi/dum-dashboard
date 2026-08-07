@@ -134,7 +134,7 @@ function TodoRowComponent({
       {/* Drag handle */}
       <button
         {...dragListeners}
-        className="min-h-11 min-w-11 shrink-0 cursor-grab rounded-md text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing"
+        className="min-h-11 min-w-11 shrink-0 cursor-grab rounded-md text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing"
         aria-label={`Drag to reorder "${todo.name}"`}
       >
         <GripVertical className="size-4" />
@@ -187,7 +187,7 @@ function TodoRowComponent({
         onClick={() => onUpdate({ id: todo.id, priority: PRIORITY_NEXT[todo.priority] })}
         aria-label={`Change "${todo.name}" priority to ${PRIORITY_LABEL[PRIORITY_NEXT[todo.priority]]}`}
         className={cn(
-          "min-h-11 shrink-0 px-2 font-medium",
+          "min-h-11 min-w-11 shrink-0 px-2 font-medium",
           compact ? "text-xs" : "text-sm",
           PRIORITY_STYLES[todo.priority],
         )}
@@ -204,7 +204,7 @@ function TodoRowComponent({
                 type="button"
                 variant="ghost"
                 aria-label={`Edit due date for "${todo.name}"`}
-                className="min-h-11 w-full justify-end px-2 text-right"
+                className="group/date min-h-11 w-full justify-end px-2 text-right"
               />
             }
           >
@@ -218,7 +218,7 @@ function TodoRowComponent({
                 {format(parseISO(todo.due_date), "MMM d")}
               </span>
             ) : (
-              <CalendarIcon className="ml-auto size-4 text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100" />
+              <CalendarIcon className="ml-auto size-4 text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-visible/date:opacity-100" />
             )}
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="end">
@@ -243,7 +243,7 @@ function TodoRowComponent({
         size="icon"
         onClick={() => onDelete(todo.id)}
         aria-label={`Delete "${todo.name}"`}
-        className="size-11 shrink-0 opacity-0 transition-opacity motion-reduce:transition-none hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+        className="size-11 shrink-0 opacity-0 transition-opacity motion-reduce:transition-none hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100"
       >
         <Trash2 />
       </Button>

@@ -104,7 +104,10 @@ function AddTodoRowComponent({
           setIsExpanded(true);
         }}
         onKeyDown={(e) => {
-          if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsExpanded(true);
+          } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
             setName(e.key);
             setIsExpanded(true);
           }
@@ -162,7 +165,7 @@ function AddTodoRowComponent({
                 variant="ghost"
                 ref={priorityButtonRef}
                 className={cn(
-                  "min-h-11 shrink-0 cursor-pointer px-2 font-medium",
+                  "min-h-11 min-w-11 shrink-0 cursor-pointer px-2 font-medium",
                   compact ? "text-xs" : "text-sm",
                   PRIORITY_STYLES[priority],
                 )}
