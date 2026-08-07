@@ -149,6 +149,55 @@ describe("TodoRow", () => {
     expect(document.activeElement).toBe(priorityControl);
   });
 
+  it("uses a two-line compact layout before fixed controls crowd out the todo name", () => {
+    renderTodoRow({ compact: true });
+
+    const row = screen.getByRole("listitem");
+    const nameControl = screen.getByRole("button", { name: "Deploy app" });
+
+    expect(row.className).toContain("flex-wrap");
+    expect(nameControl.className).toContain("min-w-0");
+    expect(nameControl.className).toContain("max-[480px]:order-last");
+    expect(nameControl.className).toContain("max-[480px]:basis-full");
+    expect(nameControl.className).toContain("overflow-hidden");
+  });
+
+  it("identifies a pending compact todo and disables its actions until it is saved", () => {
+    renderTodoRow({ compact: true, isPending: true });
+
+    const nameControl = screen.getByRole("button", { name: /deploy app \(saving\)/i });
+    expect(nameControl.contains(screen.getByText("Saving…"))).toBe(true);
+    expect((nameControl as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (
+        screen.getByRole("button", {
+          name: /mark "deploy app" as started/i,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    expect(
+      (
+        screen.getByRole("button", {
+          name: /change "deploy app" priority to low/i,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    expect(
+      (
+        screen.getByRole("button", {
+          name: /edit due date for "deploy app"/i,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    expect(
+      (
+        screen.getByRole("button", {
+          name: /delete "deploy app"/i,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+  });
+
   it("keeps the priority control at least 44px wide", () => {
     renderTodoRow();
 

@@ -39,6 +39,7 @@ function getTodoUpdateState(todo: Todo): TodoUpdateState {
 export interface TodoController {
   todos: Todo[];
   grouped: Record<TodoPriority, Todo[]>;
+  pendingIds: ReadonlySet<string>;
   status: "loading" | "ready" | "error";
   loadError: string | null;
   mutationError: string | null;
@@ -57,7 +58,9 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(() => new Set());
   const todosRef = useRef(initialTodos ?? []);
+  const pendingIdsRef = useRef(new Set<string>());
   const mutationCountRef = useRef(0);
   const mutationRevisionRef = useRef(0);
   const loadRequestRef = useRef(0);
@@ -73,6 +76,16 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
     const next = replace(todosRef.current);
     todosRef.current = next;
     setTodos(next);
+  }, []);
+
+  const markPending = useCallback((id: string) => {
+    pendingIdsRef.current.add(id);
+    setPendingIds(new Set(pendingIdsRef.current));
+  }, []);
+
+  const clearPending = useCallback((id: string) => {
+    pendingIdsRef.current.delete(id);
+    setPendingIds(new Set(pendingIdsRef.current));
   }, []);
 
   useEffect(() => {
@@ -147,6 +160,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
         created_at: new Date().toISOString(),
       };
       replaceTodos((current) => [...current, optimisticTodo]);
+      markPending(optimisticTodo.id);
 
       try {
         const created = await createTodo({
@@ -164,14 +178,16 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
         replaceTodos((current) => current.filter((todo) => todo.id !== optimisticTodo.id));
         setMutationError(SAVE_ERROR);
       } finally {
+        clearPending(optimisticTodo.id);
         endMutation();
       }
     },
-    [beginMutation, endMutation, replaceTodos],
+    [beginMutation, clearPending, endMutation, markPending, replaceTodos],
   );
 
   const update = useCallback(
     async (fields: TodoUpdateFields): Promise<void> => {
+      if (pendingIdsRef.current.has(fields.id)) return;
       const previous = todosRef.current.find((todo) => todo.id === fields.id);
       if (!updateQueuesRef.current.has(fields.id) && previous) {
         updateCommittedRef.current.set(fields.id, getTodoUpdateState(previous));
@@ -221,6 +237,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
 
   const remove = useCallback(
     async (id: string): Promise<void> => {
+      if (pendingIdsRef.current.has(id)) return;
       const previousIndex = todosRef.current.findIndex((todo) => todo.id === id);
       const previous = todosRef.current[previousIndex];
       beginMutation();
@@ -247,6 +264,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
 
   const reorder = useCallback(
     async (priority: TodoPriority, orderedIds: string[]): Promise<void> => {
+      if (orderedIds.some((id) => pendingIdsRef.current.has(id))) return;
       const orderedSortOrders = new Map(
         orderedIds.map((id, sortOrder) => [id, sortOrder] as const),
       );
@@ -320,6 +338,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   return {
     todos,
     grouped,
+    pendingIds,
     status,
     loadError,
     mutationError,

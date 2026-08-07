@@ -65,6 +65,7 @@ export function TodoBoard({ controller, variant }: TodoBoardProps): ReactElement
                 onDelete={controller.remove}
                 onCreate={controller.create}
                 onReorder={controller.reorder}
+                isPending={(id) => controller.pendingIds.has(id)}
               />
             ))}
           </div>

@@ -22,6 +22,8 @@ export interface TodoRowProps {
   onDelete: (id: string) => void;
   dragListeners?: DraggableSyntheticListeners;
   compact?: boolean;
+  isPending?: boolean;
+  dragDisabled?: boolean;
 }
 
 const STATUS_CYCLE: Record<TodoStatus, TodoStatus> = {
@@ -79,6 +81,8 @@ function TodoRowComponent({
   onDelete,
   dragListeners,
   compact = false,
+  isPending = false,
+  dragDisabled = false,
 }: TodoRowProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(todo.name);
@@ -127,14 +131,15 @@ function TodoRowComponent({
       role="listitem"
       className={cn(
         "group flex min-h-[44px] items-center transition-colors motion-reduce:transition-none hover:bg-accent",
-        compact ? "gap-1 px-2" : "gap-2 px-4",
+        compact ? "flex-wrap gap-x-1 gap-y-0.5 px-2 py-1" : "gap-2 px-4",
         todo.status === "complete" && "opacity-60",
       )}
     >
       {/* Drag handle */}
       <button
         {...dragListeners}
-        className="min-h-11 min-w-11 shrink-0 cursor-grab rounded-md text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing"
+        disabled={dragDisabled || isPending}
+        className="min-h-11 min-w-11 shrink-0 cursor-grab rounded-md text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing disabled:cursor-default"
         aria-label={`Drag to reorder "${todo.name}"`}
       >
         <GripVertical className="size-4" />
@@ -145,6 +150,7 @@ function TodoRowComponent({
         variant="ghost"
         size="icon"
         onClick={() => onUpdate({ id: todo.id, status: STATUS_CYCLE[todo.status] })}
+        disabled={isPending}
         aria-label={`Mark "${todo.name}" as ${STATUS_NEXT_LABEL[todo.status]}`}
         className="size-11 shrink-0"
       >
@@ -160,23 +166,27 @@ function TodoRowComponent({
           onChange={(e) => setNameValue(e.target.value)}
           onKeyDown={handleNameKeyDown}
           onBlur={handleNameBlur}
+          disabled={isPending}
           aria-label="Edit todo name"
           className={cn(
             "min-h-11 flex-1 border-0 p-0 shadow-none focus-visible:ring-1 focus-visible:ring-ring/50",
-            compact ? "text-sm" : "text-base",
+            compact
+              ? "min-w-0 text-sm max-[480px]:order-last max-[480px]:basis-full max-[480px]:flex-none"
+              : "text-base",
           )}
         />
       ) : (
         <button
           type="button"
-          className={cn(
-            "flex min-h-11 flex-1 cursor-pointer items-center rounded-md text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-            compact ? "text-sm" : "text-base",
-            todo.status === "complete" && "text-muted-foreground line-through",
-          )}
+          className={`flex min-h-11 min-w-0 flex-1 cursor-pointer items-center overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${compact ? "text-sm max-[480px]:order-last max-[480px]:basis-full max-[480px]:flex-none" : "text-base"} ${todo.status === "complete" ? "text-muted-foreground line-through" : ""}`}
           onClick={() => setIsEditingName(true)}
+          disabled={isPending}
+          aria-label={isPending ? `${todo.name} (saving)` : undefined}
         >
-          {todo.name}
+          <span className="truncate">{todo.name}</span>
+          {isPending && (
+            <span className="ml-2 shrink-0 text-xs text-muted-foreground">Saving…</span>
+          )}
         </button>
       )}
 
@@ -185,6 +195,7 @@ function TodoRowComponent({
         type="button"
         variant="ghost"
         onClick={() => onUpdate({ id: todo.id, priority: PRIORITY_NEXT[todo.priority] })}
+        disabled={isPending}
         aria-label={`Change "${todo.name}" priority to ${PRIORITY_LABEL[PRIORITY_NEXT[todo.priority]]}`}
         className={cn(
           "min-h-11 min-w-11 shrink-0 px-2 font-medium",
@@ -204,6 +215,7 @@ function TodoRowComponent({
                 type="button"
                 variant="ghost"
                 aria-label={`Edit due date for "${todo.name}"`}
+                disabled={isPending}
                 className="group/date min-h-11 w-full justify-end px-2 text-right"
               />
             }
@@ -242,6 +254,7 @@ function TodoRowComponent({
         variant="ghost"
         size="icon"
         onClick={() => onDelete(todo.id)}
+        disabled={isPending}
         aria-label={`Delete "${todo.name}"`}
         className="size-11 shrink-0 opacity-0 transition-opacity motion-reduce:transition-none hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100"
       >

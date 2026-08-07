@@ -15,6 +15,7 @@ function makeController(overrides: Partial<TodoController> = {}): TodoController
   return {
     todos: [],
     grouped: { high: [], low: [] },
+    pendingIds: new Set(),
     status: "ready",
     loadError: null,
     mutationError: null,

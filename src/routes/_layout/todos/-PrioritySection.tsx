@@ -32,6 +32,7 @@ export interface PrioritySectionProps {
   onCreate: AddTodoRowProps["onCreate"];
   onReorder: (priority: TodoPriority, orderedIds: string[]) => void;
   compact?: boolean;
+  isPending?: (id: string) => boolean;
 }
 
 const SECTION_LABEL_STYLES: Record<TodoPriority, string> = {
@@ -39,9 +40,17 @@ const SECTION_LABEL_STYLES: Record<TodoPriority, string> = {
   low: "text-muted-foreground",
 };
 
-function SortableTodoRow({ todo, onUpdate, onDelete, compact }: TodoRowProps) {
+function SortableTodoRow({
+  todo,
+  onUpdate,
+  onDelete,
+  compact,
+  isPending,
+  dragDisabled,
+}: TodoRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: todo.id,
+    disabled: isPending || dragDisabled,
   });
 
   const style = {
@@ -60,8 +69,10 @@ function SortableTodoRow({ todo, onUpdate, onDelete, compact }: TodoRowProps) {
         todo={todo}
         onUpdate={onUpdate}
         onDelete={onDelete}
-        dragListeners={listeners}
+        dragListeners={isPending || dragDisabled ? undefined : listeners}
         compact={compact}
+        isPending={isPending}
+        dragDisabled={dragDisabled}
       />
     </div>
   );
@@ -76,9 +87,11 @@ function PrioritySectionComponent({
   onCreate,
   onReorder,
   compact = false,
+  isPending,
 }: PrioritySectionProps) {
   const dndId = useId();
   const todoIds = useMemo(() => todos.map((t) => t.id), [todos]);
+  const hasPendingTodo = todos.some((todo) => isPending?.(todo.id));
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -87,6 +100,7 @@ function PrioritySectionComponent({
   );
 
   function handleDragEnd(event: DragEndEvent) {
+    if (hasPendingTodo) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -141,6 +155,8 @@ function PrioritySectionComponent({
                 onUpdate={onUpdate}
                 onDelete={onDelete}
                 compact={compact}
+                isPending={isPending?.(todo.id)}
+                dragDisabled={hasPendingTodo}
               />
             ))}
           </div>

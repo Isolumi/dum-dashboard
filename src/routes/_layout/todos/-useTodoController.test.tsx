@@ -119,6 +119,72 @@ describe("useTodoController", () => {
     expect(result.current.todos).toEqual([highTodo, serverTodo]);
   });
 
+  it("keeps a newly created todo when delete is requested before it has a canonical id", async () => {
+    const pendingCreate = deferred<Todo>();
+    const serverTodo = makeTodo({
+      id: "22222222-2222-4222-8222-222222222222",
+      name: "Saved todo",
+      priority: "low",
+    });
+    vi.mocked(createTodo).mockReturnValueOnce(pendingCreate.promise);
+    const { result } = renderHook(() => useTodoController([highTodo]));
+    let createMutation!: Promise<void>;
+
+    act(() => {
+      createMutation = result.current.create({
+        name: "Saved todo",
+        priority: "low",
+        due_date: null,
+      });
+    });
+    const optimisticId = result.current.todos[1]?.id;
+
+    await act(async () => result.current.remove(optimisticId!));
+
+    expect(deleteTodo).not.toHaveBeenCalled();
+    expect(result.current.todos[1]?.id).toBe(optimisticId);
+
+    await act(async () => {
+      pendingCreate.resolve(serverTodo);
+      await createMutation;
+    });
+
+    expect(result.current.todos).toEqual([highTodo, serverTodo]);
+  });
+
+  it("does not persist an update for a todo before create returns its canonical id", async () => {
+    const pendingCreate = deferred<Todo>();
+    const serverTodo = makeTodo({
+      id: "22222222-2222-4222-8222-222222222222",
+      name: "Saved todo",
+      priority: "low",
+    });
+    vi.mocked(createTodo).mockReturnValueOnce(pendingCreate.promise);
+    const { result } = renderHook(() => useTodoController([highTodo]));
+    let createMutation!: Promise<void>;
+
+    act(() => {
+      createMutation = result.current.create({
+        name: "Saved todo",
+        priority: "low",
+        due_date: null,
+      });
+    });
+    const optimisticId = result.current.todos[1]?.id;
+
+    await act(async () => result.current.update({ id: optimisticId!, status: "complete" }));
+
+    expect(updateTodo).not.toHaveBeenCalled();
+    expect(result.current.todos[1]?.status).toBe("not_started");
+
+    await act(async () => {
+      pendingCreate.resolve(serverTodo);
+      await createMutation;
+    });
+
+    expect(result.current.todos).toEqual([highTodo, serverTodo]);
+  });
+
   it("rolls an optimistic update back when the server rejects it", async () => {
     vi.mocked(updateTodo).mockRejectedValueOnce(new Error("offline"));
     const { result } = renderHook(() => useTodoController([highTodo]));
