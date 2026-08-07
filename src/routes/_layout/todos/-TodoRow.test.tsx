@@ -1,0 +1,117 @@
+/**
+ * @vitest-environment jsdom
+ */
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import React from "react";
+
+import type { Todo } from "#/lib/database.types";
+
+afterEach(() => {
+  cleanup();
+});
+
+vi.mock("#/components/ui/popover", () => ({
+  Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  PopoverTrigger: ({
+    render: trigger,
+    children,
+  }: {
+    render: React.ReactElement;
+    children: React.ReactNode;
+  }) => React.cloneElement(trigger, undefined, children),
+  PopoverContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock("#/components/ui/calendar", () => ({
+  Calendar: ({ onSelect }: { onSelect: (date: Date) => void }) => (
+    <button type="button" onClick={() => onSelect(new Date("2026-12-25T12:00:00"))}>
+      December 25, 2026
+    </button>
+  ),
+}));
+
+const { TodoRow } = await import("./-TodoRow");
+
+const highTodo: Todo = {
+  id: "todo-high",
+  name: "Deploy app",
+  priority: "high",
+  status: "not_started",
+  due_date: "2026-01-10",
+  sort_order: 0,
+  created_at: "2026-01-01T00:00:00.000Z",
+};
+
+function renderTodoRow(props: Partial<React.ComponentProps<typeof TodoRow>> = {}) {
+  const onUpdate = vi.fn();
+  const onDelete = vi.fn();
+  render(<TodoRow todo={highTodo} onUpdate={onUpdate} onDelete={onDelete} {...props} />);
+  return { onUpdate, onDelete };
+}
+
+describe("TodoRow", () => {
+  it("sends the next status when its status control is clicked", () => {
+    const { onUpdate } = renderTodoRow();
+
+    fireEvent.click(screen.getByRole("button", { name: /mark "deploy app" as started/i }));
+
+    expect(onUpdate).toHaveBeenCalledWith({ id: "todo-high", status: "started" });
+  });
+
+  it("sends the edited name when the row name is saved", () => {
+    const { onUpdate } = renderTodoRow();
+
+    fireEvent.click(screen.getByRole("button", { name: "Deploy app" }));
+    const input = screen.getByRole("textbox", { name: /edit todo name/i });
+    fireEvent.change(input, { target: { value: "Ship app" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(onUpdate).toHaveBeenCalledWith({ id: "todo-high", name: "Ship app" });
+  });
+
+  it("changes a High todo to Low when its priority control is clicked", () => {
+    const { onUpdate } = renderTodoRow();
+
+    fireEvent.click(screen.getByRole("button", { name: /change "deploy app" priority to low/i }));
+
+    expect(onUpdate).toHaveBeenCalledWith({ id: "todo-high", priority: "low" });
+  });
+
+  it("sends the selected due date when its date control is used", () => {
+    const { onUpdate } = renderTodoRow();
+
+    fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));
+    fireEvent.click(screen.getByRole("button", { name: /december 25, 2026/i }));
+
+    expect(onUpdate).toHaveBeenCalledWith({ id: "todo-high", due_date: "2026-12-25" });
+  });
+
+  it("sends the todo id when its delete control is clicked", () => {
+    const { onDelete } = renderTodoRow();
+
+    fireEvent.click(screen.getByRole("button", { name: /delete "deploy app"/i }));
+
+    expect(onDelete).toHaveBeenCalledWith("todo-high");
+  });
+
+  it("keeps compact controls focusable and preserves the 44px row target", () => {
+    renderTodoRow({ compact: true });
+
+    const row = screen.getByRole("listitem");
+    const priorityControl = screen.getByRole("button", {
+      name: /change "deploy app" priority to low/i,
+    });
+
+    expect(row.className).toContain("min-h-[44px]");
+    expect(row.className).toContain("px-2");
+    expect(row.className).toContain("motion-reduce:transition-none");
+    expect(screen.getByRole("button", { name: "Deploy app" }).className).toContain("text-sm");
+    expect(screen.getByRole("button", { name: /mark "deploy app" as started/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /edit due date for "deploy app"/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /delete "deploy app"/i })).toBeTruthy();
+
+    priorityControl.focus();
+    expect(document.activeElement).toBe(priorityControl);
+  });
+});

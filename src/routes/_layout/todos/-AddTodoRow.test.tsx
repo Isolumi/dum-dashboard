@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, act } from "@testing-library/react";
+import { render, screen, cleanup, act, fireEvent } from "@testing-library/react";
 import React from "react";
 
 afterEach(() => {
@@ -20,12 +20,7 @@ vi.mock("#/components/ui/popover", () => ({
   }: {
     render?: React.ReactElement;
     children?: React.ReactNode;
-  }) => (
-    <span data-testid="popover-trigger">
-      {renderProp}
-      <span>{children}</span>
-    </span>
-  ),
+  }) => React.cloneElement(renderProp!, undefined, children),
   PopoverContent: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="popover-content">{children}</div>
   ),
@@ -79,5 +74,33 @@ describe("AddTodoRow (expanded state)", () => {
   it("shows keyboard hint containing 'Esc to cancel' when expanded", () => {
     renderExpanded();
     expect(screen.getByText(/esc to cancel/i)).toBeTruthy();
+  });
+
+  it("offers only High and Low priorities in the selector", () => {
+    renderExpanded();
+
+    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "High",
+      "Low",
+    ]);
+  });
+});
+
+describe("AddTodoRow (compact state)", () => {
+  it("keeps the collapsed add control keyboard-focusable with a 44px target", () => {
+    const { container } = render(
+      React.createElement(AddTodoRow, { compact: true, onCreate: noopCreate }),
+    );
+    const addControl = screen.getByRole("button", { name: /add a new todo/i });
+
+    expect(addControl.className).toContain("min-h-[44px]");
+    expect(addControl.className).toContain("px-2");
+    expect(screen.getByText("Add a todo...").className).toContain("text-xs");
+    expect(addControl.className).toContain("motion-reduce:transition-none");
+
+    addControl.focus();
+    expect(document.activeElement).toBe(addControl);
+    fireEvent.click(addControl);
+    expect(container.querySelector("input[aria-label='New todo name']")).toBeTruthy();
   });
 });
