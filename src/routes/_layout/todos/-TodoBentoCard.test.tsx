@@ -37,7 +37,7 @@ function makeTodo(overrides: Partial<Todo> = {}): Todo {
     id: crypto.randomUUID(),
     name: "Test todo",
     status: "not_started" as const,
-    priority: "medium" as const,
+    priority: "low" as const,
     due_date: null,
     sort_order: 0,
     created_at: "2026-01-01T00:00:00Z",
@@ -65,12 +65,11 @@ describe("TodoBentoCard", () => {
   });
 
   it("hides priority section label when section is empty", () => {
-    const todos = [makeTodo({ priority: "medium" })];
+    const todos = [makeTodo({ priority: "low" })];
     render(React.createElement(TodoBentoCard, { tool: mockTool, data: todos }));
 
     expect(screen.queryByText("High")).toBeNull();
-    expect(screen.queryByText("Low")).toBeNull();
-    expect(screen.getByText("Medium")).toBeTruthy();
+    expect(screen.getByText("Low")).toBeTruthy();
   });
 
   it("renders todo names inside their priority sections", () => {

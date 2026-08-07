@@ -35,7 +35,6 @@ interface PrioritySectionProps {
 
 const SECTION_LABEL_STYLES: Record<TodoPriority, string> = {
   high: "text-destructive",
-  medium: "text-amber-400",
   low: "text-muted-foreground",
 };
 

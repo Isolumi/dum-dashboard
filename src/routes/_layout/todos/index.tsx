@@ -81,7 +81,7 @@ function TodosPage() {
   const handleCreate = useCallback(
     async (fields: {
       name: string;
-      priority: "high" | "medium" | "low";
+      priority: "high" | "low";
       due_date: string | null;
     }) => {
       if (fields.name.trim().length === 0) return;
@@ -106,7 +106,7 @@ function TodosPage() {
     async (fields: {
       id: string;
       name?: string;
-      priority?: "high" | "medium" | "low";
+      priority?: "high" | "low";
       status?: "not_started" | "started" | "complete";
       due_date?: string | null;
     }) => {

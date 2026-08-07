@@ -12,7 +12,7 @@ import type { TodoPriority } from "#/lib/database.types";
 export interface AddTodoRowProps {
   onCreate: (fields: {
     name: string;
-    priority: "high" | "medium" | "low";
+    priority: "high" | "low";
     due_date: string | null;
   }) => void;
   defaultPriority?: TodoPriority;
@@ -20,13 +20,11 @@ export interface AddTodoRowProps {
 
 const PRIORITY_STYLES: Record<TodoPriority, string> = {
   high: "bg-destructive/20 text-destructive",
-  medium: "bg-amber-400/20 text-amber-400",
   low: "bg-muted text-muted-foreground",
 };
 
 const PRIORITY_LABELS: Record<TodoPriority, string> = {
   high: "High",
-  medium: "Medium",
   low: "Low",
 };
 
@@ -184,7 +182,7 @@ function AddTodoRowComponent({ onCreate, defaultPriority = "low" }: AddTodoRowPr
             {PRIORITY_LABELS[priority]}
           </PopoverTrigger>
           <PopoverContent className="w-32 p-1" align="end" data-add-todo-popover>
-            {(["high", "medium", "low"] as const).map((p) => (
+            {(["high", "low"] as const).map((p) => (
               <button
                 key={p}
                 className={cn(

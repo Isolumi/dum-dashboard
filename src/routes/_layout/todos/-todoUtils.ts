@@ -1,14 +1,13 @@
 import type { Todo, TodoPriority } from "#/lib/database.types";
 
-export const PRIORITY_ORDER: TodoPriority[] = ["high", "medium", "low"];
+export const PRIORITY_ORDER: TodoPriority[] = ["high", "low"];
 export const PRIORITY_LABELS: Record<TodoPriority, string> = {
   high: "High",
-  medium: "Medium",
   low: "Low",
 };
 
 export function groupAndSortTodos(todos: Todo[]): Record<TodoPriority, Todo[]> {
-  const groups: Record<TodoPriority, Todo[]> = { high: [], medium: [], low: [] };
+  const groups: Record<TodoPriority, Todo[]> = { high: [], low: [] };
   for (const todo of todos) {
     groups[todo.priority].push(todo);
   }

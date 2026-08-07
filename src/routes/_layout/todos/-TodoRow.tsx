@@ -15,7 +15,7 @@ export interface TodoRowProps {
   onUpdate: (fields: {
     id: string;
     name?: string;
-    priority?: "high" | "medium" | "low";
+    priority?: "high" | "low";
     status?: "not_started" | "started" | "complete";
     due_date?: string | null;
   }) => void;
