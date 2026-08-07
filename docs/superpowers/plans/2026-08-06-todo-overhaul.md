@@ -24,6 +24,7 @@
 ### Task 1: Replace Medium priority in validation, types, grouping, and the database
 
 **Files:**
+
 - Create via CLI: `supabase/migrations/*_remove_medium_todo_priority.sql`
 - Modify: `src/lib/database.types.ts`
 - Modify: `src/routes/todos/todos.functions.ts`
@@ -32,6 +33,7 @@
 - Test: `src/routes/_layout/todos/-todoUtils.test.ts`
 
 **Interfaces:**
+
 - Produces: `TodoPriority = "high" | "low"` through generated database types.
 - Produces: `PRIORITY_ORDER = ["high", "low"]` and `groupAndSortTodos(todos)` returning High and Low groups only.
 - Produces: create/update schemas that reject `medium` and default creates to `low`.
@@ -147,11 +149,13 @@ git commit -m "feat: simplify todo priorities"
 ### Task 2: Extract the reusable optimistic Todo controller
 
 **Files:**
+
 - Create: `src/routes/_layout/todos/-useTodoController.ts`
 - Test: `src/routes/_layout/todos/-useTodoController.test.tsx`
 - Modify: `src/routes/_layout/todos/index.tsx`
 
 **Interfaces:**
+
 - Consumes: `Todo`, `TodoPriority`, `getTodos`, `createTodo`, `updateTodo`, `deleteTodo`, and `reorderTodos`.
 - Produces:
 
@@ -246,6 +250,7 @@ git commit -m "refactor: share todo state management"
 ### Task 3: Add shared High/Low inline row controls and compact layout support
 
 **Files:**
+
 - Modify: `src/routes/_layout/todos/-TodoRow.tsx`
 - Create: `src/routes/_layout/todos/-TodoRow.test.tsx`
 - Modify: `src/routes/_layout/todos/-AddTodoRow.tsx`
@@ -254,6 +259,7 @@ git commit -m "refactor: share todo state management"
 - Create: `src/routes/_layout/todos/-PrioritySection.test.tsx`
 
 **Interfaces:**
+
 - Produces: `TodoRowProps.compact?: boolean`.
 - Produces: `AddTodoRowProps.compact?: boolean`.
 - Produces: `PrioritySectionProps.compact?: boolean`.
@@ -308,11 +314,13 @@ git commit -m "feat: add compact todo editing controls"
 ### Task 4: Build the shared Todo board
 
 **Files:**
+
 - Create: `src/routes/_layout/todos/-TodoBoard.tsx`
 - Test: `src/routes/_layout/todos/-TodoBoard.test.tsx`
 - Modify: `src/routes/_layout/todos/index.tsx`
 
 **Interfaces:**
+
 - Consumes: `TodoController` from `-useTodoController`.
 - Produces:
 
@@ -369,10 +377,12 @@ git commit -m "feat: share todo board across dashboard views"
 ### Task 5: Turn the bento card into the complete inline editor
 
 **Files:**
+
 - Modify: `src/routes/_layout/todos/-TodoBentoCard.tsx`
 - Modify: `src/routes/_layout/todos/-TodoBentoCard.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `useTodoController(initialTodos)` and `<TodoBoard variant="compact" />`.
 - The card root is a neutral container, not a link.
 - The only navigation element is a header link labeled `Open full page` pointing to `/todos`.
@@ -420,10 +430,12 @@ git commit -m "feat: make todo bento card fully interactive"
 ### Task 6: Apply the migration, run complete verification, publish, and deploy
 
 **Files:**
+
 - Verify all files changed in Tasks 1-5.
 - Update generated deployment artifacts only through the existing GitHub Actions workflow.
 
 **Interfaces:**
+
 - Consumes: protected `v1` workflow and Argo application `dum-dashboard-dumachine`.
 - Produces: live Supabase enum `high | low` and live dashboard image tagged with the merged `v1` commit.
 
