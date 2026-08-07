@@ -178,4 +178,13 @@ describe("TodoRow", () => {
     expect(document.activeElement).toBe(dateTrigger);
     expect(emptyDateIcon?.className.baseVal).toContain("group-focus-visible/date:opacity-100");
   });
+
+  it("keeps the empty date icon visible for coarse pointers", () => {
+    renderTodoRow({ todo: { ...highTodo, due_date: null } });
+
+    const dateTrigger = screen.getByRole("button", { name: /edit due date for "deploy app"/i });
+    const emptyDateIcon = dateTrigger.querySelector("svg");
+
+    expect(emptyDateIcon?.className.baseVal).toContain("[@media(pointer:coarse)]:opacity-100");
+  });
 });

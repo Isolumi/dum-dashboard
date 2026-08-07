@@ -218,7 +218,7 @@ function TodoRowComponent({
                 {format(parseISO(todo.due_date), "MMM d")}
               </span>
             ) : (
-              <CalendarIcon className="ml-auto size-4 text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-visible/date:opacity-100" />
+              <CalendarIcon className="ml-auto size-4 text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-visible/date:opacity-100 [@media(pointer:coarse)]:opacity-100" />
             )}
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="end">
