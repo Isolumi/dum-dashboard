@@ -213,7 +213,7 @@ export type Database = {
       category: "food" | "transportation" | "entertainment" | "essentials" | "bills" | "other";
       priority: "High" | "Medium" | "Low";
       status: "Not Started" | "In Progress" | "Done";
-      todo_priority: "high" | "medium" | "low";
+      todo_priority: "high" | "low";
       todo_status: "not_started" | "started" | "complete";
     };
     CompositeTypes: {
@@ -343,7 +343,7 @@ export const Constants = {
       category: ["food", "transportation", "entertainment", "essentials", "bills", "other"],
       priority: ["High", "Medium", "Low"],
       status: ["Not Started", "In Progress", "Done"],
-      todo_priority: ["high", "medium", "low"],
+      todo_priority: ["high", "low"],
       todo_status: ["not_started", "started", "complete"],
     },
   },

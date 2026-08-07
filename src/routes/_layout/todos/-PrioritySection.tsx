@@ -23,7 +23,7 @@ import { AddTodoRow } from "./-AddTodoRow";
 import type { TodoRowProps } from "./-TodoRow";
 import { TodoRow } from "./-TodoRow";
 
-interface PrioritySectionProps {
+export interface PrioritySectionProps {
   priority: TodoPriority;
   label: string;
   todos: Todo[];
@@ -31,17 +31,26 @@ interface PrioritySectionProps {
   onDelete: TodoRowProps["onDelete"];
   onCreate: AddTodoRowProps["onCreate"];
   onReorder: (priority: TodoPriority, orderedIds: string[]) => void;
+  compact?: boolean;
+  isPending?: (id: string) => boolean;
 }
 
 const SECTION_LABEL_STYLES: Record<TodoPriority, string> = {
   high: "text-destructive",
-  medium: "text-amber-400",
   low: "text-muted-foreground",
 };
 
-function SortableTodoRow({ todo, onUpdate, onDelete }: TodoRowProps) {
+function SortableTodoRow({
+  todo,
+  onUpdate,
+  onDelete,
+  compact,
+  isPending,
+  dragDisabled,
+}: TodoRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: todo.id,
+    disabled: isPending || dragDisabled,
   });
 
   const style = {
@@ -56,7 +65,15 @@ function SortableTodoRow({ todo, onUpdate, onDelete }: TodoRowProps) {
       {...attributes}
       className={cn(isDragging && "relative z-10 opacity-50")}
     >
-      <TodoRow todo={todo} onUpdate={onUpdate} onDelete={onDelete} dragListeners={listeners} />
+      <TodoRow
+        todo={todo}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+        dragListeners={isPending || dragDisabled ? undefined : listeners}
+        compact={compact}
+        isPending={isPending}
+        dragDisabled={dragDisabled}
+      />
     </div>
   );
 }
@@ -69,9 +86,12 @@ function PrioritySectionComponent({
   onDelete,
   onCreate,
   onReorder,
+  compact = false,
+  isPending,
 }: PrioritySectionProps) {
   const dndId = useId();
   const todoIds = useMemo(() => todos.map((t) => t.id), [todos]);
+  const hasPendingTodo = todos.some((todo) => isPending?.(todo.id));
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -80,6 +100,7 @@ function PrioritySectionComponent({
   );
 
   function handleDragEnd(event: DragEndEvent) {
+    if (hasPendingTodo) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -98,12 +119,18 @@ function PrioritySectionComponent({
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className={cn("flex flex-col", compact ? "gap-0.5" : "gap-1")}>
       {/* Section header */}
-      <div className="flex items-center gap-2 px-4 pt-4 pb-1">
+      <div
+        className={cn(
+          "flex items-center",
+          compact ? "gap-1 px-2 pt-2 pb-0.5" : "gap-2 px-4 pt-4 pb-1",
+        )}
+      >
         <span
           className={cn(
-            "text-sm font-medium uppercase tracking-wider",
+            "font-medium uppercase tracking-wider",
+            compact ? "text-xs" : "text-sm",
             SECTION_LABEL_STYLES[priority],
           )}
         >
@@ -122,14 +149,22 @@ function PrioritySectionComponent({
         <SortableContext items={todoIds} strategy={verticalListSortingStrategy}>
           <div role="list">
             {todos.map((todo) => (
-              <SortableTodoRow key={todo.id} todo={todo} onUpdate={onUpdate} onDelete={onDelete} />
+              <SortableTodoRow
+                key={todo.id}
+                todo={todo}
+                onUpdate={onUpdate}
+                onDelete={onDelete}
+                compact={compact}
+                isPending={isPending?.(todo.id)}
+                dragDisabled={hasPendingTodo}
+              />
             ))}
           </div>
         </SortableContext>
       </DndContext>
 
       {/* Add todo row — defaultPriority pre-set to this section's priority */}
-      <AddTodoRow onCreate={onCreate} defaultPriority={priority} />
+      <AddTodoRow onCreate={onCreate} defaultPriority={priority} compact={compact} />
     </div>
   );
 }
