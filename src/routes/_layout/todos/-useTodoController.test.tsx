@@ -149,6 +149,102 @@ describe("useTodoController", () => {
     expect(result.current.todos).toEqual([serverTodo]);
   });
 
+  it("keeps a newer successful update when an older update fails last", async () => {
+    const olderUpdate = deferred<Todo>();
+    const newerUpdate = deferred<Todo>();
+    const newerTodo = makeTodo({ name: "Newest server name" });
+    vi.mocked(updateTodo)
+      .mockReturnValueOnce(olderUpdate.promise)
+      .mockReturnValueOnce(newerUpdate.promise);
+    const { result } = renderHook(() => useTodoController([highTodo]));
+    let olderMutation!: Promise<void>;
+    let newerMutation!: Promise<void>;
+
+    act(() => {
+      olderMutation = result.current.update({ id: highTodo.id, status: "started" });
+      newerMutation = result.current.update({ id: highTodo.id, name: "Newest server name" });
+    });
+    await act(async () => {
+      newerUpdate.resolve(newerTodo);
+      olderUpdate.reject(new Error("older update failed"));
+      await Promise.all([olderMutation, newerMutation]);
+    });
+
+    expect(result.current.todos).toEqual([newerTodo]);
+  });
+
+  it("keeps a newer successful update when an older update succeeds last", async () => {
+    const olderUpdate = deferred<Todo>();
+    const newerUpdate = deferred<Todo>();
+    const olderTodo = makeTodo({ status: "started" });
+    const newerTodo = makeTodo({ name: "Newest server name", status: "started" });
+    vi.mocked(updateTodo)
+      .mockReturnValueOnce(olderUpdate.promise)
+      .mockReturnValueOnce(newerUpdate.promise);
+    const { result } = renderHook(() => useTodoController([highTodo]));
+    let olderMutation!: Promise<void>;
+    let newerMutation!: Promise<void>;
+
+    act(() => {
+      olderMutation = result.current.update({ id: highTodo.id, status: "started" });
+      newerMutation = result.current.update({ id: highTodo.id, name: "Newest server name" });
+    });
+    await act(async () => {
+      newerUpdate.resolve(newerTodo);
+      olderUpdate.resolve(olderTodo);
+      await Promise.all([olderMutation, newerMutation]);
+    });
+
+    expect(result.current.todos).toEqual([newerTodo]);
+  });
+
+  it("rolls a newer failed update back after an older failure", async () => {
+    const olderUpdate = deferred<Todo>();
+    const newerUpdate = deferred<Todo>();
+    vi.mocked(updateTodo)
+      .mockReturnValueOnce(olderUpdate.promise)
+      .mockReturnValueOnce(newerUpdate.promise);
+    const { result } = renderHook(() => useTodoController([highTodo]));
+    let olderMutation!: Promise<void>;
+    let newerMutation!: Promise<void>;
+
+    act(() => {
+      olderMutation = result.current.update({ id: highTodo.id, status: "started" });
+      newerMutation = result.current.update({ id: highTodo.id, name: "Unsaved name" });
+    });
+    await act(async () => {
+      olderUpdate.reject(new Error("older update failed"));
+      newerUpdate.reject(new Error("newer update failed"));
+      await Promise.all([olderMutation, newerMutation]);
+    });
+
+    expect(result.current.todos).toEqual([highTodo]);
+  });
+
+  it("rolls a newer failed update back to an older canonical success", async () => {
+    const olderUpdate = deferred<Todo>();
+    const newerUpdate = deferred<Todo>();
+    const olderTodo = makeTodo({ name: "Canonical older name", status: "started" });
+    vi.mocked(updateTodo)
+      .mockReturnValueOnce(olderUpdate.promise)
+      .mockReturnValueOnce(newerUpdate.promise);
+    const { result } = renderHook(() => useTodoController([highTodo]));
+    let olderMutation!: Promise<void>;
+    let newerMutation!: Promise<void>;
+
+    act(() => {
+      olderMutation = result.current.update({ id: highTodo.id, status: "started" });
+      newerMutation = result.current.update({ id: highTodo.id, name: "Unsaved name" });
+    });
+    await act(async () => {
+      olderUpdate.resolve(olderTodo);
+      newerUpdate.reject(new Error("newer update failed"));
+      await Promise.all([olderMutation, newerMutation]);
+    });
+
+    expect(result.current.todos).toEqual([olderTodo]);
+  });
+
   it("removes optimistically and restores the todo when delete fails", async () => {
     const pendingDelete = deferred<void>();
     vi.mocked(deleteTodo).mockReturnValueOnce(pendingDelete.promise);
@@ -219,6 +315,36 @@ describe("useTodoController", () => {
     expect(result.current.grouped.high.map((todo) => todo.id)).toEqual([first.id, second.id]);
   });
 
+  it("keeps a newer successful reorder when an older reorder fails last", async () => {
+    const first = makeTodo({ id: "first", name: "First", sort_order: 0 });
+    const second = makeTodo({ id: "second", name: "Second", sort_order: 1 });
+    const third = makeTodo({ id: "third", name: "Third", sort_order: 2 });
+    const olderReorder = deferred<void>();
+    const newerReorder = deferred<void>();
+    vi.mocked(reorderTodos)
+      .mockReturnValueOnce(olderReorder.promise)
+      .mockReturnValueOnce(newerReorder.promise);
+    const { result } = renderHook(() => useTodoController([first, second, third]));
+    let olderMutation!: Promise<void>;
+    let newerMutation!: Promise<void>;
+
+    act(() => {
+      olderMutation = result.current.reorder("high", [second.id, first.id, third.id]);
+      newerMutation = result.current.reorder("high", [third.id, second.id, first.id]);
+    });
+    await act(async () => {
+      newerReorder.resolve();
+      olderReorder.reject(new Error("older reorder failed"));
+      await Promise.all([olderMutation, newerMutation]);
+    });
+
+    expect(result.current.grouped.high.map((todo) => todo.id)).toEqual([
+      third.id,
+      second.id,
+      first.id,
+    ]);
+  });
+
   it("does not let a stale polling response overwrite an optimistic mutation", async () => {
     vi.useFakeTimers();
     const pendingUpdate = deferred<Todo>();
@@ -239,6 +365,32 @@ describe("useTodoController", () => {
       pendingUpdate.resolve(savedTodo);
       await mutation;
     });
+    expect(result.current.todos).toEqual([savedTodo]);
+  });
+
+  it("discards a poll that started during a mutation even when it resolves afterward", async () => {
+    vi.useFakeTimers();
+    const pendingUpdate = deferred<Todo>();
+    const pendingPoll = deferred<Todo[]>();
+    vi.mocked(updateTodo).mockReturnValueOnce(pendingUpdate.promise);
+    vi.mocked(getTodos).mockReturnValueOnce(pendingPoll.promise);
+    const { result } = renderHook(() => useTodoController([highTodo]));
+    let mutation!: Promise<void>;
+
+    act(() => {
+      mutation = result.current.update({ id: highTodo.id, status: "complete" });
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(3_000));
+
+    const savedTodo = makeTodo({ name: "Canonical result", status: "complete" });
+    await act(async () => {
+      pendingUpdate.resolve(savedTodo);
+      await mutation;
+    });
+    expect(result.current.todos).toEqual([savedTodo]);
+
+    await act(async () => pendingPoll.resolve([highTodo]));
+
     expect(result.current.todos).toEqual([savedTodo]);
   });
 

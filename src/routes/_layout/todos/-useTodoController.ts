@@ -25,6 +25,17 @@ export type TodoUpdateFields = {
   due_date?: string | null;
 };
 
+type TodoUpdateState = Pick<Todo, "name" | "priority" | "status" | "due_date">;
+
+function getTodoUpdateState(todo: Todo): TodoUpdateState {
+  return {
+    name: todo.name,
+    priority: todo.priority,
+    status: todo.status,
+    due_date: todo.due_date,
+  };
+}
+
 export interface TodoController {
   todos: Todo[];
   grouped: Record<TodoPriority, Todo[]>;
@@ -50,6 +61,12 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   const mutationCountRef = useRef(0);
   const mutationRevisionRef = useRef(0);
   const loadRequestRef = useRef(0);
+  const updateQueuesRef = useRef(new Map<string, Promise<void>>());
+  const updateVersionsRef = useRef(new Map<string, number>());
+  const updateCommittedRef = useRef(new Map<string, TodoUpdateState>());
+  const reorderQueuesRef = useRef(new Map<TodoPriority, Promise<void>>());
+  const reorderVersionsRef = useRef(new Map<TodoPriority, number>());
+  const reorderCommittedRef = useRef(new Map<TodoPriority, Map<string, number>>());
   const shouldLoadInitiallyRef = useRef(!hasInitialTodos);
 
   const replaceTodos = useCallback((replace: (current: Todo[]) => Todo[]) => {
@@ -68,13 +85,16 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
     async ({ showLoading = true }: { showLoading?: boolean } = {}): Promise<void> => {
       const requestId = ++loadRequestRef.current;
       const revisionAtRequestStart = mutationRevisionRef.current;
+      const mutationActiveAtRequestStart = mutationCountRef.current > 0;
       if (showLoading) setStatus("loading");
 
       try {
         const fresh = await getTodos();
         if (requestId !== loadRequestRef.current) return;
         const mutationOverlappedRequest =
-          mutationCountRef.current > 0 || mutationRevisionRef.current !== revisionAtRequestStart;
+          mutationActiveAtRequestStart ||
+          mutationCountRef.current > 0 ||
+          mutationRevisionRef.current !== revisionAtRequestStart;
         if (!mutationOverlappedRequest) {
           replaceTodos(() => fresh);
           setLoadError(null);
@@ -153,23 +173,47 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   const update = useCallback(
     async (fields: TodoUpdateFields): Promise<void> => {
       const previous = todosRef.current.find((todo) => todo.id === fields.id);
+      if (!updateQueuesRef.current.has(fields.id) && previous) {
+        updateCommittedRef.current.set(fields.id, getTodoUpdateState(previous));
+      }
+      const version = (updateVersionsRef.current.get(fields.id) ?? 0) + 1;
+      updateVersionsRef.current.set(fields.id, version);
       beginMutation();
       replaceTodos((current) =>
         current.map((todo) => (todo.id === fields.id ? { ...todo, ...fields } : todo)),
       );
 
+      const previousRequest = updateQueuesRef.current.get(fields.id) ?? Promise.resolve();
+      const request = previousRequest.then(() => updateTodo({ data: fields }));
+      const queueTail = request.then(
+        () => undefined,
+        () => undefined,
+      );
+      updateQueuesRef.current.set(fields.id, queueTail);
+
       try {
-        const updated = await updateTodo({ data: fields });
-        replaceTodos((current) => current.map((todo) => (todo.id === fields.id ? updated : todo)));
-      } catch {
-        if (previous) {
+        const updated = await request;
+        updateCommittedRef.current.set(fields.id, getTodoUpdateState(updated));
+        if (updateVersionsRef.current.get(fields.id) === version) {
           replaceTodos((current) =>
-            current.map((todo) => (todo.id === fields.id ? previous : todo)),
+            current.map((todo) => (todo.id === fields.id ? updated : todo)),
+          );
+        }
+      } catch {
+        const committed = updateCommittedRef.current.get(fields.id);
+        if (committed && updateVersionsRef.current.get(fields.id) === version) {
+          replaceTodos((current) =>
+            current.map((todo) => (todo.id === fields.id ? { ...todo, ...committed } : todo)),
           );
         }
         setMutationError(SAVE_ERROR);
       } finally {
         endMutation();
+        if (updateQueuesRef.current.get(fields.id) === queueTail) {
+          updateQueuesRef.current.delete(fields.id);
+          updateVersionsRef.current.delete(fields.id);
+          updateCommittedRef.current.delete(fields.id);
+        }
       }
     },
     [beginMutation, endMutation, replaceTodos],
@@ -206,11 +250,18 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
       const orderedSortOrders = new Map(
         orderedIds.map((id, sortOrder) => [id, sortOrder] as const),
       );
-      const previousSortOrders = new Map(
-        todosRef.current
-          .filter((todo) => todo.priority === priority && orderedSortOrders.has(todo.id))
-          .map((todo) => [todo.id, todo.sort_order] as const),
-      );
+      if (!reorderQueuesRef.current.has(priority)) {
+        reorderCommittedRef.current.set(
+          priority,
+          new Map(
+            todosRef.current
+              .filter((todo) => todo.priority === priority)
+              .map((todo) => [todo.id, todo.sort_order] as const),
+          ),
+        );
+      }
+      const version = (reorderVersionsRef.current.get(priority) ?? 0) + 1;
+      reorderVersionsRef.current.set(priority, version);
       beginMutation();
       replaceTodos((current) =>
         current.map((todo) => {
@@ -221,22 +272,43 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
         }),
       );
 
-      try {
-        await reorderTodos({
+      const previousRequest = reorderQueuesRef.current.get(priority) ?? Promise.resolve();
+      const request = previousRequest.then(() =>
+        reorderTodos({
           data: {
             updates: orderedIds.map((id, sort_order) => ({ id, sort_order })),
           },
-        });
+        }),
+      );
+      const queueTail = request.then(
+        () => undefined,
+        () => undefined,
+      );
+      reorderQueuesRef.current.set(priority, queueTail);
+
+      try {
+        await request;
+        const committed = new Map(reorderCommittedRef.current.get(priority));
+        for (const [id, sortOrder] of orderedSortOrders) committed.set(id, sortOrder);
+        reorderCommittedRef.current.set(priority, committed);
       } catch {
-        replaceTodos((current) =>
-          current.map((todo) => {
-            const sortOrder = previousSortOrders.get(todo.id);
-            return sortOrder !== undefined ? { ...todo, sort_order: sortOrder } : todo;
-          }),
-        );
+        if (reorderVersionsRef.current.get(priority) === version) {
+          const committed = reorderCommittedRef.current.get(priority);
+          replaceTodos((current) =>
+            current.map((todo) => {
+              const sortOrder = committed?.get(todo.id);
+              return sortOrder !== undefined ? { ...todo, sort_order: sortOrder } : todo;
+            }),
+          );
+        }
         setMutationError(REORDER_ERROR);
       } finally {
         endMutation();
+        if (reorderQueuesRef.current.get(priority) === queueTail) {
+          reorderQueuesRef.current.delete(priority);
+          reorderVersionsRef.current.delete(priority);
+          reorderCommittedRef.current.delete(priority);
+        }
       }
     },
     [beginMutation, endMutation, replaceTodos],
