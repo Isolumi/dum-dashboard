@@ -1,51 +1,160 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 
 import type { Todo } from "#/lib/database.types";
+import { createTodo, deleteTodo, reorderTodos, updateTodo } from "#/routes/todos/todos.functions";
 import type { ToolEntry } from "#/tools/registry";
 
-afterEach(() => {
-  cleanup();
-  vi.clearAllMocks();
-});
+const dndTestState = vi.hoisted(() => ({
+  currentOnDragEnd: undefined as
+    | undefined
+    | ((event: { active: { id: string }; over: { id: string } | null }) => void),
+  onDragEndBySortableId: new Map<
+    string,
+    (event: { active: { id: string }; over: { id: string } | null }) => void
+  >(),
+  nextSortableId: new Map<string, string>(),
+}));
 
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    to,
-    children,
-    ...props
-  }: {
-    to: string;
-    children: React.ReactNode;
-    [key: string]: unknown;
-  }) => React.createElement("a", { href: to, ...props }, children),
+  Link: ({ to, children, ...props }: { to: string; children: React.ReactNode }) =>
+    React.createElement("a", { href: to, ...props }, children),
 }));
 
 vi.mock("#/routes/todos/todos.functions", () => ({
+  createTodo: vi.fn(),
+  deleteTodo: vi.fn(),
   getTodos: vi.fn(),
+  reorderTodos: vi.fn(),
+  updateTodo: vi.fn(),
+}));
+
+vi.mock("#/components/ui/popover", () => {
+  const PopoverContext = React.createContext<{
+    open: boolean;
+    onOpenChange?: (open: boolean) => void;
+  } | null>(null);
+
+  return {
+    Popover: ({
+      open = false,
+      onOpenChange,
+      children,
+    }: {
+      open?: boolean;
+      onOpenChange?: (open: boolean) => void;
+      children: React.ReactNode;
+    }) => (
+      <PopoverContext.Provider value={{ open, onOpenChange }}>{children}</PopoverContext.Provider>
+    ),
+    PopoverTrigger: ({
+      render: trigger,
+      children,
+    }: {
+      render: React.ReactElement<{ onClick?: React.MouseEventHandler<HTMLElement> }>;
+      children: React.ReactNode;
+    }) => {
+      const context = React.useContext(PopoverContext);
+      return React.cloneElement(
+        trigger,
+        {
+          onClick: (event: React.MouseEvent<HTMLElement>) => {
+            trigger.props.onClick?.(event);
+            if (!event.defaultPrevented) context?.onOpenChange?.(!context.open);
+          },
+        },
+        children,
+      );
+    },
+    PopoverContent: ({ children, ...props }: React.ComponentProps<"div">) => {
+      const context = React.useContext(PopoverContext);
+      return context?.open ? <div {...props}>{children}</div> : null;
+    },
+  };
+});
+
+vi.mock("#/components/ui/calendar", () => ({
+  Calendar: ({ onSelect }: { onSelect: (date: Date) => void }) => (
+    <button type="button" onClick={() => onSelect(new Date("2026-12-25T12:00:00"))}>
+      December 25, 2026
+    </button>
+  ),
+}));
+
+vi.mock("@dnd-kit/core", () => ({
+  DndContext: ({
+    children,
+    onDragEnd,
+  }: {
+    children: React.ReactNode;
+    onDragEnd: (event: { active: { id: string }; over: { id: string } | null }) => void;
+  }) => {
+    dndTestState.currentOnDragEnd = onDragEnd;
+    return <>{children}</>;
+  },
+  KeyboardSensor: class {},
+  PointerSensor: class {},
+  closestCenter: () => null,
+  useSensor: () => ({}),
+  useSensors: (...sensors: unknown[]) => sensors,
+}));
+
+vi.mock("@dnd-kit/sortable", () => ({
+  SortableContext: ({ children, items }: { children: React.ReactNode; items: string[] }) => {
+    items.slice(0, -1).forEach((id, index) => {
+      dndTestState.nextSortableId.set(id, items[index + 1]!);
+    });
+    for (const id of items) {
+      if (dndTestState.currentOnDragEnd) {
+        dndTestState.onDragEndBySortableId.set(id, dndTestState.currentOnDragEnd);
+      }
+    }
+    return <>{children}</>;
+  },
+  sortableKeyboardCoordinates: () => null,
+  useSortable: ({ id }: { id: string }) => ({
+    attributes: {},
+    isDragging: false,
+    listeners: {
+      onClick: () => {
+        const nextId = dndTestState.nextSortableId.get(id);
+        if (nextId) {
+          dndTestState.onDragEndBySortableId.get(id)?.({
+            active: { id },
+            over: { id: nextId },
+          });
+        }
+      },
+    },
+    setNodeRef: () => undefined,
+    transform: null,
+    transition: undefined,
+  }),
+  verticalListSortingStrategy: () => null,
+}));
+
+vi.mock("@dnd-kit/utilities", () => ({
+  CSS: { Transform: { toString: () => undefined } },
 }));
 
 const { TodoBentoCard } = await import("./-TodoBentoCard");
-const { getTodos } = await import("#/routes/todos/todos.functions");
 
 function makeTodo(overrides: Partial<Todo> = {}): Todo {
   return {
-    id: crypto.randomUUID(),
-    name: "Test todo",
-    status: "not_started" as const,
-    priority: "low" as const,
+    id: "11111111-1111-4111-8111-111111111111",
+    name: "First task",
+    status: "not_started",
+    priority: "high",
     due_date: null,
     sort_order: 0,
-    created_at: "2026-01-01T00:00:00Z",
+    created_at: "2026-08-06T12:00:00.000Z",
     ...overrides,
   };
 }
-
-const PAST_DATE = "2020-01-01";
 
 const mockTool = {
   id: "todos",
@@ -55,102 +164,197 @@ const mockTool = {
   BentoCard: () => null,
 } as unknown as ToolEntry;
 
+function installTodoServer(initialTodos: Todo[]) {
+  const serverTodos = new Map(initialTodos.map((todo) => [todo.id, todo]));
+  let createdCount = 0;
+
+  vi.mocked(createTodo).mockImplementation(async ({ data }) => {
+    createdCount += 1;
+    const created = makeTodo({
+      id: `22222222-2222-4222-8222-${String(createdCount).padStart(12, "0")}`,
+      name: data.name,
+      priority: data.priority,
+      status: data.status,
+      due_date: data.due_date ?? null,
+      sort_order:
+        Math.max(
+          -1,
+          ...[...serverTodos.values()]
+            .filter((todo) => todo.priority === data.priority)
+            .map((todo) => todo.sort_order),
+        ) + 1,
+    });
+    serverTodos.set(created.id, created);
+    return created;
+  });
+  vi.mocked(updateTodo).mockImplementation(async ({ data }) => {
+    const current = serverTodos.get(data.id);
+    if (!current) throw new Error("Todo not found");
+    const updated = { ...current, ...data };
+    serverTodos.set(updated.id, updated);
+    return updated;
+  });
+  vi.mocked(deleteTodo).mockImplementation(async ({ data }) => {
+    serverTodos.delete(data.id);
+  });
+  vi.mocked(reorderTodos).mockImplementation(async ({ data }) => {
+    for (const update of data.updates) {
+      const current = serverTodos.get(update.id);
+      if (current) serverTodos.set(update.id, { ...current, sort_order: update.sort_order });
+    }
+  });
+}
+
+function renderCard(todos: Todo[]) {
+  window.history.replaceState({}, "", "/");
+  installTodoServer(todos);
+  render(<TodoBentoCard tool={mockTool} data={todos} />);
+}
+
+function expectStillOnDashboard() {
+  expect(window.location.pathname).toBe("/");
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.resetAllMocks();
+});
+
 describe("TodoBentoCard", () => {
-  it("renders priority section labels for non-empty sections", () => {
-    const todos = [makeTodo({ priority: "high" }), makeTodo({ priority: "low" })];
-    render(React.createElement(TodoBentoCard, { tool: mockTool, data: todos }));
+  it("uses a neutral section and keeps Open full page as the only navigation link", () => {
+    renderCard([]);
 
-    expect(screen.getByText("High")).toBeTruthy();
-    expect(screen.getByText("Low")).toBeTruthy();
+    expect(screen.queryByLabelText("Open Todos tool")).toBeNull();
+    expect(screen.getByRole("region", { name: /todos/i }).tagName).toBe("SECTION");
+    const links = screen.getAllByRole("link");
+    expect(links).toHaveLength(1);
+    expect(screen.getByRole("link", { name: /open full page/i }).getAttribute("href")).toBe(
+      "/todos",
+    );
   });
 
-  it("hides priority section label when section is empty", () => {
-    const todos = [makeTodo({ priority: "low" })];
-    render(React.createElement(TodoBentoCard, { tool: mockTool, data: todos }));
+  it("creates a todo from the card without navigating", async () => {
+    renderCard([]);
 
-    expect(screen.queryByText("High")).toBeNull();
-    expect(screen.getByText("Low")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: /add a new todo/i })[0]!);
+    fireEvent.change(screen.getByRole("textbox", { name: /new todo name/i }), {
+      target: { value: "Created inline" },
+    });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: /new todo name/i }), { key: "Enter" });
+
+    await waitFor(() =>
+      expect(createTodo).toHaveBeenCalledWith({
+        data: {
+          name: "Created inline",
+          priority: "high",
+          status: "not_started",
+          due_date: null,
+        },
+      }),
+    );
+    expect(await screen.findByRole("button", { name: "Created inline" })).toBeTruthy();
+    expectStillOnDashboard();
   });
 
-  it("renders todo names inside their priority sections", () => {
-    const todos = [
-      makeTodo({ priority: "high", name: "Fix auth bug" }),
-      makeTodo({ priority: "low", name: "Update deps" }),
-    ];
-    render(React.createElement(TodoBentoCard, { tool: mockTool, data: todos }));
+  it("cycles a todo status from the card without navigating", async () => {
+    const first = makeTodo();
+    renderCard([first]);
 
-    expect(screen.getByText("Fix auth bug")).toBeTruthy();
-    expect(screen.getByText("Update deps")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /mark "first task" as started/i }));
+
+    await waitFor(() =>
+      expect(updateTodo).toHaveBeenCalledWith({ data: { id: first.id, status: "started" } }),
+    );
+    expect(screen.getByRole("button", { name: /mark "first task" as complete/i })).toBeTruthy();
+    expectStillOnDashboard();
   });
 
-  it("formats due date as 'Mon D' (e.g. Jan 1)", () => {
-    const todos = [makeTodo({ due_date: "2026-04-10" })];
-    render(React.createElement(TodoBentoCard, { tool: mockTool, data: todos }));
+  it("renames a todo from the card without navigating", async () => {
+    const first = makeTodo();
+    renderCard([first]);
 
-    expect(screen.getByText("Apr 10")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "First task" }));
+    fireEvent.change(screen.getByRole("textbox", { name: /edit todo name/i }), {
+      target: { value: "Renamed inline" },
+    });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: /edit todo name/i }), { key: "Enter" });
+
+    await waitFor(() =>
+      expect(updateTodo).toHaveBeenCalledWith({ data: { id: first.id, name: "Renamed inline" } }),
+    );
+    expect(await screen.findByRole("button", { name: "Renamed inline" })).toBeTruthy();
+    expectStillOnDashboard();
   });
 
-  it("shows dash when due_date is null", () => {
-    const todos = [makeTodo({ due_date: null })];
-    render(React.createElement(TodoBentoCard, { tool: mockTool, data: todos }));
+  it("switches a todo between High and Low from the card without navigating", async () => {
+    const first = makeTodo();
+    renderCard([first]);
 
-    expect(screen.getByText("—")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /change "first task" priority to low/i }));
+
+    await waitFor(() =>
+      expect(updateTodo).toHaveBeenCalledWith({ data: { id: first.id, priority: "low" } }),
+    );
+    expect(
+      screen.getByRole("button", { name: /change "first task" priority to high/i }),
+    ).toBeTruthy();
+    expectStillOnDashboard();
   });
 
-  it("marks overdue due date with aria-label for past-due incomplete todos", () => {
-    const todos = [makeTodo({ due_date: PAST_DATE, status: "not_started" })];
-    render(React.createElement(TodoBentoCard, { tool: mockTool, data: todos }));
+  it("updates a due date from the card without navigating", async () => {
+    const first = makeTodo();
+    renderCard([first]);
 
-    // Implementation adds aria-label="Overdue: Jan 1" on the date span
-    expect(screen.getByLabelText(/overdue/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /edit due date for "first task"/i }));
+    fireEvent.click(
+      screen
+        .getAllByRole("button", { name: /december 25, 2026/i })
+        .find((element) => element.tagName === "BUTTON")!,
+    );
+
+    await waitFor(() =>
+      expect(updateTodo).toHaveBeenCalledWith({ data: { id: first.id, due_date: "2026-12-25" } }),
+    );
+    expect(
+      screen.getByRole("button", { name: /edit due date for "first task"/i }).textContent,
+    ).toMatch(/dec 25/i);
+    expectStillOnDashboard();
   });
 
-  it("does not mark completed todos as overdue even with past due date", () => {
-    const todos = [makeTodo({ due_date: PAST_DATE, status: "complete" })];
-    render(React.createElement(TodoBentoCard, { tool: mockTool, data: todos }));
+  it("deletes a todo from the card without navigating", async () => {
+    const first = makeTodo();
+    renderCard([first]);
 
-    // Completed todos skip the overdue aria-label
-    expect(screen.queryByLabelText(/overdue/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /delete "first task"/i }));
+
+    await waitFor(() => expect(deleteTodo).toHaveBeenCalledWith({ data: { id: first.id } }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "First task" })).toBeNull());
+    expectStillOnDashboard();
   });
 
-  it("wraps completed todo name in <s> (strikethrough)", () => {
-    const todos = [makeTodo({ status: "complete", name: "Done task" })];
-    render(React.createElement(TodoBentoCard, { tool: mockTool, data: todos }));
+  it("reorders todos from the card without navigating", async () => {
+    const first = makeTodo({ id: "first", name: "First task", sort_order: 0 });
+    const second = makeTodo({ id: "second", name: "Second task", sort_order: 1 });
+    renderCard([first, second]);
 
-    const nameEl = screen.getByText("Done task");
-    expect(nameEl.tagName.toLowerCase()).toBe("s");
-  });
+    const dragHandle = screen.getByRole("button", { name: /drag to reorder "first task"/i });
+    fireEvent.click(dragHandle);
 
-  it("renders the card as a link to /todos", () => {
-    render(React.createElement(TodoBentoCard, { tool: mockTool, data: [] }));
-
-    const link = screen.getByRole("link");
-    expect(link.getAttribute("href")).toBe("/todos");
-  });
-
-  it("shows empty state message when there are no todos", () => {
-    render(React.createElement(TodoBentoCard, { tool: mockTool, data: [] }));
-    expect(screen.getByText(/no todos yet/i)).toBeTruthy();
-  });
-
-  it("loads todos from the single-owner server function when data is not preloaded", async () => {
-    vi.mocked(getTodos).mockResolvedValue([makeTodo({ name: "Loaded securely" })]);
-
-    render(React.createElement(TodoBentoCard, { tool: mockTool, data: null }));
-
-    await waitFor(() => expect(screen.getByText("Loaded securely")).toBeTruthy());
-    expect(getTodos).toHaveBeenCalledWith();
-  });
-
-  it("sorts todos within a section by sort_order ascending", () => {
-    const todos = [
-      makeTodo({ priority: "high", name: "Second", sort_order: 1 }),
-      makeTodo({ priority: "high", name: "First", sort_order: 0 }),
-    ];
-    render(React.createElement(TodoBentoCard, { tool: mockTool, data: todos }));
-
-    const names = screen.getAllByText(/first|second/i).map((el) => el.textContent);
-    expect(names[0]).toMatch(/first/i);
-    expect(names[1]).toMatch(/second/i);
+    await waitFor(() =>
+      expect(reorderTodos).toHaveBeenCalledWith({
+        data: {
+          updates: [
+            { id: second.id, sort_order: 0 },
+            { id: first.id, sort_order: 1 },
+          ],
+        },
+      }),
+    );
+    expect(screen.getAllByRole("listitem")[0]?.textContent).toContain("Second task");
+    expectStillOnDashboard();
   });
 });
