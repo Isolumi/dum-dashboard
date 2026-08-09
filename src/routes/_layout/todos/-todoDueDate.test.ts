@@ -1,7 +1,11 @@
 import { format, parseISO } from "date-fns";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { formatTodoDueDate, toTodoDueDate } from "./-todoDueDate";
+import { formatTodoDueDate, isTodoDueDateOverdue, toTodoDueDate } from "./-todoDueDate";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("todo due date helpers", () => {
   it("returns an empty string for a missing due date", () => {
@@ -23,5 +27,12 @@ describe("todo due date helpers", () => {
     const value = "2026-08-09T19:30:00.000Z";
 
     expect(formatTodoDueDate(value)).toBe(format(new Date(value), "MMM d, h:mm a"));
+  });
+
+  it("treats timestamp values as overdue once the timestamp is in the past even on the same UTC day", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-09T04:30:00.000Z"));
+
+    expect(isTodoDueDateOverdue("2026-08-09T03:30:00.000Z")).toBe(true);
   });
 });

@@ -8,6 +8,7 @@ import type { Todo, TodoPriority, TodoStatus } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
 
 import { TodoDueDatePicker } from "./-TodoDueDatePicker";
+import { isTodoDueDateOverdue } from "./-todoDueDate";
 
 export interface TodoRowProps {
   todo: Todo;
@@ -90,7 +91,7 @@ function TodoRowComponent({
   const isOverdue =
     todo.due_date &&
     todo.status !== "complete" &&
-    new Date(todo.due_date) < new Date(new Date().toISOString().split("T")[0]);
+    isTodoDueDateOverdue(todo.due_date);
 
   function saveName() {
     const trimmed = nameValue.trim();
