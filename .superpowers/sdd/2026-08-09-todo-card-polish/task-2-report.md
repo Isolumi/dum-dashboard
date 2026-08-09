@@ -173,3 +173,48 @@ Results:
 ## Commit
 
 The final task commit hash is reported in the task handoff response. Embedding the post-amend final hash inside this committed report would change the commit hash again.
+
+---
+
+## Fix round 1 — overdue timestamp regression
+
+Date: 2026-08-09
+
+Changed files:
+
+- `src/routes/_layout/todos/-todoDueDate.ts`
+- `src/routes/_layout/todos/-todoDueDate.test.ts`
+- `src/routes/_layout/todos/-TodoRow.tsx`
+- `.superpowers/sdd/2026-08-09-todo-card-polish/task-2-report.md`
+
+Root cause:
+
+- TodoRow treated every due date as a day-level comparison against UTC midnight.
+- That was compatible with legacy date-only values, but wrong for picker-produced ISO timestamps because a past timestamp on the same UTC date was still considered “not overdue”.
+
+Fix:
+
+- Added `isTodoDueDateOverdue(value, now?)` in `-todoDueDate.ts`
+- Date-only values still compare at local day granularity via `startOfDay(now)`
+- Timestamp values now compare directly against `now`
+- TodoRow now uses the shared helper instead of duplicating the old UTC-midnight comparison
+
+Focused regression test added:
+
+- `treats timestamp values as overdue once the timestamp is in the past even on the same UTC day`
+
+Exact test command:
+
+```bash
+node ./node_modules/vitest/vitest.mjs run --reporter=verbose src/routes/_layout/todos/-todoDueDate.test.ts src/routes/_layout/todos/-TodoRow.test.tsx
+```
+
+Output summary:
+
+- `Test Files  2 passed (2)`
+- `Tests  19 passed (19)`
+- Both the due-date helper suite and TodoRow suite passed with the timestamp overdue regression covered
+
+Fix commit hash:
+
+- `ecf8c1053f9607abb63169c096532cf4537b9df3`
