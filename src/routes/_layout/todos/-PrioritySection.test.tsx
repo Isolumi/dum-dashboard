@@ -23,7 +23,7 @@ const highTodo: Todo = {
 };
 
 describe("PrioritySection", () => {
-  it("propagates compact presentation to its real todo and add controls", () => {
+  it("propagates compact presentation to its todo controls without rendering an add row", () => {
     const { container } = render(
       <PrioritySection
         compact
@@ -32,7 +32,6 @@ describe("PrioritySection", () => {
         todos={[highTodo]}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
-        onCreate={vi.fn()}
         onReorder={vi.fn()}
       />,
     );
@@ -41,6 +40,6 @@ describe("PrioritySection", () => {
     expect(
       screen.getByRole("button", { name: /change "deploy app" priority to low/i }),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: /add a new todo/i }).className).toContain("px-2");
+    expect(screen.queryByRole("button", { name: /add a new todo/i })).toBeNull();
   });
 });

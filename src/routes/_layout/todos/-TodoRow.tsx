@@ -1,4 +1,4 @@
-import { Circle, CircleCheck, GripVertical, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Circle, CircleCheck, GripVertical, Trash2 } from "lucide-react";
 import { memo, useRef, useState } from "react";
 import type { DraggableSyntheticListeners } from "@dnd-kit/core";
 
@@ -73,6 +73,11 @@ const PRIORITY_LABEL: Record<TodoPriority, string> = {
 const PRIORITY_STYLES: Record<TodoPriority, string> = {
   high: "text-destructive hover:text-destructive",
   low: "text-muted-foreground",
+};
+
+const PRIORITY_ICONS: Record<TodoPriority, React.ReactNode> = {
+  high: <ArrowUp className="size-4" />,
+  low: <ArrowDown className="size-4" />,
 };
 
 function TodoRowComponent({
@@ -198,11 +203,13 @@ function TodoRowComponent({
         aria-label={`Change "${todo.name}" priority to ${PRIORITY_LABEL[PRIORITY_NEXT[todo.priority]]}`}
         className={cn(
           "min-h-11 min-w-11 shrink-0 px-2 font-medium",
-          compact ? "text-xs" : "text-sm",
-          PRIORITY_STYLES[todo.priority],
+          compact
+            ? "opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 text-muted-foreground hover:text-foreground"
+            : "text-sm",
+          compact ? "justify-center px-0" : PRIORITY_STYLES[todo.priority],
         )}
       >
-        {PRIORITY_LABEL[todo.priority]}
+        {compact ? PRIORITY_ICONS[todo.priority] : PRIORITY_LABEL[todo.priority]}
       </Button>
 
       {/* Due date — calendar popover */}

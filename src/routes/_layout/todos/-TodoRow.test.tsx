@@ -171,6 +171,9 @@ describe("TodoRow", () => {
     expect(screen.getByRole("button", { name: /mark "deploy app" as started/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /edit due date for "deploy app"/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /delete "deploy app"/i })).toBeTruthy();
+    expect(priorityControl.textContent).toBe("");
+    expect(priorityControl.className).toContain("opacity-0");
+    expect(priorityControl.className).toContain("group-hover:opacity-100");
 
     priorityControl.focus();
     expect(document.activeElement).toBe(priorityControl);

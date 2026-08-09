@@ -225,22 +225,21 @@ afterEach(() => {
 });
 
 describe("TodoBentoCard", () => {
-  it("uses a neutral section and keeps Open full page as the only navigation link", () => {
+  it("keeps only the Todos heading linked to the full page", () => {
     renderCard([]);
 
     expect(screen.queryByLabelText("Open Todos tool")).toBeNull();
     expect(screen.getByRole("region", { name: /todos/i }).tagName).toBe("SECTION");
     const links = screen.getAllByRole("link");
     expect(links).toHaveLength(1);
-    expect(screen.getByRole("link", { name: /open full page/i }).getAttribute("href")).toBe(
-      "/todos",
-    );
+    expect(screen.queryByRole("link", { name: /open full page/i })).toBeNull();
+    expect(screen.getByRole("link", { name: "Todos" }).getAttribute("href")).toBe("/todos");
   });
 
   it("creates a todo from the card without navigating", async () => {
     renderCard([]);
 
-    fireEvent.click(screen.getAllByRole("button", { name: /add a new todo/i })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: /add a new todo/i }));
     fireEvent.change(screen.getByRole("textbox", { name: /new todo name/i }), {
       target: { value: "Created inline" },
     });
@@ -250,7 +249,7 @@ describe("TodoBentoCard", () => {
       expect(createTodo).toHaveBeenCalledWith({
         data: {
           name: "Created inline",
-          priority: "high",
+          priority: "low",
           status: "not_started",
           due_date: null,
         },
@@ -317,7 +316,9 @@ describe("TodoBentoCard", () => {
     );
 
     await waitFor(() =>
-      expect(updateTodo).toHaveBeenCalledWith({ data: { id: first.id, due_date: "2026-12-25" } }),
+      expect(updateTodo).toHaveBeenCalledWith({
+        data: { id: first.id, due_date: new Date(2026, 11, 25, 9, 0).toISOString() },
+      }),
     );
     expect(
       screen.getByRole("button", { name: /edit due date for "first task"/i }).textContent,
