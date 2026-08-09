@@ -208,6 +208,37 @@ describe("AddTodoRow (expanded state)", () => {
     expect(screen.queryByRole("textbox", { name: /new todo name/i })).toBeNull();
     expect(screen.getAllByRole("button", { name: /add a new todo/i })).toHaveLength(1);
   });
+
+  it("cancels with Escape from the High switch focus path", () => {
+    renderExpanded();
+
+    const prioritySwitch = screen.getByRole("switch", { name: /high priority/i });
+    prioritySwitch.focus();
+    fireEvent.keyDown(prioritySwitch, { key: "Escape" });
+
+    expect(screen.queryByRole("textbox", { name: /new todo name/i })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /add a new todo/i })).toHaveLength(1);
+  });
+
+  it("lets the date picker close itself first, then cancels from the date trigger focus path", () => {
+    renderExpanded();
+
+    const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
+    fireEvent.click(dateTrigger);
+
+    const dateInput = screen.getByLabelText(/choose date and time date/i);
+    fireEvent.keyDown(dateInput, { key: "Escape" });
+
+    expect(screen.queryByLabelText(/choose date and time date/i)).toBeNull();
+    expect(screen.getByRole("textbox", { name: /new todo name/i })).toBeTruthy();
+
+    fireEvent.keyDown(screen.getByRole("button", { name: /choose date and time/i }), {
+      key: "Escape",
+    });
+
+    expect(screen.queryByRole("textbox", { name: /new todo name/i })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /add a new todo/i })).toHaveLength(1);
+  });
 });
 
 describe("AddTodoRow (compact state)", () => {

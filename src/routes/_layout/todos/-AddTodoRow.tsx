@@ -83,6 +83,11 @@ function AddTodoRowComponent({
   return (
     <form
       className="rounded-md bg-accent/50"
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || event.defaultPrevented) return;
+        event.preventDefault();
+        resetForm();
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         handleSubmit();
