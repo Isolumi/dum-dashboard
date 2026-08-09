@@ -296,4 +296,45 @@ describe("AddTodoRow (compact state)", () => {
     expect(dateTrigger.className).toContain("h-9");
     expect(addButton.className).toContain("h-9");
   });
+
+  it("opens the priority selector and offers only High and Low", () => {
+    renderExpanded();
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /select priority/i }));
+    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "High",
+      "Low",
+    ]);
+    fireEvent.click(screen.getByRole("option", { name: "Low" }));
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.getByRole("button", { name: /select priority/i }).textContent).toContain("Low");
+  });
+
+  it("keeps the priority trigger at least 44px wide", () => {
+    renderExpanded();
+
+    expect(screen.getByRole("button", { name: /select priority/i }).className).toContain(
+      "min-w-11",
+    );
+  });
+});
+
+describe("AddTodoRow (compact state)", () => {
+  it("keeps the collapsed add control keyboard-focusable with a 44px target", () => {
+    const { container } = render(
+      React.createElement(AddTodoRow, { compact: true, onCreate: noopCreate }),
+    );
+    const addControl = screen.getByRole("button", { name: /add a new todo/i });
+
+    expect(addControl.className).toContain("min-h-[44px]");
+    expect(addControl.className).toContain("px-2");
+    expect(screen.getByText("Add a todo...").className).toContain("text-xs");
+    expect(addControl.className).toContain("motion-reduce:transition-none");
+
+    addControl.focus();
+    expect(document.activeElement).toBe(addControl);
+    fireEvent.click(addControl);
+    expect(container.querySelector("input[aria-label='New todo name']")).toBeTruthy();
+  });
 });
