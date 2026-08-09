@@ -29,6 +29,7 @@ function makeTodo(overrides: Partial<Todo> = {}): Todo {
     status: "not_started",
     priority: "high",
     due_date: null,
+    due_date_has_time: false,
     sort_order: 0,
     created_at: "2026-08-06T12:00:00.000Z",
     ...overrides,
@@ -100,6 +101,7 @@ describe("useTodoController", () => {
         name: "  Canonical server name  ",
         priority: "low",
         due_date: "2026-08-09",
+        due_date_has_time: false,
       });
     });
 
@@ -109,6 +111,16 @@ describe("useTodoController", () => {
       priority: "low",
       status: "not_started",
       due_date: "2026-08-09",
+      due_date_has_time: false,
+    });
+    expect(createTodo).toHaveBeenCalledWith({
+      data: {
+        name: "Canonical server name",
+        priority: "low",
+        status: "not_started",
+        due_date: "2026-08-09",
+        due_date_has_time: false,
+      },
     });
 
     await act(async () => {
@@ -135,6 +147,7 @@ describe("useTodoController", () => {
         name: "Saved todo",
         priority: "low",
         due_date: null,
+        due_date_has_time: false,
       });
     });
     const optimisticId = result.current.todos[1]?.id;
@@ -168,6 +181,7 @@ describe("useTodoController", () => {
         name: "Saved todo",
         priority: "low",
         due_date: null,
+        due_date_has_time: false,
       });
     });
     const optimisticId = result.current.todos[1]?.id;
@@ -193,6 +207,30 @@ describe("useTodoController", () => {
 
     expect(result.current.todos[0]?.status).toBe("not_started");
     expect(result.current.mutationError).toMatch(/save failed/i);
+  });
+
+  it("rolls due date precision metadata back with a rejected due date update", async () => {
+    const dueDate = new Date(2026, 7, 9, 15, 30).toISOString();
+    vi.mocked(updateTodo).mockRejectedValueOnce(new Error("offline"));
+    const { result } = renderHook(() => useTodoController([highTodo]));
+
+    await act(async () =>
+      result.current.update({
+        id: highTodo.id,
+        due_date: dueDate,
+        due_date_has_time: true,
+      }),
+    );
+
+    expect(updateTodo).toHaveBeenCalledWith({
+      data: {
+        id: highTodo.id,
+        due_date: dueDate,
+        due_date_has_time: true,
+      },
+    });
+    expect(result.current.todos[0]?.due_date).toBeNull();
+    expect(result.current.todos[0]?.due_date_has_time).toBe(false);
   });
 
   it("replaces an optimistic update with the server-returned todo", async () => {

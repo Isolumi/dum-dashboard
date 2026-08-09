@@ -18,6 +18,7 @@ export interface TodoRowProps {
     priority?: "high" | "low";
     status?: "not_started" | "started" | "complete";
     due_date?: string | null;
+    due_date_has_time?: boolean;
   }) => void;
   onDelete: (id: string) => void;
   dragListeners?: DraggableSyntheticListeners;
@@ -94,7 +95,9 @@ function TodoRowComponent({
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const isOverdue =
-    todo.due_date && todo.status !== "complete" && isTodoDueDateOverdue(todo.due_date);
+    todo.due_date &&
+    todo.status !== "complete" &&
+    isTodoDueDateOverdue(todo.due_date, todo.due_date_has_time);
 
   function saveName() {
     const trimmed = nameValue.trim();
@@ -214,15 +217,18 @@ function TodoRowComponent({
       <div
         className={cn(
           "shrink-0 text-right",
-          compact ? "w-20" : "w-24",
+          compact ? "w-32" : "w-40",
           todo.due_date && (isOverdue ? "text-destructive" : "text-muted-foreground"),
         )}
       >
         <TodoDueDatePicker
           value={todo.due_date}
-          onChange={(due_date) => onUpdate({ id: todo.id, due_date })}
+          onChange={(due_date, due_date_has_time) =>
+            onUpdate({ id: todo.id, due_date, due_date_has_time })
+          }
           label={`Edit due date for "${todo.name}"`}
           compact={compact}
+          hasTime={todo.due_date_has_time}
           disabled={isPending}
         />
       </div>

@@ -6,15 +6,48 @@ import { assertSameOrigin, getOwnerUser, noStore } from "#/lib/server-auth";
 import { getSupabaseAdmin } from "#/lib/supabase-admin";
 import type { Todo } from "#/lib/database.types";
 
-const TODO_COLUMNS = "id,name,status,priority,due_date,sort_order,created_at" as const;
+const TODO_COLUMNS =
+  "id,name,status,priority,due_date,due_date_has_time,sort_order,created_at" as const;
 
 const TodoDueDateSchema = z.union([z.string().date(), z.string().datetime({ offset: true })]);
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function inferDueDateHasTime(value: string | null | undefined): boolean {
+  return value ? !DATE_ONLY_PATTERN.test(value) : false;
+}
+
+export function normalizeCreateTodoFields(data: z.infer<typeof CreateTodoSchema>) {
+  return {
+    ...data,
+    due_date_has_time:
+      data.due_date == null
+        ? false
+        : (data.due_date_has_time ?? inferDueDateHasTime(data.due_date)),
+  };
+}
+
+export function normalizeUpdateTodoFields(data: z.infer<typeof UpdateTodoSchema>) {
+  const { id, ...fields } = data;
+  return {
+    id,
+    ...(fields.due_date === undefined
+      ? fields
+      : {
+          ...fields,
+          due_date_has_time:
+            fields.due_date === null
+              ? false
+              : (fields.due_date_has_time ?? inferDueDateHasTime(fields.due_date)),
+        }),
+  };
+}
 
 export const CreateTodoSchema = z.object({
   name: z.string().trim().min(1).max(200),
   priority: z.enum(["high", "low"] as const).default("low"),
   status: z.enum(["not_started", "started", "complete"] as const).default("not_started"),
   due_date: TodoDueDateSchema.nullable().optional(),
+  due_date_has_time: z.boolean().optional(),
 });
 
 export const UpdateTodoSchema = z.object({
@@ -23,6 +56,7 @@ export const UpdateTodoSchema = z.object({
   priority: z.enum(["high", "low"] as const).optional(),
   status: z.enum(["not_started", "started", "complete"] as const).optional(),
   due_date: TodoDueDateSchema.nullable().optional(),
+  due_date_has_time: z.boolean().optional(),
   sort_order: z.number().int().nonnegative().optional(),
 });
 
@@ -92,7 +126,7 @@ export const createTodo = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<Todo> => {
     noStore();
     assertTodoMutationRequest();
-    const todoFields = data;
+    const todoFields = normalizeCreateTodoFields(data);
     // Assign sort_order as max + 1 within the same priority group
     const { data: maxRow } = await getSupabaseAdmin()
       .from("todos")
@@ -116,10 +150,10 @@ export const updateTodo = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<Todo> => {
     noStore();
     assertTodoMutationRequest();
-    const { id, ...fields } = data;
+    const { id, ...normalizedFields } = normalizeUpdateTodoFields(data);
     const { data: todo, error } = await getSupabaseAdmin()
       .from("todos")
-      .update(fields)
+      .update(normalizedFields)
       .eq("id", id)
       .select(TODO_COLUMNS)
       .single();

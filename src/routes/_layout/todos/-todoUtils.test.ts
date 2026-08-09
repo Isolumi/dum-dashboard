@@ -10,6 +10,7 @@ function makeTodo(overrides: Partial<Todo> = {}): Todo {
     status: "not_started",
     priority: "low",
     due_date: null,
+    due_date_has_time: false,
     sort_order: 0,
     created_at: "2026-01-01T00:00:00Z",
     ...overrides,
@@ -28,5 +29,61 @@ describe("groupAndSortTodos", () => {
     expect(Object.keys(grouped)).toEqual(["high", "low"]);
     expect(grouped.high.map((todo) => todo.id)).toEqual(["high-active", "high-complete"]);
     expect(grouped.low.map((todo) => todo.id)).toEqual(["low-active"]);
+  });
+
+  it("sorts date-only metadata by its stored calendar date and timed todos by instant", () => {
+    const grouped = groupAndSortTodos([
+      makeTodo({
+        id: "timed-later",
+        due_date: "2026-08-09T18:00:00.000Z",
+        due_date_has_time: true,
+      }),
+      makeTodo({
+        id: "date-only-earlier",
+        due_date: "2026-08-09T00:00:00.000Z",
+        due_date_has_time: false,
+      }),
+    ]);
+
+    expect(grouped.low.map((todo) => todo.id)).toEqual(["date-only-earlier", "timed-later"]);
+  });
+
+  it("infers a legacy timestamp without precision metadata as timed", () => {
+    const legacyTimedTodo = makeTodo({
+      id: "legacy-timed-later",
+      due_date: "2026-08-09T23:30:00-04:00",
+    });
+    delete (legacyTimedTodo as Partial<Todo>).due_date_has_time;
+
+    const grouped = groupAndSortTodos([
+      legacyTimedTodo,
+      makeTodo({
+        id: "timed-earlier",
+        due_date: "2026-08-10T01:00:00.000Z",
+        due_date_has_time: true,
+      }),
+    ]);
+
+    expect(grouped.low.map((todo) => todo.id)).toEqual(["timed-earlier", "legacy-timed-later"]);
+  });
+
+  it("sorts date-only metadata by the timestamp's UTC calendar date", () => {
+    const grouped = groupAndSortTodos([
+      makeTodo({
+        id: "date-only-next-day",
+        due_date: "2026-08-09T23:30:00-04:00",
+        due_date_has_time: false,
+      }),
+      makeTodo({
+        id: "timed-previous-day",
+        due_date: "2026-08-09T12:00:00.000Z",
+        due_date_has_time: true,
+      }),
+    ]);
+
+    expect(grouped.low.map((todo) => todo.id)).toEqual([
+      "timed-previous-day",
+      "date-only-next-day",
+    ]);
   });
 });

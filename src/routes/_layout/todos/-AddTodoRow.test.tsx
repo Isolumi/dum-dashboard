@@ -50,6 +50,9 @@ vi.mock("#/components/ui/popover", () => {
       const context = React.useContext(PopoverContext);
       return context?.open ? <div {...props}>{children}</div> : null;
     },
+    PopoverTitle: ({ children, ...props }: React.ComponentProps<"h2">) => (
+      <h2 {...props}>{children}</h2>
+    ),
   };
 });
 
@@ -124,10 +127,18 @@ describe("AddTodoRow (expanded state)", () => {
   it("focuses the name input and exposes the compact inline controls", () => {
     renderExpanded();
     const nameInput = screen.getByRole("textbox", { name: /new todo name/i });
+    const prioritySwitch = screen.getByRole("switch", { name: /high priority/i });
+    const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
 
     expect(document.activeElement).toBe(nameInput);
-    expect(screen.getByRole("switch", { name: /high priority/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /choose date and time/i })).toBeTruthy();
+    expect(prioritySwitch.textContent).toBe("Low");
+    expect(prioritySwitch.getAttribute("aria-checked")).toBe("false");
+    expect(prioritySwitch.className).not.toContain("destructive");
+    fireEvent.click(prioritySwitch);
+    expect(prioritySwitch.textContent).toBe("High");
+    expect(prioritySwitch.getAttribute("aria-checked")).toBe("true");
+    expect(dateTrigger.querySelector("svg")).toBeTruthy();
+    expect(dateTrigger.querySelector("svg")?.className.baseVal).not.toContain("opacity-0");
     expect(screen.getByRole("button", { name: /^add$/i })).toBeTruthy();
   });
 
@@ -155,6 +166,7 @@ describe("AddTodoRow (expanded state)", () => {
       name: "Pay bills",
       priority: "low",
       due_date: null,
+      due_date_has_time: false,
     });
   });
 
@@ -173,6 +185,7 @@ describe("AddTodoRow (expanded state)", () => {
       name: "Handle outage",
       priority: "high",
       due_date: null,
+      due_date_has_time: false,
     });
   });
 
@@ -191,12 +204,16 @@ describe("AddTodoRow (expanded state)", () => {
     fireEvent.change(screen.getByLabelText(/choose date and time time/i), {
       target: { value: "14:30" },
     });
+    const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
+    expect(dateTrigger.textContent?.trim()).toBe("");
+    expect(dateTrigger.querySelector("svg")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
     expect(onCreate).toHaveBeenCalledWith({
       name: "Doctor appointment",
       priority: "low",
       due_date: new Date(2026, 11, 25, 14, 30).toISOString(),
+      due_date_has_time: true,
     });
   });
 
@@ -257,5 +274,26 @@ describe("AddTodoRow (compact state)", () => {
     expect(document.activeElement).toBe(addControl);
     fireEvent.click(addControl);
     expect(container.querySelector("input[aria-label='New todo name']")).toBeTruthy();
+  });
+
+  it("keeps the expanded controls within the collapsed 44px row footprint", () => {
+    const { container } = render(
+      React.createElement(AddTodoRow, { compact: true, onCreate: noopCreate }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /add a new todo/i }));
+
+    const form = container.querySelector("form");
+    const controls = form?.firstElementChild;
+    const nameInput = screen.getByRole("textbox", { name: /new todo name/i });
+    const prioritySwitch = screen.getByRole("switch", { name: /high priority/i });
+    const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
+    const addButton = screen.getByRole("button", { name: /^add$/i });
+
+    expect(controls?.className).toContain("min-h-[44px]");
+    expect(controls?.className).not.toMatch(/\bpy-/);
+    expect(nameInput.className).toContain("h-9");
+    expect(prioritySwitch.className).toContain("h-9");
+    expect(dateTrigger.className).toContain("h-9");
+    expect(addButton.className).toContain("h-9");
   });
 });

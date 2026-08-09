@@ -48,8 +48,15 @@ vi.mock("#/components/ui/popover", () => {
     },
     PopoverContent: ({ children, ...props }: React.ComponentProps<"div">) => {
       const context = React.useContext(PopoverContext);
-      return context?.open ? <div {...props}>{children}</div> : null;
+      return context?.open ? (
+        <div role="dialog" {...props}>
+          {children}
+        </div>
+      ) : null;
     },
+    PopoverTitle: ({ children, ...props }: React.ComponentProps<"h2">) => (
+      <h2 {...props}>{children}</h2>
+    ),
   };
 });
 
@@ -79,6 +86,8 @@ describe("TodoDueDatePicker", () => {
 
     fireEvent.click(trigger);
 
+    expect(screen.getByRole("dialog", { name: /edit due date for "deploy app"/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /edit due date for "deploy app"/i })).toBeTruthy();
     const dateInput = screen.getByLabelText(/edit due date for "deploy app" date/i);
     const timeInput = screen.getByLabelText(/edit due date for "deploy app" time/i);
     expect((dateInput as HTMLInputElement).type).toBe("date");
@@ -101,10 +110,10 @@ describe("TodoDueDatePicker", () => {
     const timeInput = screen.getByLabelText(/edit due date for "deploy app" time/i);
 
     fireEvent.change(dateInput, { target: { value: "2026-08-09" } });
-    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 7, 9, 9, 0).toISOString());
+    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 7, 9, 9, 0).toISOString(), true);
 
     fireEvent.change(timeInput, { target: { value: "15:30" } });
-    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 7, 9, 15, 30).toISOString());
+    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 7, 9, 15, 30).toISOString(), true);
   });
 
   it("preserves the existing time for calendar picks and supports clearing", () => {
@@ -120,10 +129,10 @@ describe("TodoDueDatePicker", () => {
     fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));
     fireEvent.click(screen.getByRole("button", { name: /december 25, 2026/i }));
 
-    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 11, 25, 15, 30).toISOString());
+    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 11, 25, 15, 30).toISOString(), true);
 
     fireEvent.click(screen.getByRole("button", { name: /clear due date/i }));
-    expect(onChange).toHaveBeenLastCalledWith(null);
+    expect(onChange).toHaveBeenLastCalledWith(null, false);
   });
 
   it("closes the popover on Escape", () => {
@@ -140,5 +149,59 @@ describe("TodoDueDatePicker", () => {
     fireEvent.keyDown(dateInput, { key: "Escape" });
 
     expect(screen.queryByLabelText(/edit due date for "deploy app" date/i)).toBeNull();
+  });
+
+  it("keeps the calendar icon visible when the value is intentionally compact", () => {
+    render(
+      <TodoDueDatePicker
+        value="2026-08-09T19:30:00.000Z"
+        hasTime
+        showValue={false}
+        onChange={vi.fn()}
+        label={'Edit due date for "Deploy app"'}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: /edit due date for "deploy app"/i });
+    expect(trigger.textContent?.trim()).toBe("");
+    expect(trigger.querySelector("svg")?.className.baseVal).not.toContain("opacity-0");
+  });
+
+  it("keeps a selected value inside the trigger overflow contract", () => {
+    render(
+      <TodoDueDatePicker
+        value="2026-08-09T19:30:00.000Z"
+        hasTime
+        onChange={vi.fn()}
+        label={'Edit due date for "Deploy app"'}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: /edit due date for "deploy app"/i });
+    const value = trigger.querySelector("span");
+
+    expect(trigger.className).toContain("overflow-hidden");
+    expect(value?.className).toContain("min-w-0");
+    expect(value?.className).toContain("truncate");
+  });
+
+  it("loads migrated date-only timestamps as date-only inputs", () => {
+    render(
+      <TodoDueDatePicker
+        value="2026-08-09T00:00:00.000Z"
+        hasTime={false}
+        onChange={vi.fn()}
+        label={'Edit due date for "Deploy app"'}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));
+
+    expect(
+      (screen.getByLabelText(/edit due date for "deploy app" date/i) as HTMLInputElement).value,
+    ).toBe("2026-08-09");
+    expect(
+      (screen.getByLabelText(/edit due date for "deploy app" time/i) as HTMLInputElement).value,
+    ).toBe("");
   });
 });

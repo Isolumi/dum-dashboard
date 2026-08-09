@@ -74,6 +74,9 @@ vi.mock("#/components/ui/popover", () => {
       const context = React.useContext(PopoverContext);
       return context?.open ? <div {...props}>{children}</div> : null;
     },
+    PopoverTitle: ({ children, ...props }: React.ComponentProps<"h2">) => (
+      <h2 {...props}>{children}</h2>
+    ),
   };
 });
 
@@ -150,6 +153,7 @@ function makeTodo(overrides: Partial<Todo> = {}): Todo {
     status: "not_started",
     priority: "high",
     due_date: null,
+    due_date_has_time: false,
     sort_order: 0,
     created_at: "2026-08-06T12:00:00.000Z",
     ...overrides,
@@ -252,6 +256,7 @@ describe("TodoBentoCard", () => {
           priority: "low",
           status: "not_started",
           due_date: null,
+          due_date_has_time: false,
         },
       }),
     );
@@ -317,7 +322,11 @@ describe("TodoBentoCard", () => {
 
     await waitFor(() =>
       expect(updateTodo).toHaveBeenCalledWith({
-        data: { id: first.id, due_date: new Date(2026, 11, 25, 9, 0).toISOString() },
+        data: {
+          id: first.id,
+          due_date: new Date(2026, 11, 25, 9, 0).toISOString(),
+          due_date_has_time: true,
+        },
       }),
     );
     expect(
