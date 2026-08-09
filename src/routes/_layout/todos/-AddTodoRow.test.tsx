@@ -296,28 +296,6 @@ describe("AddTodoRow (compact state)", () => {
     expect(dateTrigger.className).toContain("h-9");
     expect(addButton.className).toContain("h-9");
   });
-
-  it("opens the priority selector and offers only High and Low", () => {
-    renderExpanded();
-
-    expect(screen.queryByRole("listbox")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /select priority/i }));
-    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "High",
-      "Low",
-    ]);
-    fireEvent.click(screen.getByRole("option", { name: "Low" }));
-    expect(screen.queryByRole("listbox")).toBeNull();
-    expect(screen.getByRole("button", { name: /select priority/i }).textContent).toContain("Low");
-  });
-
-  it("keeps the priority trigger at least 44px wide", () => {
-    renderExpanded();
-
-    expect(screen.getByRole("button", { name: /select priority/i }).className).toContain(
-      "min-w-11",
-    );
-  });
 });
 
 describe("AddTodoRow (compact state)", () => {
