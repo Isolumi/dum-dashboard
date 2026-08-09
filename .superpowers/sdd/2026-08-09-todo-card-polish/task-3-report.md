@@ -2,7 +2,7 @@
 
 Date: 2026-08-09
 Base commit: `53ebbe8`
-Recorded task commit hash: `3951caa`
+Recorded task commit hash: `9a7a1c3`
 
 Note: this report file lives inside the same commit lineage it describes, so the exact final HEAD hash is returned in the task handoff after the report backfill amend.
 
@@ -148,6 +148,55 @@ Additional compact-row verification:
 ```text
 ✓ |components| src/routes/_layout/todos/-TodoRow.test.tsx (14 tests)
 
+Test Files  1 passed (1)
+Tests  14 passed (14)
+```
+
+## Fix round 1 report: Escape handling across non-name controls
+
+Review finding addressed:
+
+- The expanded add form only cancelled on Escape from the name input.
+- Escape now collapses the form from the High switch and date-trigger focus paths too.
+- The shared due-date picker still consumes the first Escape while its popover is open, then a subsequent Escape from the trigger collapses the form.
+
+Fix commit hash:
+
+- `618175d`
+
+Changed files:
+
+- `src/routes/_layout/todos/-AddTodoRow.tsx`
+- `src/routes/_layout/todos/-AddTodoRow.test.tsx`
+- `.superpowers/sdd/2026-08-09-todo-card-polish/task-3-report.md`
+
+Exact verification command:
+
+```bash
+bunx vitest run src/routes/_layout/todos/-AddTodoRow.test.tsx src/routes/_layout/todos/-PrioritySection.test.tsx src/routes/_layout/todos/-TodoBoard.test.tsx src/routes/_layout/todos/-TodoBentoCard.test.tsx
+```
+
+Exact verification output:
+
+```text
+✓ |components| src/routes/_layout/todos/-TodoBoard.test.tsx (8 tests) 266ms
+✓ |components| src/routes/_layout/todos/-AddTodoRow.test.tsx (14 tests) 471ms
+✓ |components| src/routes/_layout/todos/-TodoBentoCard.test.tsx (8 tests) 833ms
+✓ |components| src/routes/_layout/todos/-PrioritySection.test.tsx (1 test) 124ms
+
+Test Files  4 passed (4)
+Tests  31 passed (31)
+```
+
+Additional targeted RED/GREEN proof for the new regression:
+
+```text
+RED:
+- AddTodoRow (expanded state) > cancels with Escape from the High switch focus path
+- AddTodoRow (expanded state) > lets the date picker close itself first, then cancels from the date trigger focus path
+
+GREEN:
+✓ |components| src/routes/_layout/todos/-AddTodoRow.test.tsx (14 tests)
 Test Files  1 passed (1)
 Tests  14 passed (14)
 ```
