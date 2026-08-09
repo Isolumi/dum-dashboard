@@ -3,8 +3,61 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import React from "react";
 
 import type { TodoController } from "./-useTodoController";
+
+vi.mock("#/components/ui/popover", () => {
+  const PopoverContext = React.createContext<{
+    open: boolean;
+    onOpenChange?: (open: boolean) => void;
+  } | null>(null);
+
+  return {
+    Popover: ({
+      open = false,
+      onOpenChange,
+      children,
+    }: {
+      open?: boolean;
+      onOpenChange?: (open: boolean) => void;
+      children: React.ReactNode;
+    }) => (
+      <PopoverContext.Provider value={{ open, onOpenChange }}>{children}</PopoverContext.Provider>
+    ),
+    PopoverTrigger: ({
+      render: trigger,
+      children,
+    }: {
+      render: React.ReactElement<{ onClick?: React.MouseEventHandler<HTMLElement> }>;
+      children: React.ReactNode;
+    }) => {
+      const context = React.useContext(PopoverContext);
+      return React.cloneElement(
+        trigger,
+        {
+          onClick: (event: React.MouseEvent<HTMLElement>) => {
+            trigger.props.onClick?.(event);
+            if (!event.defaultPrevented) context?.onOpenChange?.(!context.open);
+          },
+        },
+        children,
+      );
+    },
+    PopoverContent: ({ children, ...props }: React.ComponentProps<"div">) => {
+      const context = React.useContext(PopoverContext);
+      return context?.open ? <div {...props}>{children}</div> : null;
+    },
+    PopoverTitle: ({ children, ...props }: React.ComponentProps<"h2">) => (
+      <h2 {...props}>{children}</h2>
+    ),
+  };
+});
+
+vi.mock("#/components/ui/calendar", () => ({
+  Calendar: () => <div>Calendar</div>,
+}));
+
 import { TodoBoard } from "./-TodoBoard";
 
 afterEach(() => {
@@ -36,7 +89,19 @@ describe("TodoBoard", () => {
 
       expect(screen.getByText("High")).toBeTruthy();
       expect(screen.getByText("Low")).toBeTruthy();
-      expect(screen.getAllByRole("button", { name: /add a new todo/i })).toHaveLength(2);
+      expect(screen.getAllByRole("button", { name: /add a new todo/i })).toHaveLength(1);
+    },
+  );
+
+  it.each(["compact", "full"] as const)(
+    "replaces the single add control inline with the add form in %s mode",
+    (variant) => {
+      render(<TodoBoard controller={makeController()} variant={variant} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /add a new todo/i }));
+
+      expect(screen.queryByRole("button", { name: /add a new todo/i })).toBeNull();
+      expect(screen.getByRole("textbox", { name: /new todo name/i })).toBeTruthy();
     },
   );
 

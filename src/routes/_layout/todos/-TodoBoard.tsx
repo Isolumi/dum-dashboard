@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
 import { Skeleton } from "#/components/ui/skeleton";
 import { cn } from "#/lib/utils";
+import { AddTodoRow } from "./-AddTodoRow";
 import { PrioritySection } from "./-PrioritySection";
 import { PRIORITY_LABELS, PRIORITY_ORDER } from "./-todoUtils";
 import type { TodoController } from "./-useTodoController";
@@ -63,11 +64,11 @@ export function TodoBoard({ controller, variant }: TodoBoardProps): ReactElement
                 todos={controller.grouped[priority]}
                 onUpdate={controller.update}
                 onDelete={controller.remove}
-                onCreate={controller.create}
                 onReorder={controller.reorder}
                 isPending={(id) => controller.pendingIds.has(id)}
               />
             ))}
+            <AddTodoRow compact={compact} defaultPriority="low" onCreate={controller.create} />
           </div>
           {controller.mutationError && (
             <Alert variant="destructive">

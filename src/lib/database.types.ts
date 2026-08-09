@@ -152,6 +152,7 @@ export type Database = {
         Row: {
           created_at: string;
           due_date: string | null;
+          due_date_has_time: boolean;
           id: string;
           name: string;
           priority: Database["public"]["Enums"]["todo_priority"];
@@ -161,6 +162,7 @@ export type Database = {
         Insert: {
           created_at?: string;
           due_date?: string | null;
+          due_date_has_time?: boolean;
           id?: string;
           name: string;
           priority?: Database["public"]["Enums"]["todo_priority"];
@@ -170,6 +172,7 @@ export type Database = {
         Update: {
           created_at?: string;
           due_date?: string | null;
+          due_date_has_time?: boolean;
           id?: string;
           name?: string;
           priority?: Database["public"]["Enums"]["todo_priority"];

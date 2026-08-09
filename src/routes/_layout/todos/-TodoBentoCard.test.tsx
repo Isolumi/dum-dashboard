@@ -74,6 +74,9 @@ vi.mock("#/components/ui/popover", () => {
       const context = React.useContext(PopoverContext);
       return context?.open ? <div {...props}>{children}</div> : null;
     },
+    PopoverTitle: ({ children, ...props }: React.ComponentProps<"h2">) => (
+      <h2 {...props}>{children}</h2>
+    ),
   };
 });
 
@@ -150,6 +153,7 @@ function makeTodo(overrides: Partial<Todo> = {}): Todo {
     status: "not_started",
     priority: "high",
     due_date: null,
+    due_date_has_time: false,
     sort_order: 0,
     created_at: "2026-08-06T12:00:00.000Z",
     ...overrides,
@@ -225,22 +229,21 @@ afterEach(() => {
 });
 
 describe("TodoBentoCard", () => {
-  it("uses a neutral section and keeps Open full page as the only navigation link", () => {
+  it("keeps only the Todos heading linked to the full page", () => {
     renderCard([]);
 
     expect(screen.queryByLabelText("Open Todos tool")).toBeNull();
     expect(screen.getByRole("region", { name: /todos/i }).tagName).toBe("SECTION");
     const links = screen.getAllByRole("link");
     expect(links).toHaveLength(1);
-    expect(screen.getByRole("link", { name: /open full page/i }).getAttribute("href")).toBe(
-      "/todos",
-    );
+    expect(screen.queryByRole("link", { name: /open full page/i })).toBeNull();
+    expect(screen.getByRole("link", { name: "Todos" }).getAttribute("href")).toBe("/todos");
   });
 
   it("creates a todo from the card without navigating", async () => {
     renderCard([]);
 
-    fireEvent.click(screen.getAllByRole("button", { name: /add a new todo/i })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: /add a new todo/i }));
     fireEvent.change(screen.getByRole("textbox", { name: /new todo name/i }), {
       target: { value: "Created inline" },
     });
@@ -250,9 +253,10 @@ describe("TodoBentoCard", () => {
       expect(createTodo).toHaveBeenCalledWith({
         data: {
           name: "Created inline",
-          priority: "high",
+          priority: "low",
           status: "not_started",
           due_date: null,
+          due_date_has_time: false,
         },
       }),
     );
@@ -317,7 +321,13 @@ describe("TodoBentoCard", () => {
     );
 
     await waitFor(() =>
-      expect(updateTodo).toHaveBeenCalledWith({ data: { id: first.id, due_date: "2026-12-25" } }),
+      expect(updateTodo).toHaveBeenCalledWith({
+        data: {
+          id: first.id,
+          due_date: new Date(2026, 11, 25, 9, 0).toISOString(),
+          due_date_has_time: true,
+        },
+      }),
     );
     expect(
       screen.getByRole("button", { name: /edit due date for "first task"/i }).textContent,

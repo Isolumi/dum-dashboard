@@ -50,6 +50,9 @@ vi.mock("#/components/ui/popover", () => {
       const context = React.useContext(PopoverContext);
       return context?.open ? <div {...props}>{children}</div> : null;
     },
+    PopoverTitle: ({ children, ...props }: React.ComponentProps<"h2">) => (
+      <h2 {...props}>{children}</h2>
+    ),
   };
 });
 
@@ -121,57 +124,177 @@ describe("AddTodoRow (expanded state)", () => {
     expect(wrapper?.className).toContain("bg-accent/50");
   });
 
-  it("renders the date field as a Calendar popover trigger button", () => {
+  it("focuses the name input and exposes the compact inline controls", () => {
     renderExpanded();
-    const dateTrigger = screen.getByRole("button", { name: /select due date/i });
-    expect(dateTrigger).toBeTruthy();
-    expect(screen.getByText("Date")).toBeTruthy();
+    const nameInput = screen.getByRole("textbox", { name: /new todo name/i });
+    const prioritySwitch = screen.getByRole("switch", { name: /high priority/i });
+    const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
+
+    expect(document.activeElement).toBe(nameInput);
+    expect(prioritySwitch.textContent).toBe("Low");
+    expect(prioritySwitch.getAttribute("aria-checked")).toBe("false");
+    expect(prioritySwitch.className).not.toContain("destructive");
+    fireEvent.click(prioritySwitch);
+    expect(prioritySwitch.textContent).toBe("High");
+    expect(prioritySwitch.getAttribute("aria-checked")).toBe("true");
+    expect(dateTrigger.querySelector("svg")).toBeTruthy();
+    expect(dateTrigger.querySelector("svg")?.className.baseVal).not.toContain("opacity-0");
+    expect(screen.getByRole("button", { name: /^add$/i })).toBeTruthy();
   });
 
-  it("opens the date picker from its trigger before a date can be selected", () => {
+  it("keeps the date picker overlaid while the expanded row stays in place", () => {
     renderExpanded();
 
     expect(screen.queryByRole("button", { name: /december 25, 2026/i })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /select due date/i }));
-    fireEvent.click(screen.getByRole("button", { name: /december 25, 2026/i }));
+    fireEvent.click(screen.getByRole("button", { name: /choose date and time/i }));
 
-    expect(screen.queryByRole("button", { name: /december 25, 2026/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /select due date/i }).textContent).toContain(
-      "Dec 25",
+    expect(screen.getByRole("button", { name: /december 25, 2026/i })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: /new todo name/i })).toBeTruthy();
+  });
+
+  it("submits low priority by default when Enter is pressed", () => {
+    const onCreate = vi.fn();
+    render(React.createElement(AddTodoRow, { onCreate }));
+
+    fireEvent.click(screen.getByRole("button", { name: /add a new todo/i }));
+    fireEvent.change(screen.getByRole("textbox", { name: /new todo name/i }), {
+      target: { value: "Pay bills" },
+    });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: /new todo name/i }), { key: "Enter" });
+
+    expect(onCreate).toHaveBeenCalledWith({
+      name: "Pay bills",
+      priority: "low",
+      due_date: null,
+      due_date_has_time: false,
+    });
+  });
+
+  it("submits high priority when the switch is turned on", () => {
+    const onCreate = vi.fn();
+    render(React.createElement(AddTodoRow, { onCreate }));
+
+    fireEvent.click(screen.getByRole("button", { name: /add a new todo/i }));
+    fireEvent.change(screen.getByRole("textbox", { name: /new todo name/i }), {
+      target: { value: "Handle outage" },
+    });
+    fireEvent.click(screen.getByRole("switch", { name: /high priority/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+
+    expect(onCreate).toHaveBeenCalledWith({
+      name: "Handle outage",
+      priority: "high",
+      due_date: null,
+      due_date_has_time: false,
+    });
+  });
+
+  it("passes typed date and time through to onCreate as an ISO timestamp", () => {
+    const onCreate = vi.fn();
+    render(React.createElement(AddTodoRow, { onCreate }));
+
+    fireEvent.click(screen.getByRole("button", { name: /add a new todo/i }));
+    fireEvent.change(screen.getByRole("textbox", { name: /new todo name/i }), {
+      target: { value: "Doctor appointment" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /choose date and time/i }));
+    fireEvent.change(screen.getByLabelText(/choose date and time date/i), {
+      target: { value: "2026-12-25" },
+    });
+    fireEvent.change(screen.getByLabelText(/choose date and time time/i), {
+      target: { value: "14:30" },
+    });
+    const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
+    expect(dateTrigger.textContent?.trim()).toBe("");
+    expect(dateTrigger.querySelector("svg")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+
+    expect(onCreate).toHaveBeenCalledWith({
+      name: "Doctor appointment",
+      priority: "low",
+      due_date: new Date(2026, 11, 25, 14, 30).toISOString(),
+      due_date_has_time: true,
+    });
+  });
+
+  it("cancels with Escape and restores the single collapsed row", () => {
+    renderExpanded();
+
+    fireEvent.keyDown(screen.getByRole("textbox", { name: /new todo name/i }), { key: "Escape" });
+
+    expect(screen.queryByRole("textbox", { name: /new todo name/i })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /add a new todo/i })).toHaveLength(1);
+  });
+
+  it("cancels with Escape from the High switch focus path", () => {
+    renderExpanded();
+
+    const prioritySwitch = screen.getByRole("switch", { name: /high priority/i });
+    prioritySwitch.focus();
+    fireEvent.keyDown(prioritySwitch, { key: "Escape" });
+
+    expect(screen.queryByRole("textbox", { name: /new todo name/i })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /add a new todo/i })).toHaveLength(1);
+  });
+
+  it("lets the date picker close itself first, then cancels from the date trigger focus path", () => {
+    renderExpanded();
+
+    const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
+    fireEvent.click(dateTrigger);
+
+    const dateInput = screen.getByLabelText(/choose date and time date/i);
+    fireEvent.keyDown(dateInput, { key: "Escape" });
+
+    expect(screen.queryByLabelText(/choose date and time date/i)).toBeNull();
+    expect(screen.getByRole("textbox", { name: /new todo name/i })).toBeTruthy();
+
+    fireEvent.keyDown(screen.getByRole("button", { name: /choose date and time/i }), {
+      key: "Escape",
+    });
+
+    expect(screen.queryByRole("textbox", { name: /new todo name/i })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /add a new todo/i })).toHaveLength(1);
+  });
+});
+
+describe("AddTodoRow (compact state)", () => {
+  it("keeps the collapsed add control keyboard-focusable with a 44px target", () => {
+    const { container } = render(
+      React.createElement(AddTodoRow, { compact: true, onCreate: noopCreate }),
     );
+    const addControl = screen.getByRole("button", { name: /add a new todo/i });
+
+    expect(addControl.className).toContain("min-h-[44px]");
+    expect(addControl.className).toContain("px-2");
+    expect(screen.getByText("Add a todo...").className).toContain("text-xs");
+    expect(addControl.className).toContain("motion-reduce:transition-none");
+
+    addControl.focus();
+    expect(document.activeElement).toBe(addControl);
+    fireEvent.click(addControl);
+    expect(container.querySelector("input[aria-label='New todo name']")).toBeTruthy();
   });
 
-  it("date trigger button has shrink-0 class for fixed width", () => {
-    renderExpanded();
-    const dateTrigger = screen.getByRole("button", { name: /select due date/i });
-    expect(dateTrigger.className).toContain("shrink-0");
-  });
-
-  it("shows keyboard hint containing 'Esc to cancel' when expanded", () => {
-    renderExpanded();
-    expect(screen.getByText(/esc to cancel/i)).toBeTruthy();
-  });
-
-  it("opens the priority selector and offers only High and Low", () => {
-    renderExpanded();
-
-    expect(screen.queryByRole("listbox")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /select priority/i }));
-    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "High",
-      "Low",
-    ]);
-    fireEvent.click(screen.getByRole("option", { name: "Low" }));
-    expect(screen.queryByRole("listbox")).toBeNull();
-    expect(screen.getByRole("button", { name: /select priority/i }).textContent).toContain("Low");
-  });
-
-  it("keeps the priority trigger at least 44px wide", () => {
-    renderExpanded();
-
-    expect(screen.getByRole("button", { name: /select priority/i }).className).toContain(
-      "min-w-11",
+  it("keeps the expanded controls within the collapsed 44px row footprint", () => {
+    const { container } = render(
+      React.createElement(AddTodoRow, { compact: true, onCreate: noopCreate }),
     );
+    fireEvent.click(screen.getByRole("button", { name: /add a new todo/i }));
+
+    const form = container.querySelector("form");
+    const controls = form?.firstElementChild;
+    const nameInput = screen.getByRole("textbox", { name: /new todo name/i });
+    const prioritySwitch = screen.getByRole("switch", { name: /high priority/i });
+    const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
+    const addButton = screen.getByRole("button", { name: /^add$/i });
+
+    expect(controls?.className).toContain("min-h-[44px]");
+    expect(controls?.className).not.toMatch(/\bpy-/);
+    expect(nameInput.className).toContain("h-9");
+    expect(prioritySwitch.className).toContain("h-9");
+    expect(dateTrigger.className).toContain("h-9");
+    expect(addButton.className).toContain("h-9");
   });
 });
 
