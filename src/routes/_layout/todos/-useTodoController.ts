@@ -23,9 +23,13 @@ export type TodoUpdateFields = {
   priority?: TodoPriority;
   status?: TodoStatus;
   due_date?: string | null;
+  due_date_has_time?: boolean;
 };
 
-type TodoUpdateState = Pick<Todo, "name" | "priority" | "status" | "due_date">;
+type TodoUpdateState = Pick<
+  Todo,
+  "name" | "priority" | "status" | "due_date" | "due_date_has_time"
+>;
 
 function getTodoUpdateState(todo: Todo): TodoUpdateState {
   return {
@@ -33,6 +37,7 @@ function getTodoUpdateState(todo: Todo): TodoUpdateState {
     priority: todo.priority,
     status: todo.status,
     due_date: todo.due_date,
+    due_date_has_time: todo.due_date_has_time,
   };
 }
 
@@ -44,7 +49,12 @@ export interface TodoController {
   loadError: string | null;
   mutationError: string | null;
   retry(): Promise<void>;
-  create(fields: { name: string; priority: TodoPriority; due_date: string | null }): Promise<void>;
+  create(fields: {
+    name: string;
+    priority: TodoPriority;
+    due_date: string | null;
+    due_date_has_time: boolean;
+  }): Promise<void>;
   update(fields: TodoUpdateFields): Promise<void>;
   remove(id: string): Promise<void>;
   reorder(priority: TodoPriority, orderedIds: string[]): Promise<void>;
@@ -144,6 +154,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
       name: string;
       priority: TodoPriority;
       due_date: string | null;
+      due_date_has_time: boolean;
     }): Promise<void> => {
       const name = fields.name.trim();
       if (name.length === 0) return;
@@ -156,6 +167,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
         priority: fields.priority,
         status: "not_started",
         due_date: fields.due_date,
+        due_date_has_time: fields.due_date_has_time,
         sort_order: Math.max(-1, ...priorityTodos.map((todo) => todo.sort_order)) + 1,
         created_at: new Date().toISOString(),
       };
@@ -169,6 +181,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
             priority: fields.priority,
             status: "not_started",
             due_date: fields.due_date,
+            due_date_has_time: fields.due_date_has_time,
           },
         });
         replaceTodos((current) =>

@@ -18,8 +18,6 @@ import { CSS } from "@dnd-kit/utilities";
 
 import type { Todo, TodoPriority } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
-import type { AddTodoRowProps } from "./-AddTodoRow";
-import { AddTodoRow } from "./-AddTodoRow";
 import type { TodoRowProps } from "./-TodoRow";
 import { TodoRow } from "./-TodoRow";
 
@@ -29,14 +27,13 @@ export interface PrioritySectionProps {
   todos: Todo[];
   onUpdate: TodoRowProps["onUpdate"];
   onDelete: TodoRowProps["onDelete"];
-  onCreate: AddTodoRowProps["onCreate"];
   onReorder: (priority: TodoPriority, orderedIds: string[]) => void;
   compact?: boolean;
   isPending?: (id: string) => boolean;
 }
 
 const SECTION_LABEL_STYLES: Record<TodoPriority, string> = {
-  high: "text-destructive",
+  high: "text-muted-foreground",
   low: "text-muted-foreground",
 };
 
@@ -84,7 +81,6 @@ function PrioritySectionComponent({
   todos,
   onUpdate,
   onDelete,
-  onCreate,
   onReorder,
   compact = false,
   isPending,
@@ -162,9 +158,6 @@ function PrioritySectionComponent({
           </div>
         </SortableContext>
       </DndContext>
-
-      {/* Add todo row — defaultPriority pre-set to this section's priority */}
-      <AddTodoRow onCreate={onCreate} defaultPriority={priority} compact={compact} />
     </div>
   );
 }
