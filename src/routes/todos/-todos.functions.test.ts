@@ -102,6 +102,15 @@ describe("CreateTodoSchema", () => {
     const result = CreateTodoSchema.safeParse({ name: "Test", due_date: "not-a-date" });
     expect(result.success).toBe(false);
   });
+
+  it("accepts an ISO timestamp with an offset for due_date", () => {
+    expect(
+      CreateTodoSchema.safeParse({
+        name: "Timed todo",
+        due_date: "2026-08-09T15:30:00.000Z",
+      }).success,
+    ).toBe(true);
+  });
 });
 
 describe("single-owner todo function inputs", () => {
@@ -168,6 +177,15 @@ describe("UpdateTodoSchema", () => {
       priority: "critical",
     });
     expect(result.success).toBe(false);
+  });
+
+  it("accepts an ISO timestamp in UpdateTodoSchema", () => {
+    expect(
+      UpdateTodoSchema.safeParse({
+        id: "00000000-0000-0000-0000-000000000001",
+        due_date: "2026-08-09T11:30:00-04:00",
+      }).success,
+    ).toBe(true);
   });
 });
 
