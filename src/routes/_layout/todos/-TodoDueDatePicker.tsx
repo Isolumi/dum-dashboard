@@ -105,10 +105,7 @@ export function TodoDueDatePicker({
                 return;
               }
 
-              updateDueDate(
-                format(date, "yyyy-MM-dd"),
-                timeValue || DEFAULT_TODO_DUE_TIME,
-              );
+              updateDueDate(format(date, "yyyy-MM-dd"), timeValue || DEFAULT_TODO_DUE_TIME);
             }}
           />
 

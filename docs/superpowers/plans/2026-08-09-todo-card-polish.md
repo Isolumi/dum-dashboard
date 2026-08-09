@@ -25,12 +25,14 @@
 ### Task 1: Migrate the Todo due-date contract to date/time values
 
 **Files:**
+
 - Create: `supabase/migrations/20260809000000_todo_due_datetime.sql`
 - Modify: `src/routes/todos/todos.functions.ts`
 - Modify: `src/lib/database.types.ts` only if regeneration changes the generated schema output
 - Test: `src/routes/todos/-todos.functions.test.ts`
 
 **Interfaces:**
+
 - Preserve `CreateTodoSchema`, `UpdateTodoSchema`, and the existing `Todo` field name `due_date`.
 - Accept `null`, an ISO date-only string such as `2026-08-09`, or an ISO timestamp with an explicit offset such as `2026-08-09T15:30:00.000Z` at the server boundary.
 - New UI-created values will use ISO timestamps; existing date-only values remain valid during the transition.
@@ -74,10 +76,7 @@ Expected: the new timestamp cases fail because the current schemas only accept `
 Define one shared schema in `src/routes/todos/todos.functions.ts`:
 
 ```ts
-const TodoDueDateSchema = z.union([
-  z.string().date(),
-  z.string().datetime({ offset: true }),
-]);
+const TodoDueDateSchema = z.union([z.string().date(), z.string().datetime({ offset: true })]);
 ```
 
 Use `TodoDueDateSchema.nullable().optional()` in both create and update schemas. Keep all other validation unchanged.
@@ -121,6 +120,7 @@ Expected: focused tests pass and the migration/schema diff is clean.
 ### Task 2: Add reusable date/time picker and row date display
 
 **Files:**
+
 - Create: `src/routes/_layout/todos/-todoDueDate.ts`
 - Create: `src/routes/_layout/todos/-TodoDueDatePicker.tsx`
 - Test: `src/routes/_layout/todos/-todoDueDate.test.ts`
@@ -129,6 +129,7 @@ Expected: focused tests pass and the migration/schema diff is clean.
 - Modify: `src/routes/_layout/todos/-TodoRow.test.tsx`
 
 **Interfaces:**
+
 - `formatTodoDueDate(value: string | null): string` returns an empty marker for null, a local date for date-only values, and a local date plus time for timestamp values.
 - `toTodoDueDate(dateValue: string, timeValue: string): string` combines local date/time input and returns an ISO timestamp.
 - `TodoDueDatePicker` accepts `value: string | null`, `onChange(value: string | null)`, `label: string`, `compact?: boolean`, and `disabled?: boolean`.
@@ -205,6 +206,7 @@ Expected: all focused tests pass and TodoRow keeps its existing actions.
 ### Task 3: Polish the shared board, add form, and Overview card
 
 **Files:**
+
 - Modify: `src/routes/_layout/todos/-TodoBentoCard.tsx`
 - Modify: `src/routes/_layout/todos/-TodoBoard.tsx`
 - Modify: `src/routes/_layout/todos/-PrioritySection.tsx`
@@ -215,6 +217,7 @@ Expected: all focused tests pass and TodoRow keeps its existing actions.
 - Modify: `src/routes/_layout/todos/-TodoBentoCard.test.tsx`
 
 **Interfaces:**
+
 - `PrioritySection` renders only its section header and Todo rows; it no longer owns an add control.
 - `TodoBoard` renders exactly one `AddTodoRow` after both priority sections in both `compact` and `full` variants.
 - `AddTodoRow` keeps its existing `onCreate({ name, priority, due_date })` interface, with `due_date` now accepting an ISO timestamp or null.
@@ -274,6 +277,7 @@ Expected: focused UI tests pass with one stable add row and no `Open full page` 
 ### Task 4: Whole-branch verification and deployment handoff
 
 **Files:**
+
 - No planned source changes; fix only verified regressions found by the checks below.
 
 - [ ] **Step 1: Run the complete local verification suite**

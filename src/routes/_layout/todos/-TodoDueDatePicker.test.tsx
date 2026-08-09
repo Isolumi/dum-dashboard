@@ -66,7 +66,11 @@ const { TodoDueDatePicker } = await import("./-TodoDueDatePicker");
 describe("TodoDueDatePicker", () => {
   it("keeps the empty trigger icon-only and exposes accessible native inputs", () => {
     render(
-      <TodoDueDatePicker value={null} onChange={vi.fn()} label={'Edit due date for "Deploy app"'} />,
+      <TodoDueDatePicker
+        value={null}
+        onChange={vi.fn()}
+        label={'Edit due date for "Deploy app"'}
+      />,
     );
 
     const trigger = screen.getByRole("button", { name: /edit due date for "deploy app"/i });
@@ -84,7 +88,11 @@ describe("TodoDueDatePicker", () => {
   it("serializes typed local date and time changes as ISO timestamps", () => {
     const onChange = vi.fn();
     render(
-      <TodoDueDatePicker value={null} onChange={onChange} label={'Edit due date for "Deploy app"'} />,
+      <TodoDueDatePicker
+        value={null}
+        onChange={onChange}
+        label={'Edit due date for "Deploy app"'}
+      />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));
@@ -120,7 +128,11 @@ describe("TodoDueDatePicker", () => {
 
   it("closes the popover on Escape", () => {
     render(
-      <TodoDueDatePicker value={null} onChange={vi.fn()} label={'Edit due date for "Deploy app"'} />,
+      <TodoDueDatePicker
+        value={null}
+        onChange={vi.fn()}
+        label={'Edit due date for "Deploy app"'}
+      />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));

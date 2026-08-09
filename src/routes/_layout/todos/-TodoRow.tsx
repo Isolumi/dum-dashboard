@@ -94,9 +94,7 @@ function TodoRowComponent({
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const isOverdue =
-    todo.due_date &&
-    todo.status !== "complete" &&
-    isTodoDueDateOverdue(todo.due_date);
+    todo.due_date && todo.status !== "complete" && isTodoDueDateOverdue(todo.due_date);
 
   function saveName() {
     const trimmed = nameValue.trim();

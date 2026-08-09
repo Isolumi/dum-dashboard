@@ -134,9 +134,9 @@ describe("TodoRow", () => {
     const dueDate = new Date(2026, 7, 9, 15, 30).toISOString();
     renderTodoRow({ todo: { ...highTodo, due_date: dueDate } });
 
-    expect(screen.getByRole("button", { name: /edit due date for "deploy app"/i }).textContent).toContain(
-      format(new Date(dueDate), "MMM d, h:mm a"),
-    );
+    expect(
+      screen.getByRole("button", { name: /edit due date for "deploy app"/i }).textContent,
+    ).toContain(format(new Date(dueDate), "MMM d, h:mm a"));
   });
 
   it("keeps overdue due dates visually destructive", () => {

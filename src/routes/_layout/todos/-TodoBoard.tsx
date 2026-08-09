@@ -68,11 +68,7 @@ export function TodoBoard({ controller, variant }: TodoBoardProps): ReactElement
                 isPending={(id) => controller.pendingIds.has(id)}
               />
             ))}
-            <AddTodoRow
-              compact={compact}
-              defaultPriority="low"
-              onCreate={controller.create}
-            />
+            <AddTodoRow compact={compact} defaultPriority="low" onCreate={controller.create} />
           </div>
           {controller.mutationError && (
             <Alert variant="destructive">

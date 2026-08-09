@@ -25,9 +25,7 @@ export function isTodoDueDateOverdue(value: string | null, now = new Date()): bo
   return DATE_ONLY_PATTERN.test(value) ? dueDate < startOfDay(now) : dueDate < now;
 }
 
-export function getTodoDueDateInputValues(
-  value: string | null,
-): {
+export function getTodoDueDateInputValues(value: string | null): {
   dateValue: string;
   timeValue: string;
 } {
