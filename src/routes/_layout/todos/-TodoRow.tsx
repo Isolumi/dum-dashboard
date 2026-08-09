@@ -1,14 +1,13 @@
-import { format, parseISO } from "date-fns";
-import { Circle, CircleCheck, CalendarIcon, GripVertical, Trash2 } from "lucide-react";
+import { Circle, CircleCheck, GripVertical, Trash2 } from "lucide-react";
 import { memo, useRef, useState } from "react";
 import type { DraggableSyntheticListeners } from "@dnd-kit/core";
 
 import { Button } from "#/components/ui/button";
-import { Calendar } from "#/components/ui/calendar";
 import { Input } from "#/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
 import type { Todo, TodoPriority, TodoStatus } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
+
+import { TodoDueDatePicker } from "./-TodoDueDatePicker";
 
 export interface TodoRowProps {
   todo: Todo;
@@ -86,7 +85,6 @@ function TodoRowComponent({
 }: TodoRowProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(todo.name);
-  const [isDateOpen, setIsDateOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const isOverdue =
@@ -207,46 +205,20 @@ function TodoRowComponent({
       </Button>
 
       {/* Due date — calendar popover */}
-      <div className={cn("shrink-0 text-right", compact ? "w-20" : "w-24")}>
-        <Popover open={isDateOpen} onOpenChange={setIsDateOpen}>
-          <PopoverTrigger
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                aria-label={`Edit due date for "${todo.name}"`}
-                disabled={isPending}
-                className="group/date min-h-11 w-full justify-end px-2 text-right"
-              />
-            }
-          >
-            {todo.due_date ? (
-              <span
-                className={cn(
-                  compact ? "text-xs" : "text-sm",
-                  isOverdue ? "text-destructive" : "text-muted-foreground",
-                )}
-              >
-                {format(parseISO(todo.due_date), "MMM d")}
-              </span>
-            ) : (
-              <CalendarIcon className="ml-auto size-4 text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-visible/date:opacity-100 [@media(pointer:coarse)]:opacity-100" />
-            )}
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="end">
-            <Calendar
-              mode="single"
-              selected={todo.due_date ? parseISO(todo.due_date) : undefined}
-              onSelect={(date) => {
-                onUpdate({
-                  id: todo.id,
-                  due_date: date ? format(date, "yyyy-MM-dd") : null,
-                });
-                setIsDateOpen(false);
-              }}
-            />
-          </PopoverContent>
-        </Popover>
+      <div
+        className={cn(
+          "shrink-0 text-right",
+          compact ? "w-20" : "w-24",
+          todo.due_date && (isOverdue ? "text-destructive" : "text-muted-foreground"),
+        )}
+      >
+        <TodoDueDatePicker
+          value={todo.due_date}
+          onChange={(due_date) => onUpdate({ id: todo.id, due_date })}
+          label={`Edit due date for "${todo.name}"`}
+          compact={compact}
+          disabled={isPending}
+        />
       </div>
 
       {/* Delete button */}

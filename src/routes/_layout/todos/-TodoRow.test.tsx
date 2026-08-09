@@ -1,7 +1,8 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { format } from "date-fns";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 
@@ -9,6 +10,12 @@ import type { Todo } from "#/lib/database.types";
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
+});
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-08-09T12:00:00.000Z"));
 });
 
 vi.mock("#/components/ui/popover", () => {
@@ -117,8 +124,28 @@ describe("TodoRow", () => {
     fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));
     fireEvent.click(screen.getByRole("button", { name: /december 25, 2026/i }));
 
-    expect(onUpdate).toHaveBeenCalledWith({ id: "todo-high", due_date: "2026-12-25" });
-    expect(screen.queryByRole("button", { name: /december 25, 2026/i })).toBeNull();
+    expect(onUpdate).toHaveBeenCalledWith({
+      id: "todo-high",
+      due_date: new Date(2026, 11, 25, 9, 0).toISOString(),
+    });
+  });
+
+  it("shows timestamp due dates with a compact local time", () => {
+    const dueDate = new Date(2026, 7, 9, 15, 30).toISOString();
+    renderTodoRow({ todo: { ...highTodo, due_date: dueDate } });
+
+    expect(screen.getByRole("button", { name: /edit due date for "deploy app"/i }).textContent).toContain(
+      format(new Date(dueDate), "MMM d, h:mm a"),
+    );
+  });
+
+  it("keeps overdue due dates visually destructive", () => {
+    renderTodoRow({ todo: { ...highTodo, due_date: "2026-08-08" } });
+
+    expect(
+      screen.getByRole("button", { name: /edit due date for "deploy app"/i }).parentElement
+        ?.className,
+    ).toContain("text-destructive");
   });
 
   it("sends the todo id when its delete control is clicked", () => {
