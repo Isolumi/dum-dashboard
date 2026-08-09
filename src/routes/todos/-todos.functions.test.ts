@@ -13,6 +13,8 @@ import {
   DeleteTodoSchema,
   GetTodoSchema,
   GetTodosInputSchema,
+  normalizeCreateTodoFields,
+  normalizeUpdateTodoFields,
   ReorderTodosSchema,
   UpdateTodoSchema,
 } from "./todos.functions";
@@ -54,6 +56,15 @@ describe("CreateTodoSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.status).toBe("not_started");
+    }
+  });
+
+  it("leaves due date precision open for server-side normalization", () => {
+    const result = CreateTodoSchema.safeParse({ name: "Test todo" });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.due_date_has_time).toBeUndefined();
     }
   });
 
@@ -108,8 +119,41 @@ describe("CreateTodoSchema", () => {
       CreateTodoSchema.safeParse({
         name: "Timed todo",
         due_date: "2026-08-09T15:30:00.000Z",
+        due_date_has_time: true,
       }).success,
     ).toBe(true);
+  });
+
+  it("normalizes timestamp due dates to time-aware metadata when omitted", () => {
+    const result = CreateTodoSchema.safeParse({
+      name: "Timed todo",
+      due_date: "2026-08-09T15:30:00.000Z",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(normalizeCreateTodoFields(result.data).due_date_has_time).toBe(true);
+  });
+
+  it("normalizes a cleared create due date to time-free metadata", () => {
+    const result = CreateTodoSchema.safeParse({
+      name: "No due date",
+      due_date: null,
+      due_date_has_time: true,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success)
+      expect(normalizeCreateTodoFields(result.data).due_date_has_time).toBe(false);
+  });
+
+  it("rejects non-boolean due date precision metadata", () => {
+    expect(
+      CreateTodoSchema.safeParse({
+        name: "Timed todo",
+        due_date: "2026-08-09T15:30:00.000Z",
+        due_date_has_time: "yes",
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -186,6 +230,47 @@ describe("UpdateTodoSchema", () => {
         due_date: "2026-08-09T11:30:00-04:00",
       }).success,
     ).toBe(true);
+  });
+
+  it("normalizes a timestamp update to time-aware metadata when omitted", () => {
+    const result = UpdateTodoSchema.safeParse({
+      id: TODO_ID,
+      due_date: "2026-08-09T11:30:00-04:00",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(normalizeUpdateTodoFields(result.data).due_date_has_time).toBe(true);
+  });
+
+  it("normalizes a cleared update due date to time-free metadata", () => {
+    const result = UpdateTodoSchema.safeParse({
+      id: TODO_ID,
+      due_date: null,
+      due_date_has_time: true,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success)
+      expect(normalizeUpdateTodoFields(result.data).due_date_has_time).toBe(false);
+  });
+
+  it("accepts an explicit due date time flag in updates", () => {
+    expect(
+      UpdateTodoSchema.safeParse({
+        id: TODO_ID,
+        due_date: "2026-08-09T11:30:00-04:00",
+        due_date_has_time: true,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects non-boolean due date precision metadata in updates", () => {
+    expect(
+      UpdateTodoSchema.safeParse({
+        id: TODO_ID,
+        due_date_has_time: 1,
+      }).success,
+    ).toBe(false);
   });
 });
 

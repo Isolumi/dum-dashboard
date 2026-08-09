@@ -59,6 +59,9 @@ vi.mock("#/components/ui/popover", () => {
       const context = React.useContext(PopoverContext);
       return context?.open ? <>{children}</> : null;
     },
+    PopoverTitle: ({ children, ...props }: React.ComponentProps<"h2">) => (
+      <h2 {...props}>{children}</h2>
+    ),
   };
 });
 
@@ -78,6 +81,7 @@ const highTodo: Todo = {
   priority: "high",
   status: "not_started",
   due_date: "2026-01-10",
+  due_date_has_time: false,
   sort_order: 0,
   created_at: "2026-01-01T00:00:00.000Z",
 };
@@ -127,16 +131,66 @@ describe("TodoRow", () => {
     expect(onUpdate).toHaveBeenCalledWith({
       id: "todo-high",
       due_date: new Date(2026, 11, 25, 9, 0).toISOString(),
+      due_date_has_time: true,
     });
   });
 
   it("shows timestamp due dates with a compact local time", () => {
     const dueDate = new Date(2026, 7, 9, 15, 30).toISOString();
-    renderTodoRow({ todo: { ...highTodo, due_date: dueDate } });
+    renderTodoRow({ todo: { ...highTodo, due_date: dueDate, due_date_has_time: true } });
 
     expect(
       screen.getByRole("button", { name: /edit due date for "deploy app"/i }).textContent,
     ).toContain(format(new Date(dueDate), "MMM d, h:mm a"));
+  });
+
+  it("keeps a migrated UTC-midnight due date on its original calendar day without a time", () => {
+    renderTodoRow({
+      todo: {
+        ...highTodo,
+        due_date: "2026-08-09T00:00:00.000Z",
+        due_date_has_time: false,
+      },
+    });
+
+    expect(
+      screen.getByRole("button", { name: /edit due date for "deploy app"/i }).textContent,
+    ).toBe(format(new Date(2026, 7, 9), "MMM d"));
+  });
+
+  it("clears both the due date and its time metadata", () => {
+    const { onUpdate } = renderTodoRow({
+      todo: {
+        ...highTodo,
+        due_date: new Date(2026, 7, 9, 15, 30).toISOString(),
+        due_date_has_time: true,
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));
+    fireEvent.click(screen.getByRole("button", { name: /clear due date/i }));
+
+    expect(onUpdate).toHaveBeenCalledWith({
+      id: "todo-high",
+      due_date: null,
+      due_date_has_time: false,
+    });
+  });
+
+  it("contains a selected compact date and time without overflowing its control", () => {
+    const dueDate = new Date(2026, 7, 9, 15, 30).toISOString();
+    renderTodoRow({
+      compact: true,
+      todo: { ...highTodo, due_date: dueDate, due_date_has_time: true },
+    });
+
+    const trigger = screen.getByRole("button", { name: /edit due date for "deploy app"/i });
+    const value = trigger.querySelector("span");
+
+    expect(trigger.parentElement?.className).toContain("w-32");
+    expect(trigger.className).toContain("overflow-hidden");
+    expect(value?.className).toContain("min-w-0");
+    expect(value?.className).toContain("truncate");
   });
 
   it("keeps overdue due dates visually destructive", () => {

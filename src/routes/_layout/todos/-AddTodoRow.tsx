@@ -8,7 +8,12 @@ import type { TodoPriority } from "#/lib/database.types";
 import { TodoDueDatePicker } from "./-TodoDueDatePicker";
 
 export interface AddTodoRowProps {
-  onCreate: (fields: { name: string; priority: "high" | "low"; due_date: string | null }) => void;
+  onCreate: (fields: {
+    name: string;
+    priority: "high" | "low";
+    due_date: string | null;
+    due_date_has_time: boolean;
+  }) => void;
   defaultPriority?: TodoPriority;
   compact?: boolean;
 }
@@ -22,6 +27,7 @@ function AddTodoRowComponent({
   const [name, setName] = useState("");
   const [priority, setPriority] = useState<TodoPriority>(defaultPriority);
   const [dueDate, setDueDate] = useState<string | null>(null);
+  const [dueDateHasTime, setDueDateHasTime] = useState(false);
 
   const collapsedRowRef = useRef<HTMLDivElement>(null);
 
@@ -35,6 +41,7 @@ function AddTodoRowComponent({
     setName("");
     setPriority(defaultPriority);
     setDueDate(null);
+    setDueDateHasTime(false);
     setIsExpanded(false);
   }, [defaultPriority]);
 
@@ -44,9 +51,10 @@ function AddTodoRowComponent({
       name: name.trim(),
       priority,
       due_date: dueDate,
+      due_date_has_time: dueDateHasTime,
     });
     resetForm();
-  }, [name, priority, dueDate, onCreate, resetForm]);
+  }, [name, priority, dueDate, dueDateHasTime, onCreate, resetForm]);
 
   if (!isExpanded) {
     return (
@@ -93,12 +101,7 @@ function AddTodoRowComponent({
         handleSubmit();
       }}
     >
-      <div
-        className={cn(
-          "flex min-h-[44px] items-center",
-          compact ? "gap-1 px-2 py-1" : "gap-2 px-4 py-2",
-        )}
-      >
+      <div className={cn("flex min-h-[44px] items-center", compact ? "gap-1 px-2" : "gap-2 px-4")}>
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -114,39 +117,40 @@ function AddTodoRowComponent({
           placeholder="Todo name..."
           autoFocus
           className={cn(
-            "h-11 flex-1 rounded-lg border border-input/40 bg-input/20 px-3 shadow-none transition-colors motion-reduce:transition-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:bg-input/30 focus-visible:ring-2 focus-visible:ring-ring/30",
+            "h-9 flex-1 rounded-lg border border-input/40 bg-input/20 px-3 shadow-none transition-colors motion-reduce:transition-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:bg-input/30 focus-visible:ring-2 focus-visible:ring-ring/30",
             compact ? "text-sm" : "text-base",
           )}
           aria-label="New todo name"
         />
 
-        <label
+        <button
+          type="button"
+          role="switch"
+          aria-label="High priority"
+          aria-checked={priority === "high"}
+          onClick={() => setPriority((current) => (current === "high" ? "low" : "high"))}
           className={cn(
-            "flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-lg px-2 text-muted-foreground",
+            "flex h-9 min-w-[3.75rem] shrink-0 cursor-pointer items-center justify-center rounded-full border border-border bg-muted/50 px-2 text-muted-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-checked:bg-accent aria-checked:text-foreground",
             compact ? "text-xs" : "text-sm",
           )}
         >
-          <input
-            type="checkbox"
-            role="switch"
-            aria-label="High priority"
-            checked={priority === "high"}
-            onChange={(event) => setPriority(event.target.checked ? "high" : "low")}
-            className="size-4 shrink-0 accent-[var(--destructive)]"
-          />
-          <span className="hidden sm:inline">High</span>
-        </label>
+          {priority === "high" ? "High" : "Low"}
+        </button>
 
-        <div className={cn("shrink-0", compact ? "w-11" : "w-40")}>
+        <div className="w-11 shrink-0">
           <TodoDueDatePicker
             value={dueDate}
-            onChange={setDueDate}
+            onChange={(value, hasTime) => {
+              setDueDate(value);
+              setDueDateHasTime(hasTime);
+            }}
             label="Choose date and time"
             compact={compact}
+            showValue={false}
           />
         </div>
 
-        <Button type="submit" size="sm" className="min-h-11 shrink-0">
+        <Button type="submit" size="sm" className="h-9 min-h-0 shrink-0">
           Add
         </Button>
       </div>
