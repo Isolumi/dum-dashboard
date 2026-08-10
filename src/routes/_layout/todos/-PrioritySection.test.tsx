@@ -6,6 +6,15 @@ import { cleanup, render, screen } from "@testing-library/react";
 
 import type { Todo } from "#/lib/database.types";
 
+const dndTestState = vi.hoisted(() => ({
+  useDroppable: vi.fn(() => ({ setNodeRef: () => undefined })),
+}));
+
+vi.mock("@dnd-kit/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@dnd-kit/core")>();
+  return { ...actual, useDroppable: dndTestState.useDroppable };
+});
+
 afterEach(() => {
   cleanup();
 });
@@ -33,7 +42,6 @@ describe("PrioritySection", () => {
         todos={[highTodo]}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
-        onReorder={vi.fn()}
       />,
     );
 
@@ -43,5 +51,19 @@ describe("PrioritySection", () => {
       screen.getByRole("button", { name: /change "deploy app" priority to low/i }),
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: /add a new todo/i })).toBeNull();
+  });
+
+  it("registers the priority container as a drop target", () => {
+    render(
+      <PrioritySection
+        priority="high"
+        label="High priority"
+        todos={[highTodo]}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(dndTestState.useDroppable).toHaveBeenCalledWith({ id: "priority-high" });
   });
 });

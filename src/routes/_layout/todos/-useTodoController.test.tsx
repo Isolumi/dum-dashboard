@@ -391,6 +391,28 @@ describe("useTodoController", () => {
     expect(result.current.mutationError).toMatch(/reorder failed/i);
   });
 
+  it("moves optimistically across priorities and restores both lists when persistence fails", async () => {
+    const first = makeTodo({ id: "first", name: "First", sort_order: 0 });
+    const second = makeTodo({ id: "second", name: "Second", sort_order: 1 });
+    const lowTodo = makeTodo({ id: "low", name: "Low", priority: "low", sort_order: 0 });
+    vi.mocked(updateTodo).mockRejectedValueOnce(new Error("offline"));
+    const { result } = renderHook(() => useTodoController([first, second, lowTodo]));
+    let mutation!: Promise<void>;
+
+    act(() => {
+      mutation = result.current.move(first.id, "low", 0);
+    });
+
+    expect(result.current.grouped.high.map((todo) => todo.id)).toEqual([second.id]);
+    expect(result.current.grouped.low.map((todo) => todo.id)).toEqual([first.id, lowTodo.id]);
+
+    await act(async () => mutation);
+
+    expect(result.current.grouped.high.map((todo) => todo.id)).toEqual([first.id, second.id]);
+    expect(result.current.grouped.low.map((todo) => todo.id)).toEqual([lowTodo.id]);
+    expect(result.current.mutationError).toMatch(/reorder failed/i);
+  });
+
   it("does not erase a concurrent successful update when reorder rolls back", async () => {
     const first = makeTodo({ id: "first", name: "First", sort_order: 0 });
     const second = makeTodo({ id: "second", name: "Second", sort_order: 1 });

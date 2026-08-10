@@ -58,6 +58,7 @@ export interface TodoController {
   update(fields: TodoUpdateFields): Promise<void>;
   remove(id: string): Promise<void>;
   reorder(priority: TodoPriority, orderedIds: string[]): Promise<void>;
+  move(id: string, targetPriority: TodoPriority, targetIndex: number): Promise<void>;
 }
 
 export function useTodoController(initialTodos?: Todo[]): TodoController {
@@ -345,6 +346,64 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
     [beginMutation, endMutation, replaceTodos],
   );
 
+  const move = useCallback(
+    async (id: string, targetPriority: TodoPriority, targetIndex: number): Promise<void> => {
+      if (pendingIdsRef.current.has(id)) return;
+      const previousTodos = todosRef.current;
+      const movedTodo = previousTodos.find((todo) => todo.id === id);
+      if (!movedTodo || movedTodo.priority === targetPriority) return;
+
+      const groupedTodos = groupAndSortTodos(previousTodos);
+      const sourceTodos = groupedTodos[movedTodo.priority].filter((todo) => todo.id !== id);
+      const targetTodos = [...groupedTodos[targetPriority]];
+      const normalizedTargetIndex = Math.max(0, Math.min(targetIndex, targetTodos.length));
+      targetTodos.splice(normalizedTargetIndex, 0, { ...movedTodo, priority: targetPriority });
+
+      const normalizedSourceTodos = sourceTodos.map((todo, sort_order) => ({
+        ...todo,
+        sort_order,
+      }));
+      const normalizedTargetTodos = targetTodos.map((todo, sort_order) => ({
+        ...todo,
+        sort_order,
+      }));
+      const normalizedTodos = [...normalizedSourceTodos, ...normalizedTargetTodos];
+      const normalizedById = new Map(normalizedTodos.map((todo) => [todo.id, todo] as const));
+      const affectedIds = normalizedTodos.map((todo) => todo.id);
+
+      beginMutation();
+      replaceTodos((current) =>
+        current.map((todo) => normalizedById.get(todo.id) ?? todo),
+      );
+
+      try {
+        await Promise.all([
+          updateTodo({
+            data: {
+              id,
+              priority: targetPriority,
+              sort_order: normalizedTargetIndex,
+            },
+          }),
+          reorderTodos({
+            data: {
+              updates: affectedIds.map((affectedId) => ({
+                id: affectedId,
+                sort_order: normalizedById.get(affectedId)?.sort_order ?? 0,
+              })),
+            },
+          }),
+        ]);
+      } catch {
+        replaceTodos(() => previousTodos);
+        setMutationError(REORDER_ERROR);
+      } finally {
+        endMutation();
+      }
+    },
+    [beginMutation, endMutation, replaceTodos],
+  );
+
   const retry = useCallback(async (): Promise<void> => loadTodos(), [loadTodos]);
   const grouped = useMemo(() => groupAndSortTodos(todos), [todos]);
 
@@ -360,5 +419,6 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
     update,
     remove,
     reorder,
+    move,
   };
 }

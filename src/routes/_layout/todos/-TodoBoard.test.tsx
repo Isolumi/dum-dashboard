@@ -1,11 +1,17 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 
 import type { TodoController } from "./-useTodoController";
+
+const dndTestState = vi.hoisted(() => ({
+  onDragEndHandlers: [] as Array<
+    (event: { active: { id: string }; over: { id: string } | null }) => void
+  >,
+}));
 
 vi.mock("#/components/ui/popover", () => {
   const PopoverContext = React.createContext<{
@@ -58,10 +64,32 @@ vi.mock("#/components/ui/calendar", () => ({
   Calendar: () => <div>Calendar</div>,
 }));
 
+vi.mock("@dnd-kit/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@dnd-kit/core")>();
+
+  return {
+    ...actual,
+    DndContext: ({
+      children,
+      onDragEnd,
+    }: {
+      children: React.ReactNode;
+      onDragEnd: (event: { active: { id: string }; over: { id: string } | null }) => void;
+    }) => {
+      dndTestState.onDragEndHandlers.push(onDragEnd);
+      return <>{children}</>;
+    },
+  };
+});
+
 import { TodoBoard } from "./-TodoBoard";
 
 afterEach(() => {
   cleanup();
+});
+
+beforeEach(() => {
+  dndTestState.onDragEndHandlers.length = 0;
 });
 
 function makeController(overrides: Partial<TodoController> = {}): TodoController {
@@ -77,7 +105,21 @@ function makeController(overrides: Partial<TodoController> = {}): TodoController
     update: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
     reorder: vi.fn().mockResolvedValue(undefined),
+    move: vi.fn().mockResolvedValue(undefined),
     ...overrides,
+  };
+}
+
+function makeTodo(id: string, priority: "high" | "low", sort_order: number) {
+  return {
+    id,
+    name: id,
+    priority,
+    status: "not_started" as const,
+    due_date: null,
+    due_date_has_time: false,
+    sort_order,
+    created_at: "2026-08-10T00:00:00.000Z",
   };
 }
 
@@ -153,5 +195,43 @@ describe("TodoBoard", () => {
         .getByRole("region", { name: /todo board/i })
         .contains(screen.getByText(/save failed/i)),
     ).toBe(true);
+  });
+
+  it("moves a High todo into the Low section when the board drag ends over a Low todo", () => {
+    const highTodo = makeTodo("high-todo", "high", 0);
+    const lowTodo = makeTodo("low-todo", "low", 0);
+    const move = vi.fn().mockResolvedValue(undefined);
+    const controller = makeController({
+      todos: [highTodo, lowTodo],
+      grouped: { high: [highTodo], low: [lowTodo] },
+      move,
+    });
+    render(<TodoBoard controller={controller} variant="full" />);
+
+    dndTestState.onDragEndHandlers[0]?.({
+      active: { id: highTodo.id },
+      over: { id: lowTodo.id },
+    });
+
+    expect(move).toHaveBeenCalledWith(highTodo.id, "low", 0);
+  });
+
+  it("reorders High todos when the board drag ends in the same priority", () => {
+    const first = makeTodo("first", "high", 0);
+    const second = makeTodo("second", "high", 1);
+    const reorder = vi.fn().mockResolvedValue(undefined);
+    const controller = makeController({
+      todos: [first, second],
+      grouped: { high: [first, second], low: [] },
+      reorder,
+    });
+    render(<TodoBoard controller={controller} variant="full" />);
+
+    dndTestState.onDragEndHandlers[0]?.({
+      active: { id: first.id },
+      over: { id: second.id },
+    });
+
+    expect(reorder).toHaveBeenCalledWith("high", [second.id, first.id]);
   });
 });

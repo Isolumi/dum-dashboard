@@ -1,16 +1,7 @@
-import { memo, useId, useMemo } from "react";
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import type { DragEndEvent } from "@dnd-kit/core";
+import { memo, useMemo } from "react";
+import { useDroppable } from "@dnd-kit/core";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -27,7 +18,6 @@ export interface PrioritySectionProps {
   todos: Todo[];
   onUpdate: TodoRowProps["onUpdate"];
   onDelete: TodoRowProps["onDelete"];
-  onReorder: (priority: TodoPriority, orderedIds: string[]) => void;
   compact?: boolean;
   isPending?: (id: string) => boolean;
 }
@@ -48,6 +38,7 @@ function SortableTodoRow({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: todo.id,
     disabled: isPending || dragDisabled,
+    data: { priority: todo.priority },
   });
 
   const style = {
@@ -81,41 +72,18 @@ function PrioritySectionComponent({
   todos,
   onUpdate,
   onDelete,
-  onReorder,
   compact = false,
   isPending,
 }: PrioritySectionProps) {
-  const dndId = useId();
   const todoIds = useMemo(() => todos.map((t) => t.id), [todos]);
   const hasPendingTodo = todos.some((todo) => isPending?.(todo.id));
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  );
-
-  function handleDragEnd(event: DragEndEvent) {
-    if (hasPendingTodo) return;
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = todos.findIndex((t) => t.id === active.id);
-    const newIndex = todos.findIndex((t) => t.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    const reordered = [...todos];
-    const [moved] = reordered.splice(oldIndex, 1);
-    reordered.splice(newIndex, 0, moved);
-
-    onReorder(
-      priority,
-      reordered.map((t) => t.id),
-    );
-  }
+  const { setNodeRef: setDroppableNodeRef } = useDroppable({ id: `priority-${priority}` });
 
   return (
-    <div className={cn("flex flex-col", compact ? "gap-0.5" : "gap-1")}>
+    <div
+      ref={setDroppableNodeRef}
+      className={cn("flex flex-col", compact ? "gap-0.5" : "gap-1")}
+    >
       {/* Section header */}
       <div
         className={cn(
@@ -136,28 +104,21 @@ function PrioritySectionComponent({
       </div>
 
       {/* Todo rows */}
-      <DndContext
-        id={dndId}
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext items={todoIds} strategy={verticalListSortingStrategy}>
-          <div role="list">
-            {todos.map((todo) => (
-              <SortableTodoRow
-                key={todo.id}
-                todo={todo}
-                onUpdate={onUpdate}
-                onDelete={onDelete}
-                compact={compact}
-                isPending={isPending?.(todo.id)}
-                dragDisabled={hasPendingTodo}
-              />
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
+      <SortableContext items={todoIds} strategy={verticalListSortingStrategy}>
+        <div role="list">
+          {todos.map((todo) => (
+            <SortableTodoRow
+              key={todo.id}
+              todo={todo}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+              compact={compact}
+              isPending={isPending?.(todo.id)}
+              dragDisabled={hasPendingTodo}
+            />
+          ))}
+        </div>
+      </SortableContext>
     </div>
   );
 }
