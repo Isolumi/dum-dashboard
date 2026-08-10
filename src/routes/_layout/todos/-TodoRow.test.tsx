@@ -219,31 +219,46 @@ describe("TodoRow", () => {
     });
 
     expect(row.className).toContain("min-h-[44px]");
-    expect(row.className).toContain("px-2");
+    expect(row.className).toContain("px-3");
     expect(row.className).toContain("motion-reduce:transition-none");
     expect(screen.getByRole("button", { name: "Deploy app" }).className).toContain("text-sm");
     expect(screen.getByRole("button", { name: /mark "deploy app" as started/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /edit due date for "deploy app"/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /delete "deploy app"/i })).toBeTruthy();
     expect(priorityControl.textContent).toBe("");
-    expect(priorityControl.className).toContain("opacity-0");
-    expect(priorityControl.className).toContain("group-hover:opacity-100");
+    expect(priorityControl.parentElement?.className).toContain("opacity-0");
+    expect(priorityControl.parentElement?.className).toContain("group-hover:opacity-100");
 
     priorityControl.focus();
     expect(document.activeElement).toBe(priorityControl);
   });
 
-  it("uses a two-line compact layout before fixed controls crowd out the todo name", () => {
+  it("uses one aligned compact grid without a hidden leading drag column", () => {
     renderTodoRow({ compact: true });
 
     const row = screen.getByRole("listitem");
     const nameControl = screen.getByRole("button", { name: "Deploy app" });
+    const statusControl = screen.getByRole("button", { name: /mark "deploy app" as started/i });
+    const dragControl = screen.getByRole("button", { name: /drag to reorder "deploy app"/i });
 
-    expect(row.className).toContain("flex-wrap");
+    expect(row.className).toContain("grid-cols-[2.75rem_minmax(0,1fr)_auto]");
     expect(nameControl.className).toContain("min-w-0");
-    expect(nameControl.className).toContain("max-[480px]:order-last");
-    expect(nameControl.className).toContain("max-[480px]:basis-full");
     expect(nameControl.className).toContain("overflow-hidden");
+    expect(row.firstElementChild).toBe(statusControl);
+    expect(
+      dragControl.compareDocumentPosition(nameControl) & Node.DOCUMENT_POSITION_PRECEDING,
+    ).toBe(Node.DOCUMENT_POSITION_PRECEDING);
+  });
+
+  it("keeps the full-page drag handle before the status control", () => {
+    renderTodoRow();
+
+    const row = screen.getByRole("listitem");
+    const dragControl = screen.getByRole("button", { name: /drag to reorder "deploy app"/i });
+    const statusControl = screen.getByRole("button", { name: /mark "deploy app" as started/i });
+
+    expect(row.firstElementChild).toBe(dragControl);
+    expect(row.children[1]).toBe(statusControl);
   });
 
   it("identifies a pending compact todo and disables its actions until it is saved", () => {

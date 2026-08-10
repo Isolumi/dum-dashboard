@@ -17,6 +17,10 @@ reducing duplicate controls, unnecessary labels, and layout movement.
   an aggressive red treatment.
 - Tighten compact row padding and allow the Todo name to use the available
   horizontal space.
+- Align section labels, Todo names, and the add-row label to one vertical text
+  line. Do not reserve a hidden drag column before the Todo status control.
+- Keep hover-only row actions in an overlay so they do not shorten Todo names
+  when the actions are hidden.
 
 ### Todo row actions
 
@@ -37,6 +41,8 @@ reducing duplicate controls, unnecessary labels, and layout movement.
   a calendar icon, and an Add action.
 - The priority switch displays `Low` when off and `High` when on. Off maps to
   the existing `low` value; on maps to `high`.
+- Use a native checkbox switch with a visible track and moving thumb. Do not
+  style the control as a pill button.
 - The calendar icon opens a date/time picker that supports both picker selection
   and typed date/time input.
 - Enter submits a valid Todo; Escape cancels and restores the add row.

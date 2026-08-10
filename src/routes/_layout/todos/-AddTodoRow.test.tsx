@@ -118,10 +118,11 @@ describe("AddTodoRow (collapsed state)", () => {
 });
 
 describe("AddTodoRow (expanded state)", () => {
-  it("shows the outer wrapper with bg-accent/50 class when expanded", () => {
+  it("shows a quiet bordered wrapper when expanded", () => {
     const container = renderExpanded();
     const wrapper = container.firstElementChild;
-    expect(wrapper?.className).toContain("bg-accent/50");
+    expect(wrapper?.className).toContain("bg-accent/30");
+    expect(wrapper?.className).toContain("ring-border/50");
   });
 
   it("focuses the name input and exposes the compact inline controls", () => {
@@ -131,11 +132,21 @@ describe("AddTodoRow (expanded state)", () => {
     const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
 
     expect(document.activeElement).toBe(nameInput);
-    expect(prioritySwitch.textContent).toBe("Low");
+    expect(prioritySwitch.tagName).toBe("INPUT");
+    expect(prioritySwitch.getAttribute("type")).toBe("checkbox");
+    expect(prioritySwitch.className).toContain("inset-0");
+    expect(prioritySwitch.className).toContain("size-full");
+    expect(prioritySwitch.nextElementSibling?.getAttribute("data-slot")).toBe(
+      "priority-switch-track",
+    );
+    expect(
+      prioritySwitch.nextElementSibling?.querySelector('[data-slot="priority-switch-thumb"]'),
+    ).toBeTruthy();
+    expect(prioritySwitch.nextElementSibling?.textContent).toBe("Low");
     expect(prioritySwitch.getAttribute("aria-checked")).toBe("false");
     expect(prioritySwitch.className).not.toContain("destructive");
     fireEvent.click(prioritySwitch);
-    expect(prioritySwitch.textContent).toBe("High");
+    expect(prioritySwitch.nextElementSibling?.textContent).toBe("High");
     expect(prioritySwitch.getAttribute("aria-checked")).toBe("true");
     expect(dateTrigger.querySelector("svg")).toBeTruthy();
     expect(dateTrigger.querySelector("svg")?.className.baseVal).not.toContain("opacity-0");
@@ -266,7 +277,7 @@ describe("AddTodoRow (compact state)", () => {
     const addControl = screen.getByRole("button", { name: /add a new todo/i });
 
     expect(addControl.className).toContain("min-h-[44px]");
-    expect(addControl.className).toContain("px-2");
+    expect(addControl.className).toContain("px-3");
     expect(screen.getByText("Add a todo...").className).toContain("text-xs");
     expect(addControl.className).toContain("motion-reduce:transition-none");
 
@@ -292,7 +303,7 @@ describe("AddTodoRow (compact state)", () => {
     expect(controls?.className).toContain("min-h-[44px]");
     expect(controls?.className).not.toMatch(/\bpy-/);
     expect(nameInput.className).toContain("h-9");
-    expect(prioritySwitch.className).toContain("h-9");
+    expect(prioritySwitch.nextElementSibling?.className).toContain("h-7");
     expect(dateTrigger.className).toContain("h-9");
     expect(addButton.className).toContain("h-9");
   });
@@ -306,7 +317,7 @@ describe("AddTodoRow (compact state)", () => {
     const addControl = screen.getByRole("button", { name: /add a new todo/i });
 
     expect(addControl.className).toContain("min-h-[44px]");
-    expect(addControl.className).toContain("px-2");
+    expect(addControl.className).toContain("px-3");
     expect(screen.getByText("Add a todo...").className).toContain("text-xs");
     expect(addControl.className).toContain("motion-reduce:transition-none");
 

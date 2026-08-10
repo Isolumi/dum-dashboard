@@ -120,7 +120,7 @@ function PrioritySectionComponent({
       <div
         className={cn(
           "flex items-center",
-          compact ? "gap-1 px-2 pt-2 pb-0.5" : "gap-2 px-4 pt-4 pb-1",
+          compact ? "gap-1 pr-3 pl-[3.75rem] pt-2 pb-0.5" : "gap-2 px-4 pt-4 pb-1",
         )}
       >
         <span

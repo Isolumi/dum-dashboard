@@ -135,20 +135,21 @@ function TodoRowComponent({
     <div
       role="listitem"
       className={cn(
-        "group flex min-h-[44px] items-center transition-colors motion-reduce:transition-none hover:bg-accent",
-        compact ? "flex-wrap gap-x-1 gap-y-0.5 px-2 py-1" : "gap-2 px-4",
+        "group min-h-[44px] items-center rounded-md transition-colors motion-reduce:transition-none hover:bg-accent",
+        compact ? "grid grid-cols-[2.75rem_minmax(0,1fr)_auto] gap-1 px-3" : "flex gap-2 px-4",
         todo.status === "complete" && "opacity-60",
       )}
     >
-      {/* Drag handle */}
-      <button
-        {...dragListeners}
-        disabled={dragDisabled || isPending}
-        className="min-h-11 min-w-11 shrink-0 cursor-grab rounded-md text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing disabled:cursor-default"
-        aria-label={`Drag to reorder "${todo.name}"`}
-      >
-        <GripVertical className="size-4" />
-      </button>
+      {!compact && (
+        <button
+          {...dragListeners}
+          disabled={dragDisabled || isPending}
+          className="min-h-11 min-w-11 shrink-0 cursor-grab rounded-md text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing disabled:cursor-default"
+          aria-label={`Drag to reorder "${todo.name}"`}
+        >
+          <GripVertical className="size-4" />
+        </button>
+      )}
 
       {/* Status icon button */}
       <Button
@@ -175,15 +176,13 @@ function TodoRowComponent({
           aria-label="Edit todo name"
           className={cn(
             "min-h-11 flex-1 border-0 p-0 shadow-none focus-visible:ring-1 focus-visible:ring-ring/50",
-            compact
-              ? "min-w-0 text-sm max-[480px]:order-last max-[480px]:basis-full max-[480px]:flex-none"
-              : "text-base",
+            compact ? "min-w-0 text-sm" : "text-base",
           )}
         />
       ) : (
         <button
           type="button"
-          className={`flex min-h-11 min-w-0 flex-1 cursor-pointer items-center overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${compact ? "text-sm max-[480px]:order-last max-[480px]:basis-full max-[480px]:flex-none" : "text-base"} ${todo.status === "complete" ? "text-muted-foreground line-through" : ""}`}
+          className={`flex min-h-11 min-w-0 flex-1 cursor-pointer items-center overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${compact ? "text-sm" : "text-base"} ${todo.status === "complete" ? "text-muted-foreground line-through" : ""}`}
           onClick={() => setIsEditingName(true)}
           disabled={isPending}
           aria-label={isPending ? `${todo.name} (saving)` : undefined}
@@ -195,55 +194,105 @@ function TodoRowComponent({
         </button>
       )}
 
-      {/* Priority switcher */}
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={() => onUpdate({ id: todo.id, priority: PRIORITY_NEXT[todo.priority] })}
-        disabled={isPending}
-        aria-label={`Change "${todo.name}" priority to ${PRIORITY_LABEL[PRIORITY_NEXT[todo.priority]]}`}
-        className={cn(
-          "min-h-11 min-w-11 shrink-0 px-2 font-medium",
-          compact
-            ? "opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 text-muted-foreground hover:text-foreground"
-            : "text-sm",
-          compact ? "justify-center px-0" : PRIORITY_STYLES[todo.priority],
-        )}
-      >
-        {compact ? PRIORITY_ICONS[todo.priority] : PRIORITY_LABEL[todo.priority]}
-      </Button>
+      {compact ? (
+        <div className="relative flex min-w-11 shrink-0 items-center">
+          <div className="absolute right-full z-10 flex items-center rounded-md bg-accent/95 opacity-0 shadow-sm transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-within:opacity-100 [@media(pointer:coarse)]:static [@media(pointer:coarse)]:opacity-100">
+            <button
+              {...dragListeners}
+              disabled={dragDisabled || isPending}
+              className="min-h-11 min-w-11 shrink-0 cursor-grab rounded-md text-muted-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing disabled:cursor-default"
+              aria-label={`Drag to reorder "${todo.name}"`}
+            >
+              <GripVertical className="size-4" />
+            </button>
 
-      {/* Due date — calendar popover */}
-      <div
-        className={cn(
-          "shrink-0 text-right",
-          compact ? "w-32" : "w-40",
-          todo.due_date && (isOverdue ? "text-destructive" : "text-muted-foreground"),
-        )}
-      >
-        <TodoDueDatePicker
-          value={todo.due_date}
-          onChange={(due_date, due_date_has_time) =>
-            onUpdate({ id: todo.id, due_date, due_date_has_time })
-          }
-          label={`Edit due date for "${todo.name}"`}
-          compact={compact}
-          hasTime={todo.due_date_has_time}
-          disabled={isPending}
-        />
-      </div>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onUpdate({ id: todo.id, priority: PRIORITY_NEXT[todo.priority] })}
+              disabled={isPending}
+              aria-label={`Change "${todo.name}" priority to ${PRIORITY_LABEL[PRIORITY_NEXT[todo.priority]]}`}
+              className="min-h-11 min-w-11 shrink-0 justify-center px-0 font-medium text-muted-foreground hover:text-foreground"
+            >
+              {PRIORITY_ICONS[todo.priority]}
+            </Button>
 
-      {/* Delete button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => onDelete(todo.id)}
-        disabled={isPending}
-        aria-label={`Delete "${todo.name}"`}
-        className="size-11 shrink-0 opacity-0 transition-opacity motion-reduce:transition-none hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100"
-      >
-        <Trash2 />
-      </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onDelete(todo.id)}
+              disabled={isPending}
+              aria-label={`Delete "${todo.name}"`}
+              className="size-11 shrink-0 hover:text-destructive"
+            >
+              <Trash2 />
+            </Button>
+          </div>
+
+          <div
+            className={cn(
+              "shrink-0 text-right",
+              todo.due_date ? "w-32" : "w-11",
+              todo.due_date && (isOverdue ? "text-destructive" : "text-muted-foreground"),
+            )}
+          >
+            <TodoDueDatePicker
+              value={todo.due_date}
+              onChange={(due_date, due_date_has_time) =>
+                onUpdate({ id: todo.id, due_date, due_date_has_time })
+              }
+              label={`Edit due date for "${todo.name}"`}
+              compact
+              hasTime={todo.due_date_has_time}
+              disabled={isPending}
+            />
+          </div>
+        </div>
+      ) : (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onUpdate({ id: todo.id, priority: PRIORITY_NEXT[todo.priority] })}
+            disabled={isPending}
+            aria-label={`Change "${todo.name}" priority to ${PRIORITY_LABEL[PRIORITY_NEXT[todo.priority]]}`}
+            className={cn(
+              "min-h-11 min-w-11 shrink-0 px-2 text-sm font-medium",
+              PRIORITY_STYLES[todo.priority],
+            )}
+          >
+            {PRIORITY_LABEL[todo.priority]}
+          </Button>
+
+          <div
+            className={cn(
+              "w-40 shrink-0 text-right",
+              todo.due_date && (isOverdue ? "text-destructive" : "text-muted-foreground"),
+            )}
+          >
+            <TodoDueDatePicker
+              value={todo.due_date}
+              onChange={(due_date, due_date_has_time) =>
+                onUpdate({ id: todo.id, due_date, due_date_has_time })
+              }
+              label={`Edit due date for "${todo.name}"`}
+              hasTime={todo.due_date_has_time}
+              disabled={isPending}
+            />
+          </div>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onDelete(todo.id)}
+            disabled={isPending}
+            aria-label={`Delete "${todo.name}"`}
+            className="size-11 shrink-0 opacity-0 transition-opacity motion-reduce:transition-none hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100"
+          >
+            <Trash2 />
+          </Button>
+        </>
+      )}
     </div>
   );
 }
