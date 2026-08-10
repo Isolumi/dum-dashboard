@@ -152,13 +152,31 @@ describe("AddTodoRow (expanded state)", () => {
     expect(switchTrack.className).toContain("h-[1.875rem]");
     expect(switchTrack.className).toContain("w-[4.375rem]");
     expect(switchTrack.className).toContain("peer-focus-visible:ring-2");
+    expect(switchTrack.className).toContain("duration-200");
+    expect(switchTrack.className).toContain("ease-out");
+    expect(switchTrack.className).toContain("motion-reduce:transition-none");
     expect(switchThumb).toBeTruthy();
     expect(switchThumb?.getAttribute("class")).toContain("size-[1.375rem]");
-    expect(prioritySwitch.nextElementSibling?.textContent).toBe("Low");
+    expect(switchThumb?.getAttribute("class")).toContain("duration-200");
+    expect(switchThumb?.getAttribute("class")).toContain("ease-out");
+    expect(switchThumb?.getAttribute("class")).toContain("motion-reduce:transition-none");
+    const lowLabel = switchTrack.querySelector('[data-slot="priority-switch-low-label"]');
+    const highLabel = switchTrack.querySelector('[data-slot="priority-switch-high-label"]');
+    expect(lowLabel?.textContent).toBe("Low");
+    expect(highLabel?.textContent).toBe("High");
+    expect(lowLabel?.getAttribute("class")).toContain("duration-200");
+    expect(lowLabel?.getAttribute("class")).toContain("ease-out");
+    expect(lowLabel?.getAttribute("class")).toContain("motion-reduce:transition-none");
+    expect(highLabel?.getAttribute("class")).toContain("duration-200");
+    expect(highLabel?.getAttribute("class")).toContain("ease-out");
+    expect(highLabel?.getAttribute("class")).toContain("motion-reduce:transition-none");
+    expect(prioritySwitch.nextElementSibling?.textContent).toContain("Low");
+    expect(prioritySwitch.nextElementSibling?.textContent).toContain("High");
     expect(prioritySwitch.getAttribute("aria-checked")).toBe("false");
     expect(prioritySwitch.className).not.toContain("destructive");
     fireEvent.click(prioritySwitch);
-    expect(prioritySwitch.nextElementSibling?.textContent).toBe("High");
+    expect(prioritySwitch.nextElementSibling?.textContent).toContain("Low");
+    expect(prioritySwitch.nextElementSibling?.textContent).toContain("High");
     expect(prioritySwitch.getAttribute("aria-checked")).toBe("true");
     expect(
       switchTrack.querySelector('[data-slot="priority-switch-thumb"]')?.getAttribute("class"),
@@ -336,13 +354,12 @@ describe("AddTodoRow (compact state)", () => {
     fireEvent.click(screen.getByRole("button", { name: /add a new todo/i }));
 
     const controls = container.querySelector("form")?.firstElementChild;
-    const alignmentSpacer = controls?.firstElementChild;
     const addButton = screen.getByRole("button", { name: /^add$/i });
 
     expect(controls?.className).toContain("grid-cols-[minmax(5rem,1fr)_auto_auto]");
-    expect(controls?.className).toContain("sm:grid-cols-[2.75rem_minmax(5rem,1fr)_auto_auto_auto]");
-    expect(alignmentSpacer?.className).toContain("hidden");
-    expect(alignmentSpacer?.className).toContain("sm:block");
+    expect(controls?.className).toContain("sm:grid-cols-[minmax(5rem,1fr)_auto_auto_auto]");
+    expect(controls?.className).not.toContain("2.75rem");
+    expect(controls?.querySelector('span.hidden[aria-hidden="true"]')).toBeNull();
     expect(addButton.className).toContain("col-span-3");
     expect(addButton.className).toContain("sm:col-span-1");
   });
