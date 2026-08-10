@@ -99,6 +99,16 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
     setPendingIds(new Set(pendingIdsRef.current));
   }, []);
 
+  const markPendingIds = useCallback((ids: string[]) => {
+    for (const id of ids) pendingIdsRef.current.add(id);
+    setPendingIds(new Set(pendingIdsRef.current));
+  }, []);
+
+  const clearPendingIds = useCallback((ids: string[]) => {
+    for (const id of ids) pendingIdsRef.current.delete(id);
+    setPendingIds(new Set(pendingIdsRef.current));
+  }, []);
+
   useEffect(() => {
     if (!mutationError) return;
     const timer = setTimeout(() => setMutationError(null), MUTATION_ERROR_DURATION_MS);
@@ -370,38 +380,65 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
       const normalizedTodos = [...normalizedSourceTodos, ...normalizedTargetTodos];
       const normalizedById = new Map(normalizedTodos.map((todo) => [todo.id, todo] as const));
       const affectedIds = normalizedTodos.map((todo) => todo.id);
-
-      beginMutation();
-      replaceTodos((current) =>
-        current.map((todo) => normalizedById.get(todo.id) ?? todo),
+      if (affectedIds.some((affectedId) => pendingIdsRef.current.has(affectedId))) return;
+      const previousPositions = new Map(
+        affectedIds.map((affectedId) => {
+          const todo = previousTodos.find((candidate) => candidate.id === affectedId)!;
+          return [affectedId, { priority: todo.priority, sort_order: todo.sort_order }] as const;
+        }),
       );
+      const nextOrderUpdates = affectedIds.map((affectedId) => ({
+        id: affectedId,
+        sort_order: normalizedById.get(affectedId)!.sort_order,
+      }));
+      const previousOrderUpdates = affectedIds.map((affectedId) => ({
+        id: affectedId,
+        sort_order: previousPositions.get(affectedId)!.sort_order,
+      }));
+
+      markPendingIds(affectedIds);
+      beginMutation();
+      replaceTodos((current) => current.map((todo) => normalizedById.get(todo.id) ?? todo));
 
       try {
-        await Promise.all([
-          updateTodo({
+        await reorderTodos({ data: { updates: nextOrderUpdates } });
+        await updateTodo({
+          data: {
+            id,
+            priority: targetPriority,
+            sort_order: normalizedTargetIndex,
+          },
+        });
+      } catch {
+        try {
+          await updateTodo({
             data: {
               id,
-              priority: targetPriority,
-              sort_order: normalizedTargetIndex,
+              priority: movedTodo.priority,
+              sort_order: movedTodo.sort_order,
             },
+          });
+        } catch {
+          // Continue so that order compensation is still attempted.
+        }
+        try {
+          await reorderTodos({ data: { updates: previousOrderUpdates } });
+        } catch {
+          // Local rollback and the mutation error still apply if compensation fails.
+        }
+        replaceTodos((current) =>
+          current.map((todo) => {
+            const previousPosition = previousPositions.get(todo.id);
+            return previousPosition ? { ...todo, ...previousPosition } : todo;
           }),
-          reorderTodos({
-            data: {
-              updates: affectedIds.map((affectedId) => ({
-                id: affectedId,
-                sort_order: normalizedById.get(affectedId)?.sort_order ?? 0,
-              })),
-            },
-          }),
-        ]);
-      } catch {
-        replaceTodos(() => previousTodos);
+        );
         setMutationError(REORDER_ERROR);
       } finally {
+        clearPendingIds(affectedIds);
         endMutation();
       }
     },
-    [beginMutation, endMutation, replaceTodos],
+    [beginMutation, clearPendingIds, endMutation, markPendingIds, replaceTodos],
   );
 
   const retry = useCallback(async (): Promise<void> => loadTodos(), [loadTodos]);

@@ -413,6 +413,135 @@ describe("useTodoController", () => {
     expect(result.current.mutationError).toMatch(/reorder failed/i);
   });
 
+  it("compensates the original priority and sort orders after partial move persistence", async () => {
+    const first = makeTodo({ id: "first", name: "First", sort_order: 0 });
+    const second = makeTodo({ id: "second", name: "Second", sort_order: 1 });
+    const lowTodo = makeTodo({ id: "low", name: "Low", priority: "low", sort_order: 0 });
+    const pendingReorder = deferred<void>();
+    vi.mocked(reorderTodos).mockReturnValueOnce(pendingReorder.promise);
+    vi.mocked(updateTodo).mockRejectedValueOnce(new Error("priority update failed"));
+    const { result } = renderHook(() => useTodoController([first, second, lowTodo]));
+    let mutation!: Promise<void>;
+
+    act(() => {
+      mutation = result.current.move(first.id, "low", 0);
+    });
+
+    expect(updateTodo).not.toHaveBeenCalled();
+
+    await act(async () => {
+      pendingReorder.resolve();
+      await mutation;
+    });
+
+    expect(reorderTodos).toHaveBeenNthCalledWith(1, {
+      data: {
+        updates: [
+          { id: second.id, sort_order: 0 },
+          { id: first.id, sort_order: 0 },
+          { id: lowTodo.id, sort_order: 1 },
+        ],
+      },
+    });
+    expect(updateTodo).toHaveBeenNthCalledWith(1, {
+      data: { id: first.id, priority: "low", sort_order: 0 },
+    });
+    expect(updateTodo).toHaveBeenNthCalledWith(2, {
+      data: { id: first.id, priority: "high", sort_order: 0 },
+    });
+    expect(reorderTodos).toHaveBeenNthCalledWith(2, {
+      data: {
+        updates: [
+          { id: second.id, sort_order: 1 },
+          { id: first.id, sort_order: 0 },
+          { id: lowTodo.id, sort_order: 0 },
+        ],
+      },
+    });
+  });
+
+  it("keeps affected todos pending and rejects overlapping affected mutations", async () => {
+    const first = makeTodo({ id: "first", name: "First", sort_order: 0 });
+    const second = makeTodo({ id: "second", name: "Second", sort_order: 1 });
+    const lowTodo = makeTodo({ id: "low", name: "Low", priority: "low", sort_order: 0 });
+    const pendingReorder = deferred<void>();
+    const pendingPriorityUpdate = deferred<void>();
+    vi.mocked(reorderTodos).mockReturnValueOnce(pendingReorder.promise);
+    vi.mocked(updateTodo).mockReturnValueOnce(pendingPriorityUpdate.promise);
+    const { result } = renderHook(() => useTodoController([first, second, lowTodo]));
+    let mutation!: Promise<void>;
+
+    act(() => {
+      mutation = result.current.move(first.id, "low", 0);
+    });
+
+    expect([...result.current.pendingIds]).toEqual([second.id, first.id, lowTodo.id]);
+
+    await act(async () => pendingReorder.resolve());
+
+    expect(updateTodo).toHaveBeenCalledTimes(1);
+    expect([...result.current.pendingIds]).toEqual([second.id, first.id, lowTodo.id]);
+
+    await act(async () => {
+      await result.current.update({ id: second.id, status: "complete" });
+      await result.current.remove(lowTodo.id);
+      await result.current.reorder("low", [lowTodo.id, first.id]);
+      await result.current.move(lowTodo.id, "high", 0);
+    });
+
+    expect(result.current.grouped.high.map((todo) => todo.id)).toEqual([second.id]);
+    expect(result.current.grouped.low.map((todo) => todo.id)).toEqual([first.id, lowTodo.id]);
+    expect(result.current.todos.find((todo) => todo.id === second.id)?.status).toBe("not_started");
+    expect(deleteTodo).not.toHaveBeenCalled();
+    expect(reorderTodos).toHaveBeenCalledTimes(1);
+    expect(updateTodo).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      pendingPriorityUpdate.resolve();
+      await mutation;
+    });
+
+    expect(updateTodo).toHaveBeenCalledTimes(1);
+    expect(result.current.pendingIds.size).toBe(0);
+  });
+
+  it("preserves an unrelated concurrent todo when a failed move rolls back", async () => {
+    const first = makeTodo({ id: "first", name: "First", sort_order: 0 });
+    const second = makeTodo({ id: "second", name: "Second", sort_order: 1 });
+    const lowTodo = makeTodo({ id: "low", name: "Low", priority: "low", sort_order: 0 });
+    const createdTodo = makeTodo({
+      id: "created",
+      name: "Created during move",
+      priority: "low",
+      sort_order: 2,
+    });
+    const pendingReorder = deferred<void>();
+    vi.mocked(reorderTodos).mockReturnValueOnce(pendingReorder.promise);
+    vi.mocked(createTodo).mockResolvedValueOnce(createdTodo);
+    const { result } = renderHook(() => useTodoController([first, second, lowTodo]));
+    let mutation!: Promise<void>;
+
+    act(() => {
+      mutation = result.current.move(first.id, "low", 0);
+    });
+    await act(async () =>
+      result.current.create({
+        name: createdTodo.name,
+        priority: "low",
+        due_date: null,
+        due_date_has_time: false,
+      }),
+    );
+
+    await act(async () => {
+      pendingReorder.reject(new Error("reorder failed"));
+      await mutation;
+    });
+
+    expect(result.current.grouped.high.map((todo) => todo.id)).toEqual([first.id, second.id]);
+    expect(result.current.grouped.low.map((todo) => todo.id)).toEqual([lowTodo.id, createdTodo.id]);
+  });
+
   it("does not erase a concurrent successful update when reorder rolls back", async () => {
     const first = makeTodo({ id: "first", name: "First", sort_order: 0 });
     const second = makeTodo({ id: "second", name: "Second", sort_order: 1 });
