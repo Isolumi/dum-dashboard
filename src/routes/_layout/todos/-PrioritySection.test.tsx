@@ -6,8 +6,18 @@ import { cleanup, render, screen } from "@testing-library/react";
 
 import type { Todo } from "#/lib/database.types";
 
+const dndTestState = vi.hoisted(() => ({
+  useDroppable: vi.fn(() => ({ setNodeRef: () => undefined })),
+}));
+
+vi.mock("@dnd-kit/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@dnd-kit/core")>();
+  return { ...actual, useDroppable: dndTestState.useDroppable };
+});
+
 afterEach(() => {
   cleanup();
+  dndTestState.useDroppable.mockClear();
 });
 
 const { PrioritySection } = await import("./-PrioritySection");
@@ -33,15 +43,48 @@ describe("PrioritySection", () => {
         todos={[highTodo]}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
-        onReorder={vi.fn()}
       />,
     );
 
     expect(container.firstElementChild?.className).toContain("gap-0.5");
     expect(screen.getByText("High priority").parentElement?.className).toContain("pl-5");
-    expect(
-      screen.getByRole("button", { name: /change "deploy app" priority to low/i }),
-    ).toBeTruthy();
+    const row = screen.getByRole("listitem");
+    const dragHandle = screen.getByRole("button", { name: /drag to move "deploy app"/i });
+    const statusControl = screen.getByRole("button", {
+      name: /mark "deploy app" as started/i,
+    });
+
+    expect(screen.queryAllByRole("button", { name: /^change/i })).toHaveLength(0);
+    expect(row.firstElementChild).toBe(dragHandle);
+    expect(row.children[1]).toBe(statusControl);
     expect(screen.queryByRole("button", { name: /add a new todo/i })).toBeNull();
+  });
+
+  it("registers the priority container as a drop target", () => {
+    render(
+      <PrioritySection
+        priority="high"
+        label="High priority"
+        todos={[highTodo]}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(dndTestState.useDroppable).toHaveBeenCalledWith({ id: "priority-high" });
+  });
+
+  it("registers a trailing drop target after a non-empty priority list", () => {
+    render(
+      <PrioritySection
+        priority="high"
+        label="High priority"
+        todos={[highTodo]}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(dndTestState.useDroppable).toHaveBeenCalledWith({ id: "priority-high-end" });
   });
 });

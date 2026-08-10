@@ -1,4 +1,25 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { rpcMock } = vi.hoisted(() => ({
+  rpcMock: vi.fn(),
+}));
+
+vi.mock("@tanstack/react-start", () => ({
+  createServerFn: vi.fn(() => {
+    let validator: { parse: (input: unknown) => unknown } | undefined;
+    const builder = {
+      inputValidator(nextValidator: { parse: (input: unknown) => unknown }) {
+        validator = nextValidator;
+        return builder;
+      },
+      handler(handler: (context: { data: unknown }) => unknown) {
+        return (options?: { data?: unknown }) =>
+          handler({ data: validator ? validator.parse(options?.data) : options?.data });
+      },
+    };
+    return builder;
+  }),
+}));
 
 vi.mock("#/lib/server-auth", () => ({
   assertSameOrigin: vi.fn(),
@@ -6,21 +27,34 @@ vi.mock("#/lib/server-auth", () => ({
   noStore: vi.fn(),
 }));
 
-import {
+vi.mock("#/lib/supabase-admin", () => ({
+  getSupabaseAdmin: vi.fn(() => ({ rpc: rpcMock })),
+}));
+
+const {
   assertTodoMutationRequest,
   CreateTodoSchema,
   CreateTodoInputSchema,
   DeleteTodoSchema,
   GetTodoSchema,
   GetTodosInputSchema,
+  moveTodo,
+  MoveTodoInputSchema,
   normalizeCreateTodoFields,
   normalizeUpdateTodoFields,
+  reorderTodos,
   ReorderTodosSchema,
   UpdateTodoSchema,
-} from "./todos.functions";
-import { assertSameOrigin } from "#/lib/server-auth";
+} = await import("./todos.functions");
+const { assertSameOrigin } = await import("#/lib/server-auth");
 
 const TODO_ID = "550e8400-e29b-41d4-a716-446655440000";
+const SECOND_TODO_ID = "11111111-1111-4111-8111-111111111111";
+const LOW_TODO_ID = "22222222-2222-4222-8222-222222222222";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("CreateTodoSchema", () => {
   it("rejects empty name", () => {
@@ -293,15 +327,121 @@ describe("DeleteTodoSchema", () => {
 
 describe("ReorderTodosSchema", () => {
   it("rejects empty reorder batches", () => {
-    const result = ReorderTodosSchema.safeParse({ updates: [] });
+    const result = ReorderTodosSchema.safeParse({ expected_ids: [], ordered_ids: [] });
     expect(result.success).toBe(false);
   });
 
-  it("rejects negative sort order values", () => {
-    const result = ReorderTodosSchema.safeParse({
-      updates: [{ id: TODO_ID, sort_order: -1 }],
+  it.each([
+    ["duplicate expected id", [TODO_ID, TODO_ID], [SECOND_TODO_ID, TODO_ID]],
+    ["duplicate ordered id", [TODO_ID, SECOND_TODO_ID], [TODO_ID, TODO_ID]],
+    ["different Todo sets", [TODO_ID, SECOND_TODO_ID], [TODO_ID, LOW_TODO_ID]],
+  ])("rejects %s", (_name, expected_ids, ordered_ids) => {
+    expect(ReorderTodosSchema.safeParse({ expected_ids, ordered_ids }).success).toBe(false);
+  });
+});
+
+describe("reorderTodos", () => {
+  it("calls one stale-state-validating atomic database RPC", async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: null });
+
+    await expect(
+      reorderTodos({
+        data: {
+          expected_ids: [TODO_ID, SECOND_TODO_ID],
+          ordered_ids: [SECOND_TODO_ID, TODO_ID],
+        },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(rpcMock).toHaveBeenCalledOnce();
+    expect(rpcMock).toHaveBeenCalledWith("reorder_todos_atomically", {
+      p_expected_ids: [TODO_ID, SECOND_TODO_ID],
+      p_ordered_ids: [SECOND_TODO_ID, TODO_ID],
     });
-    expect(result.success).toBe(false);
+    expect(assertSameOrigin).toHaveBeenCalledOnce();
+  });
+
+  it("reports an atomic database reorder failure", async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: { message: "stale Todo order" } });
+
+    await expect(
+      reorderTodos({
+        data: {
+          expected_ids: [TODO_ID, SECOND_TODO_ID],
+          ordered_ids: [SECOND_TODO_ID, TODO_ID],
+        },
+      }),
+    ).rejects.toThrow("Failed to reorder todos: stale Todo order");
+  });
+});
+
+describe("MoveTodoInputSchema", () => {
+  const validMove = {
+    id: TODO_ID,
+    target_priority: "low" as const,
+    source_ids: [SECOND_TODO_ID],
+    target_ids: [TODO_ID, LOW_TODO_ID],
+  };
+
+  it("accepts one complete normalized source and target order", () => {
+    expect(MoveTodoInputSchema.safeParse(validMove).success).toBe(true);
+  });
+
+  it.each([
+    ["moved Todo missing from target", { ...validMove, target_ids: [LOW_TODO_ID] }],
+    ["moved Todo left in source", { ...validMove, source_ids: [TODO_ID, SECOND_TODO_ID] }],
+    ["duplicate source id", { ...validMove, source_ids: [SECOND_TODO_ID, SECOND_TODO_ID] }],
+    ["duplicate target id", { ...validMove, target_ids: [TODO_ID, LOW_TODO_ID, LOW_TODO_ID] }],
+    ["overlapping lists", { ...validMove, source_ids: [LOW_TODO_ID] }],
+  ])("rejects %s", (_name, input) => {
+    expect(MoveTodoInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects unknown input fields", () => {
+    expect(
+      MoveTodoInputSchema.safeParse({ ...validMove, service_role_key: "secret" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("moveTodo", () => {
+  it("validates the move and calls the atomic database RPC once", async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: null });
+
+    await expect(
+      moveTodo({
+        data: {
+          id: TODO_ID,
+          target_priority: "low",
+          source_ids: [SECOND_TODO_ID],
+          target_ids: [TODO_ID, LOW_TODO_ID],
+        },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(rpcMock).toHaveBeenCalledOnce();
+    expect(rpcMock).toHaveBeenCalledWith("move_todo_between_priorities", {
+      p_todo_id: TODO_ID,
+      p_target_priority: "low",
+      p_source_ids: [SECOND_TODO_ID],
+      p_target_ids: [TODO_ID, LOW_TODO_ID],
+    });
+    expect(assertSameOrigin).toHaveBeenCalledOnce();
+  });
+
+  it("reports an atomic database move failure", async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: { message: "stale Todo order" } });
+
+    await expect(
+      moveTodo({
+        data: {
+          id: TODO_ID,
+          target_priority: "low",
+          source_ids: [SECOND_TODO_ID],
+          target_ids: [TODO_ID, LOW_TODO_ID],
+        },
+      }),
+    ).rejects.toThrow("Failed to move todo: stale Todo order");
   });
 });
 

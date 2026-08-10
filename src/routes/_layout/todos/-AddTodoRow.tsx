@@ -108,11 +108,10 @@ function AddTodoRowComponent({
         className={cn(
           "min-h-[44px] items-center",
           compact
-            ? "grid grid-cols-[minmax(5rem,1fr)_auto_auto] gap-1 px-2 py-1 sm:grid-cols-[2.75rem_minmax(5rem,1fr)_auto_auto_auto] sm:py-0"
+            ? "grid grid-cols-[minmax(5rem,1fr)_auto_auto] gap-1 px-2 py-1 sm:grid-cols-[minmax(5rem,1fr)_auto_auto_auto] sm:py-0"
             : "flex gap-2 px-4",
         )}
       >
-        {compact && <span className="hidden sm:block" aria-hidden="true" />}
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -146,21 +145,31 @@ function AddTodoRowComponent({
           />
           <span
             data-slot="priority-switch-track"
-            className="relative block h-[1.875rem] w-[4.375rem] rounded-full border border-border bg-muted/60 text-[10px] font-semibold text-muted-foreground shadow-inner transition-colors motion-reduce:transition-none peer-focus-visible:ring-2 peer-focus-visible:ring-muted-foreground/40 peer-checked:border-primary/40 peer-checked:bg-primary/20 peer-checked:text-foreground"
+            className="relative block h-[1.875rem] w-[4.375rem] rounded-full border border-border bg-muted/60 text-[10px] font-semibold text-muted-foreground shadow-inner transition-colors duration-200 ease-out motion-reduce:transition-none peer-focus-visible:ring-2 peer-focus-visible:ring-muted-foreground/40 peer-checked:border-primary/40 peer-checked:bg-primary/20 peer-checked:text-foreground"
           >
             <span
+              data-slot="priority-switch-low-label"
               className={cn(
-                "absolute inset-y-0 flex items-center",
-                priority === "high" ? "left-2.5" : "right-2.5",
+                "absolute inset-y-0 right-2.5 flex items-center transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                priority === "low" ? "opacity-100" : "opacity-0",
               )}
             >
-              {priority === "high" ? "High" : "Low"}
+              Low
+            </span>
+            <span
+              data-slot="priority-switch-high-label"
+              className={cn(
+                "absolute inset-y-0 left-2.5 flex items-center transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                priority === "high" ? "opacity-100" : "opacity-0",
+              )}
+            >
+              High
             </span>
             <span
               data-slot="priority-switch-thumb"
               aria-hidden="true"
               className={cn(
-                "absolute top-[3px] left-[3px] size-[1.375rem] rounded-full bg-foreground/75 shadow-sm transition-[transform,background-color] motion-reduce:transition-none",
+                "absolute top-[3px] left-[3px] size-[1.375rem] rounded-full bg-foreground/75 shadow-sm transition-[transform,background-color] duration-200 ease-out motion-reduce:transition-none",
                 priority === "high" && "translate-x-10 bg-primary",
               )}
             />

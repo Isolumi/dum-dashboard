@@ -1,12 +1,18 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 
 import type { Todo } from "#/lib/database.types";
-import { createTodo, deleteTodo, reorderTodos, updateTodo } from "#/routes/todos/todos.functions";
+import {
+  createTodo,
+  deleteTodo,
+  moveTodo,
+  reorderTodos,
+  updateTodo,
+} from "#/routes/todos/todos.functions";
 import type { ToolEntry } from "#/tools/registry";
 
 const dndTestState = vi.hoisted(() => ({
@@ -29,6 +35,7 @@ vi.mock("#/routes/todos/todos.functions", () => ({
   createTodo: vi.fn(),
   deleteTodo: vi.fn(),
   getTodos: vi.fn(),
+  moveTodo: vi.fn(),
   reorderTodos: vi.fn(),
   updateTodo: vi.fn(),
 }));
@@ -102,11 +109,18 @@ vi.mock("@dnd-kit/core", () => ({
   KeyboardSensor: class {},
   PointerSensor: class {},
   closestCenter: () => null,
+  useDroppable: () => ({ isOver: false, setNodeRef: () => undefined }),
   useSensor: () => ({}),
   useSensors: (...sensors: unknown[]) => sensors,
 }));
 
 vi.mock("@dnd-kit/sortable", () => ({
+  arrayMove: <T,>(items: T[], from: number, to: number) => {
+    const next = [...items];
+    const [moved] = next.splice(from, 1);
+    if (moved !== undefined) next.splice(to, 0, moved);
+    return next;
+  },
   SortableContext: ({ children, items }: { children: React.ReactNode; items: string[] }) => {
     items.slice(0, -1).forEach((id, index) => {
       dndTestState.nextSortableId.set(id, items[index + 1]!);
@@ -201,10 +215,11 @@ function installTodoServer(initialTodos: Todo[]) {
   vi.mocked(deleteTodo).mockImplementation(async ({ data }) => {
     serverTodos.delete(data.id);
   });
+  vi.mocked(moveTodo).mockResolvedValue(undefined);
   vi.mocked(reorderTodos).mockImplementation(async ({ data }) => {
-    for (const update of data.updates) {
-      const current = serverTodos.get(update.id);
-      if (current) serverTodos.set(update.id, { ...current, sort_order: update.sort_order });
+    for (const [sortOrder, id] of data.ordered_ids.entries()) {
+      const current = serverTodos.get(id);
+      if (current) serverTodos.set(id, { ...current, sort_order: sortOrder });
     }
   });
 }
@@ -294,18 +309,19 @@ describe("TodoBentoCard", () => {
     expectStillOnDashboard();
   });
 
-  it("switches a todo between High and Low from the card without navigating", async () => {
+  it("keeps the left drag handle and removes priority controls from the card", () => {
     const first = makeTodo();
     renderCard([first]);
 
-    fireEvent.click(screen.getByRole("button", { name: /change "first task" priority to low/i }));
+    const row = screen.getByRole("listitem");
+    const dragHandle = within(row).getByRole("button", { name: /drag to move "first task"/i });
+    const statusControl = within(row).getByRole("button", {
+      name: /mark "first task" as started/i,
+    });
 
-    await waitFor(() =>
-      expect(updateTodo).toHaveBeenCalledWith({ data: { id: first.id, priority: "low" } }),
-    );
-    expect(
-      screen.getByRole("button", { name: /change "first task" priority to high/i }),
-    ).toBeTruthy();
+    expect(screen.queryAllByRole("button", { name: /^change/i })).toHaveLength(0);
+    expect(row.firstElementChild).toBe(dragHandle);
+    expect(row.children[1]).toBe(statusControl);
     expectStillOnDashboard();
   });
 
@@ -351,16 +367,14 @@ describe("TodoBentoCard", () => {
     const second = makeTodo({ id: "second", name: "Second task", sort_order: 1 });
     renderCard([first, second]);
 
-    const dragHandle = screen.getByRole("button", { name: /drag to reorder "first task"/i });
+    const dragHandle = screen.getByRole("button", { name: /drag to move "first task"/i });
     fireEvent.click(dragHandle);
 
     await waitFor(() =>
       expect(reorderTodos).toHaveBeenCalledWith({
         data: {
-          updates: [
-            { id: second.id, sort_order: 0 },
-            { id: first.id, sort_order: 1 },
-          ],
+          expected_ids: [first.id, second.id],
+          ordered_ids: [second.id, first.id],
         },
       }),
     );
