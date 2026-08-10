@@ -210,7 +210,15 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      move_todo_between_priorities: {
+        Args: {
+          p_source_ids: string[];
+          p_target_ids: string[];
+          p_target_priority: Database["public"]["Enums"]["todo_priority"];
+          p_todo_id: string;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       category: "food" | "transportation" | "entertainment" | "essentials" | "bills" | "other";

@@ -6,6 +6,7 @@ import {
   createTodo,
   deleteTodo,
   getTodos,
+  moveTodo,
   reorderTodos,
   updateTodo,
 } from "#/routes/todos/todos.functions";
@@ -387,45 +388,21 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
           return [affectedId, { priority: todo.priority, sort_order: todo.sort_order }] as const;
         }),
       );
-      const nextOrderUpdates = affectedIds.map((affectedId) => ({
-        id: affectedId,
-        sort_order: normalizedById.get(affectedId)!.sort_order,
-      }));
-      const previousOrderUpdates = affectedIds.map((affectedId) => ({
-        id: affectedId,
-        sort_order: previousPositions.get(affectedId)!.sort_order,
-      }));
 
       markPendingIds(affectedIds);
       beginMutation();
       replaceTodos((current) => current.map((todo) => normalizedById.get(todo.id) ?? todo));
 
       try {
-        await reorderTodos({ data: { updates: nextOrderUpdates } });
-        await updateTodo({
+        await moveTodo({
           data: {
             id,
-            priority: targetPriority,
-            sort_order: normalizedTargetIndex,
+            target_priority: targetPriority,
+            source_ids: normalizedSourceTodos.map((todo) => todo.id),
+            target_ids: normalizedTargetTodos.map((todo) => todo.id),
           },
         });
       } catch {
-        try {
-          await updateTodo({
-            data: {
-              id,
-              priority: movedTodo.priority,
-              sort_order: movedTodo.sort_order,
-            },
-          });
-        } catch {
-          // Continue so that order compensation is still attempted.
-        }
-        try {
-          await reorderTodos({ data: { updates: previousOrderUpdates } });
-        } catch {
-          // Local rollback and the mutation error still apply if compensation fails.
-        }
         replaceTodos((current) =>
           current.map((todo) => {
             const previousPosition = previousPositions.get(todo.id);

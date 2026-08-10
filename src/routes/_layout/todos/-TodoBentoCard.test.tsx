@@ -6,7 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 
 import type { Todo } from "#/lib/database.types";
-import { createTodo, deleteTodo, reorderTodos, updateTodo } from "#/routes/todos/todos.functions";
+import {
+  createTodo,
+  deleteTodo,
+  moveTodo,
+  reorderTodos,
+  updateTodo,
+} from "#/routes/todos/todos.functions";
 import type { ToolEntry } from "#/tools/registry";
 
 const dndTestState = vi.hoisted(() => ({
@@ -29,6 +35,7 @@ vi.mock("#/routes/todos/todos.functions", () => ({
   createTodo: vi.fn(),
   deleteTodo: vi.fn(),
   getTodos: vi.fn(),
+  moveTodo: vi.fn(),
   reorderTodos: vi.fn(),
   updateTodo: vi.fn(),
 }));
@@ -102,11 +109,18 @@ vi.mock("@dnd-kit/core", () => ({
   KeyboardSensor: class {},
   PointerSensor: class {},
   closestCenter: () => null,
+  useDroppable: () => ({ isOver: false, setNodeRef: () => undefined }),
   useSensor: () => ({}),
   useSensors: (...sensors: unknown[]) => sensors,
 }));
 
 vi.mock("@dnd-kit/sortable", () => ({
+  arrayMove: <T,>(items: T[], from: number, to: number) => {
+    const next = [...items];
+    const [moved] = next.splice(from, 1);
+    if (moved !== undefined) next.splice(to, 0, moved);
+    return next;
+  },
   SortableContext: ({ children, items }: { children: React.ReactNode; items: string[] }) => {
     items.slice(0, -1).forEach((id, index) => {
       dndTestState.nextSortableId.set(id, items[index + 1]!);
@@ -201,6 +215,7 @@ function installTodoServer(initialTodos: Todo[]) {
   vi.mocked(deleteTodo).mockImplementation(async ({ data }) => {
     serverTodos.delete(data.id);
   });
+  vi.mocked(moveTodo).mockResolvedValue(undefined);
   vi.mocked(reorderTodos).mockImplementation(async ({ data }) => {
     for (const update of data.updates) {
       const current = serverTodos.get(update.id);

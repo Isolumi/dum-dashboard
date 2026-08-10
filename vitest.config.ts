@@ -35,7 +35,10 @@ export default mergeConfig(
                 "shared/**/-*.test.ts",
                 "gateway/src/**/-*.test.ts",
               ],
-              exclude: ["src/homelab/-homelab.functions.test.ts"],
+              exclude: [
+                "src/homelab/-homelab.functions.test.ts",
+                "src/routes/todos/-todos.functions.test.ts",
+              ],
               environment: "node",
               env: {
                 VITE_SUPABASE_URL: "http://localhost",
@@ -55,7 +58,10 @@ export default mergeConfig(
           plugins: [tsconfigPaths({ projects: ["./tsconfig.json"] })],
           test: {
             name: "server-unit",
-            include: ["src/homelab/-homelab.functions.test.ts"],
+            include: [
+              "src/homelab/-homelab.functions.test.ts",
+              "src/routes/todos/-todos.functions.test.ts",
+            ],
             environment: "node",
             env: {
               GATEWAY_URL: "http://gateway.internal:8080",
