@@ -60,17 +60,88 @@ export const UpdateTodoSchema = z.object({
   sort_order: z.number().int().nonnegative().optional(),
 });
 
-export const ReorderTodosSchema = z.object({
-  updates: z
-    .array(
-      z.object({
-        id: z.string().uuid(),
-        sort_order: z.number().int().nonnegative(),
-      }),
-    )
-    .min(1)
-    .max(200),
-});
+const TodoIdListSchema = z.array(z.string().uuid()).max(200);
+
+export const ReorderTodosSchema = z
+  .object({
+    expected_ids: TodoIdListSchema.min(1),
+    ordered_ids: TodoIdListSchema.min(1),
+  })
+  .strict()
+  .superRefine((data, context) => {
+    if (new Set(data.expected_ids).size !== data.expected_ids.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Expected Todo ids must be unique",
+        path: ["expected_ids"],
+      });
+    }
+    if (new Set(data.ordered_ids).size !== data.ordered_ids.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Ordered Todo ids must be unique",
+        path: ["ordered_ids"],
+      });
+    }
+    const expectedIds = new Set(data.expected_ids);
+    if (
+      data.expected_ids.length !== data.ordered_ids.length ||
+      data.ordered_ids.some((id) => !expectedIds.has(id))
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Expected and ordered Todo ids must contain the same Todos",
+        path: ["ordered_ids"],
+      });
+    }
+  });
+
+export const MoveTodoSchema = z
+  .object({
+    id: z.string().uuid(),
+    target_priority: z.enum(["high", "low"] as const),
+    source_ids: TodoIdListSchema,
+    target_ids: TodoIdListSchema.min(1),
+  })
+  .strict()
+  .superRefine((data, context) => {
+    if (new Set(data.source_ids).size !== data.source_ids.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Source Todo ids must be unique",
+        path: ["source_ids"],
+      });
+    }
+    if (new Set(data.target_ids).size !== data.target_ids.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Target Todo ids must be unique",
+        path: ["target_ids"],
+      });
+    }
+    if (data.source_ids.includes(data.id)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Moved Todo cannot remain in the source order",
+        path: ["source_ids"],
+      });
+    }
+    if (!data.target_ids.includes(data.id)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Moved Todo must be in the target order",
+        path: ["target_ids"],
+      });
+    }
+    const targetIds = new Set(data.target_ids);
+    if (data.source_ids.some((id) => targetIds.has(id))) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Source and target Todo ids must not overlap",
+        path: ["source_ids"],
+      });
+    }
+  });
 
 export const DeleteTodoSchema = z.object({
   id: z.string().uuid(),
@@ -90,7 +161,9 @@ export const UpdateTodoInputSchema = UpdateTodoSchema.strict();
 
 export const DeleteTodoInputSchema = DeleteTodoSchema.strict();
 
-export const ReorderTodosInputSchema = ReorderTodosSchema.strict();
+export const ReorderTodosInputSchema = ReorderTodosSchema;
+
+export const MoveTodoInputSchema = MoveTodoSchema;
 
 export function assertTodoMutationRequest(): void {
   assertSameOrigin();
@@ -175,11 +248,22 @@ export const reorderTodos = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<void> => {
     noStore();
     assertTodoMutationRequest();
-    const results = await Promise.all(
-      data.updates.map(({ id, sort_order }) =>
-        getSupabaseAdmin().from("todos").update({ sort_order }).eq("id", id),
-      ),
-    );
-    const failed = results.find((result) => result.error);
-    if (failed?.error) throw new Error(`Failed to reorder todos: ${failed.error.message}`);
+    const { error } = await getSupabaseAdmin().rpc("reorder_todos_atomically", {
+      p_expected_ids: data.expected_ids,
+      p_ordered_ids: data.ordered_ids,
+    });
+    if (error) throw new Error(`Failed to reorder todos: ${error.message}`);
+  });
+
+export const moveTodo = createServerFn({ method: "POST" })
+  .inputValidator(zodValidator(MoveTodoInputSchema))
+  .handler(async ({ data }): Promise<void> => {
+    assertTodoMutationRequest();
+    const { error } = await getSupabaseAdmin().rpc("move_todo_between_priorities", {
+      p_todo_id: data.id,
+      p_target_priority: data.target_priority,
+      p_source_ids: data.source_ids,
+      p_target_ids: data.target_ids,
+    });
+    if (error) throw new Error(`Failed to move todo: ${error.message}`);
   });

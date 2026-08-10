@@ -18,7 +18,7 @@ function makeTodo(overrides: Partial<Todo> = {}): Todo {
 }
 
 describe("groupAndSortTodos", () => {
-  it("returns only high and low groups and sorts active todos before completed todos", () => {
+  it("returns only high and low groups and follows persisted sort order before status", () => {
     const grouped = groupAndSortTodos([
       makeTodo({ id: "high-complete", priority: "high", status: "complete", sort_order: 0 }),
       makeTodo({ id: "high-active", priority: "high", status: "not_started", sort_order: 1 }),
@@ -27,8 +27,27 @@ describe("groupAndSortTodos", () => {
 
     expect(PRIORITY_ORDER).toEqual(["high", "low"]);
     expect(Object.keys(grouped)).toEqual(["high", "low"]);
-    expect(grouped.high.map((todo) => todo.id)).toEqual(["high-active", "high-complete"]);
+    expect(grouped.high.map((todo) => todo.id)).toEqual(["high-complete", "high-active"]);
     expect(grouped.low.map((todo) => todo.id)).toEqual(["low-active"]);
+  });
+
+  it("follows persisted sort order before due date", () => {
+    const grouped = groupAndSortTodos([
+      makeTodo({
+        id: "persisted-first",
+        due_date: "2026-08-12T00:00:00.000Z",
+        due_date_has_time: false,
+        sort_order: 0,
+      }),
+      makeTodo({
+        id: "due-earlier",
+        due_date: "2026-08-11T00:00:00.000Z",
+        due_date_has_time: false,
+        sort_order: 1,
+      }),
+    ]);
+
+    expect(grouped.low.map((todo) => todo.id)).toEqual(["persisted-first", "due-earlier"]);
   });
 
   it("sorts date-only metadata by its stored calendar date and timed todos by instant", () => {

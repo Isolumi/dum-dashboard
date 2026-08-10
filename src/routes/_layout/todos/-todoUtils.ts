@@ -29,6 +29,9 @@ export function groupAndSortTodos(todos: Todo[]): Record<TodoPriority, Todo[]> {
   }
   for (const key of PRIORITY_ORDER) {
     groups[key].sort((a, b) => {
+      const sortOrderDifference = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+      if (sortOrderDifference !== 0) return sortOrderDifference;
+
       const aComplete = a.status === "complete" ? 1 : 0;
       const bComplete = b.status === "complete" ? 1 : 0;
       if (aComplete !== bComplete) return aComplete - bComplete;
@@ -39,7 +42,7 @@ export function groupAndSortTodos(todos: Todo[]): Record<TodoPriority, Todo[]> {
         if (bDueDate === null) return -1;
         return aDueDate - bDueDate;
       }
-      return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+      return 0;
     });
   }
   return groups;

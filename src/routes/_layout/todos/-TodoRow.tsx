@@ -1,10 +1,10 @@
-import { ArrowDown, ArrowUp, Circle, CircleCheck, GripVertical, Trash2 } from "lucide-react";
+import { Circle, CircleCheck, GripVertical, Trash2 } from "lucide-react";
 import { memo, useRef, useState } from "react";
 import type { DraggableSyntheticListeners } from "@dnd-kit/core";
 
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
-import type { Todo, TodoPriority, TodoStatus } from "#/lib/database.types";
+import type { Todo, TodoStatus } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
 
 import { TodoDueDatePicker } from "./-TodoDueDatePicker";
@@ -59,26 +59,6 @@ const STATUS_NEXT_LABEL: Record<TodoStatus, string> = {
   not_started: "started",
   started: "complete",
   complete: "not started",
-};
-
-const PRIORITY_NEXT: Record<TodoPriority, TodoPriority> = {
-  high: "low",
-  low: "high",
-};
-
-const PRIORITY_LABEL: Record<TodoPriority, string> = {
-  high: "High",
-  low: "Low",
-};
-
-const PRIORITY_STYLES: Record<TodoPriority, string> = {
-  high: "text-destructive hover:text-destructive",
-  low: "text-muted-foreground",
-};
-
-const PRIORITY_ICONS: Record<TodoPriority, React.ReactNode> = {
-  high: <ArrowUp className="size-4" />,
-  low: <ArrowDown className="size-4" />,
 };
 
 function TodoRowComponent({
@@ -136,20 +116,20 @@ function TodoRowComponent({
       role="listitem"
       className={cn(
         "group min-h-[44px] items-center rounded-md transition-colors motion-reduce:transition-none hover:bg-accent",
-        compact ? "grid grid-cols-[2.75rem_minmax(0,1fr)_auto] gap-1 px-2" : "flex gap-2 px-4",
+        compact
+          ? "grid grid-cols-[2.75rem_2.75rem_minmax(0,1fr)_auto] gap-1 px-2"
+          : "flex gap-2 px-4",
         todo.status === "complete" && "opacity-60",
       )}
     >
-      {!compact && (
-        <button
-          {...dragListeners}
-          disabled={dragDisabled || isPending}
-          className="min-h-11 min-w-11 shrink-0 cursor-grab rounded-md text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing disabled:cursor-default"
-          aria-label={`Drag to reorder "${todo.name}"`}
-        >
-          <GripVertical className="size-4" />
-        </button>
-      )}
+      <button
+        {...dragListeners}
+        disabled={dragDisabled || isPending}
+        className="min-h-11 min-w-11 shrink-0 cursor-grab rounded-md text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing disabled:cursor-default"
+        aria-label={`Drag to move "${todo.name}"`}
+      >
+        <GripVertical className="size-4" />
+      </button>
 
       {/* Status icon button */}
       <Button
@@ -197,26 +177,6 @@ function TodoRowComponent({
       {compact ? (
         <div className="relative flex min-w-11 shrink-0 items-center">
           <div className="absolute right-full z-10 flex items-center rounded-md bg-accent opacity-0 transition-opacity before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-8 before:bg-gradient-to-r before:from-transparent before:to-accent motion-reduce:transition-none group-hover:opacity-100 focus-within:opacity-100 [@media(pointer:coarse)]:static [@media(pointer:coarse)]:opacity-100 [@media(pointer:coarse)]:before:hidden">
-            <button
-              {...dragListeners}
-              disabled={dragDisabled || isPending}
-              className="min-h-11 min-w-11 shrink-0 cursor-grab rounded-md text-muted-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing disabled:cursor-default"
-              aria-label={`Drag to reorder "${todo.name}"`}
-            >
-              <GripVertical className="size-4" />
-            </button>
-
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onUpdate({ id: todo.id, priority: PRIORITY_NEXT[todo.priority] })}
-              disabled={isPending}
-              aria-label={`Change "${todo.name}" priority to ${PRIORITY_LABEL[PRIORITY_NEXT[todo.priority]]}`}
-              className="min-h-11 min-w-11 shrink-0 justify-center px-0 font-medium text-muted-foreground hover:text-foreground"
-            >
-              {PRIORITY_ICONS[todo.priority]}
-            </Button>
-
             <Button
               variant="ghost"
               size="icon"
@@ -250,20 +210,6 @@ function TodoRowComponent({
         </div>
       ) : (
         <>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => onUpdate({ id: todo.id, priority: PRIORITY_NEXT[todo.priority] })}
-            disabled={isPending}
-            aria-label={`Change "${todo.name}" priority to ${PRIORITY_LABEL[PRIORITY_NEXT[todo.priority]]}`}
-            className={cn(
-              "min-h-11 min-w-11 shrink-0 px-2 text-sm font-medium",
-              PRIORITY_STYLES[todo.priority],
-            )}
-          >
-            {PRIORITY_LABEL[todo.priority]}
-          </Button>
-
           <div
             className={cn(
               "w-40 shrink-0 text-right",
