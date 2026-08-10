@@ -27,7 +27,7 @@ function OverviewPage() {
   return (
     <div className="p-6">
       <h1 className="sr-only">Overview</h1>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr] md:gap-6">
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[2fr_1fr] md:gap-6">
         {firstTool && <firstTool.BentoCard tool={firstTool} data={toolData[firstTool.id]} />}
         {remainingTools.length > 0 && (
           <div className="flex flex-col gap-4 md:gap-6">
