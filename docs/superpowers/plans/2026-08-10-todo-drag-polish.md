@@ -22,6 +22,7 @@
 ### Task 1: Board-level drag and cross-priority persistence
 
 **Files:**
+
 - Modify: `src/routes/_layout/todos/-TodoBoard.tsx`
 - Modify: `src/routes/_layout/todos/-PrioritySection.tsx`
 - Modify: `src/routes/_layout/todos/-useTodoController.ts`
@@ -30,6 +31,7 @@
 - Test: `src/routes/_layout/todos/-useTodoController.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `TodoController.grouped`, `TodoController.reorder(priority, orderedIds)`, DnD Kit `DragEndEvent`.
 - Produces: `TodoController.move(id, targetPriority, targetIndex): Promise<void>` and priority container ids `priority-high` and `priority-low`.
 
@@ -100,11 +102,13 @@ git commit -m "feat: drag Todos between priorities"
 ### Task 2: Left drag handle and remove priority controls
 
 **Files:**
+
 - Modify: `src/routes/_layout/todos/-TodoRow.tsx`
 - Test: `src/routes/_layout/todos/-TodoRow.test.tsx`
 - Test: `src/routes/_layout/todos/-TodoBentoCard.test.tsx`
 
 **Interfaces:**
+
 - Consumes: existing `TodoRowProps.dragListeners` and `dragDisabled`.
 - Produces: one left-side drag handle with `aria-label="Drag to move <name>"`; no row priority button.
 
@@ -138,10 +142,12 @@ git commit -m "refactor: simplify Todo row actions"
 ### Task 3: Full-width add input and animated priority switch
 
 **Files:**
+
 - Modify: `src/routes/_layout/todos/-AddTodoRow.tsx`
 - Test: `src/routes/_layout/todos/-AddTodoRow.test.tsx`
 
 **Interfaces:**
+
 - Consumes: existing `AddTodoRow` form state and native checkbox switch.
 - Produces: a compact desktop grid without a blank first column and a 200 ms reduced-motion-aware switch animation.
 
@@ -181,9 +187,11 @@ git commit -m "style: polish Todo add controls"
 ### Task 4: Full verification and live deployment
 
 **Files:**
+
 - Verify all changed files.
 
 **Interfaces:**
+
 - Consumes: repository CI, GHCR build workflow, Argo CD application `dum-dashboard-dumachine`.
 - Produces: merged PR, healthy live image, and browser evidence.
 

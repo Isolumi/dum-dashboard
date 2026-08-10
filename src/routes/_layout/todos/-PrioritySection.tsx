@@ -1,10 +1,6 @@
 import { memo, useMemo } from "react";
 import { useDroppable } from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 import type { Todo, TodoPriority } from "#/lib/database.types";
@@ -80,10 +76,7 @@ function PrioritySectionComponent({
   const { setNodeRef: setDroppableNodeRef } = useDroppable({ id: `priority-${priority}` });
 
   return (
-    <div
-      ref={setDroppableNodeRef}
-      className={cn("flex flex-col", compact ? "gap-0.5" : "gap-1")}
-    >
+    <div ref={setDroppableNodeRef} className={cn("flex flex-col", compact ? "gap-0.5" : "gap-1")}>
       {/* Section header */}
       <div
         className={cn(

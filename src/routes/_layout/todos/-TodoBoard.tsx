@@ -58,7 +58,8 @@ export function TodoBoard({ controller, variant }: TodoBoardProps): ReactElement
     if (!sourceTodo) return;
 
     const destinationTodo = controller.todos.find((todo) => todo.id === overId);
-    const targetPriority = destinationTodo?.priority ??
+    const targetPriority =
+      destinationTodo?.priority ??
       (overId.startsWith("priority-") ? overId.slice("priority-".length) : null);
     if (targetPriority !== "high" && targetPriority !== "low") return;
 
