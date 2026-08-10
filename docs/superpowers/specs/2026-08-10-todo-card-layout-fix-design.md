@@ -23,8 +23,9 @@ There were no browser console warnings or errors during the measurement.
 
 - The Overview grid aligns its children to the start. The Todo card uses its
   content height and does not match the height of the right column.
-- Compact content uses a smaller leading control column and smaller horizontal
-  padding. Section labels, Todo names, and the add label share one reading line.
+- Compact content uses smaller horizontal padding. Section labels align near
+  the visible status controls. Todo names and the add label share the next
+  reading line, as shown in the approved mockup.
 - High and Low remain quiet section labels with counts.
 - The collapsed add row has no focus until the user reaches it by keyboard or
   pointer. Keyboard focus remains visible after real interaction.

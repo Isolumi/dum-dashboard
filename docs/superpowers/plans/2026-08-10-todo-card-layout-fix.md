@@ -36,14 +36,17 @@
 **Interfaces:**
 
 - `OverviewPage` keeps the current two-column responsive structure.
-- Compact Todo rows use `grid-cols-[2.25rem_minmax(0,1fr)_auto]`.
-- Compact add rows use `grid-cols-[2.25rem_minmax(0,1fr)]`.
-- Compact section labels use left padding that matches the Todo-name column.
+- Compact Todo rows retain their 44px leading control column and use 8px
+  horizontal padding.
+- Compact add rows retain their 44px leading control column and use 8px
+  horizontal padding.
+- Compact section labels use 20px left padding to align near the visible status
+  controls, as shown in the approved mockup.
 
 - [ ] **Step 1: Write failing layout tests**
 
-Add assertions that the Overview grid contains `items-start`, compact rows use a
-`2.25rem` leading column, and section labels use the matching compact inset.
+Add assertions that the Overview grid contains `items-start`, compact rows use
+8px horizontal padding, and section labels use the approved 20px compact inset.
 
 - [ ] **Step 2: Run the focused tests and verify RED**
 
@@ -53,15 +56,14 @@ Run:
 bunx vitest run src/routes/_layout/index.test.tsx src/routes/_layout/todos/-PrioritySection.test.tsx src/routes/_layout/todos/-TodoRow.test.tsx src/routes/_layout/todos/-AddTodoRow.test.tsx
 ```
 
-Expected: assertions fail because the grid stretches and compact controls use a
-`2.75rem` leading column with a `3.75rem` section inset.
+Expected: assertions fail because the grid stretches and compact controls use
+12px horizontal padding with a `3.75rem` section inset.
 
 - [ ] **Step 3: Implement the compact layout**
 
 Add `items-start` to the Overview grid. Change only compact component classes to
-the `2.25rem` leading column, 8px horizontal padding, and the matching section
-heading inset. Preserve 44px interactive targets inside the smaller visual
-column.
+8px horizontal padding and the approved 20px section-heading inset. Preserve
+the existing 44px interactive targets and leading control columns.
 
 - [ ] **Step 4: Run focused layout tests and verify GREEN**
 
