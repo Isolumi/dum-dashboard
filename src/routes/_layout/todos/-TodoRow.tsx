@@ -196,7 +196,7 @@ function TodoRowComponent({
 
       {compact ? (
         <div className="relative flex min-w-11 shrink-0 items-center">
-          <div className="absolute right-full z-10 flex items-center rounded-md bg-accent/95 opacity-0 shadow-sm transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-within:opacity-100 [@media(pointer:coarse)]:static [@media(pointer:coarse)]:opacity-100">
+          <div className="absolute right-full z-10 flex items-center rounded-md bg-accent opacity-0 transition-opacity before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-8 before:bg-gradient-to-r before:from-transparent before:to-accent motion-reduce:transition-none group-hover:opacity-100 focus-within:opacity-100 [@media(pointer:coarse)]:static [@media(pointer:coarse)]:opacity-100 [@media(pointer:coarse)]:before:hidden">
             <button
               {...dragListeners}
               disabled={dragDisabled || isPending}
