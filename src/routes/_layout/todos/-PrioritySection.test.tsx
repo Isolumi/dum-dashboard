@@ -17,6 +17,7 @@ vi.mock("@dnd-kit/core", async (importOriginal) => {
 
 afterEach(() => {
   cleanup();
+  dndTestState.useDroppable.mockClear();
 });
 
 const { PrioritySection } = await import("./-PrioritySection");
@@ -71,5 +72,19 @@ describe("PrioritySection", () => {
     );
 
     expect(dndTestState.useDroppable).toHaveBeenCalledWith({ id: "priority-high" });
+  });
+
+  it("registers a trailing drop target after a non-empty priority list", () => {
+    render(
+      <PrioritySection
+        priority="high"
+        label="High priority"
+        todos={[highTodo]}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(dndTestState.useDroppable).toHaveBeenCalledWith({ id: "priority-high-end" });
   });
 });

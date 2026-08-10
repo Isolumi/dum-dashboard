@@ -73,15 +73,15 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(() => new Set());
   const todosRef = useRef(initialTodos ?? []);
   const pendingIdsRef = useRef(new Set<string>());
+  const blockedIdsRef = useRef(new Set<string>());
   const mutationCountRef = useRef(0);
   const mutationRevisionRef = useRef(0);
   const loadRequestRef = useRef(0);
   const updateQueuesRef = useRef(new Map<string, Promise<void>>());
   const updateVersionsRef = useRef(new Map<string, number>());
   const updateCommittedRef = useRef(new Map<string, TodoUpdateState>());
-  const reorderQueuesRef = useRef(new Map<TodoPriority, Promise<void>>());
-  const reorderVersionsRef = useRef(new Map<TodoPriority, number>());
-  const reorderCommittedRef = useRef(new Map<TodoPriority, Map<string, number>>());
+  const orderingQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const orderingQueueBusyRef = useRef(false);
   const shouldLoadInitiallyRef = useRef(!hasInitialTodos);
 
   const replaceTodos = useCallback((replace: (current: Todo[]) => Todo[]) => {
@@ -92,11 +92,13 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
 
   const markPending = useCallback((id: string) => {
     pendingIdsRef.current.add(id);
+    blockedIdsRef.current.add(id);
     setPendingIds(new Set(pendingIdsRef.current));
   }, []);
 
   const clearPending = useCallback((id: string) => {
     pendingIdsRef.current.delete(id);
+    blockedIdsRef.current.delete(id);
     setPendingIds(new Set(pendingIdsRef.current));
   }, []);
 
@@ -108,6 +110,39 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   const clearPendingIds = useCallback((ids: string[]) => {
     for (const id of ids) pendingIdsRef.current.delete(id);
     setPendingIds(new Set(pendingIdsRef.current));
+  }, []);
+
+  const markBlockedPendingIds = useCallback((ids: string[]) => {
+    for (const id of ids) {
+      pendingIdsRef.current.add(id);
+      blockedIdsRef.current.add(id);
+    }
+    setPendingIds(new Set(pendingIdsRef.current));
+  }, []);
+
+  const clearBlockedPendingIds = useCallback((ids: string[]) => {
+    for (const id of ids) {
+      pendingIdsRef.current.delete(id);
+      blockedIdsRef.current.delete(id);
+    }
+    setPendingIds(new Set(pendingIdsRef.current));
+  }, []);
+
+  const runOrderingMutation = useCallback((mutation: () => Promise<void>): Promise<void> => {
+    const request = orderingQueueBusyRef.current
+      ? orderingQueueRef.current.then(mutation)
+      : mutation();
+    orderingQueueBusyRef.current = true;
+
+    const queueTail = request.then(
+      () => undefined,
+      () => undefined,
+    );
+    orderingQueueRef.current = queueTail;
+
+    return request.finally(() => {
+      if (orderingQueueRef.current === queueTail) orderingQueueBusyRef.current = false;
+    });
   }, []);
 
   useEffect(() => {
@@ -212,7 +247,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
 
   const update = useCallback(
     async (fields: TodoUpdateFields): Promise<void> => {
-      if (pendingIdsRef.current.has(fields.id)) return;
+      if (blockedIdsRef.current.has(fields.id)) return;
       const previous = todosRef.current.find((todo) => todo.id === fields.id);
       if (!updateQueuesRef.current.has(fields.id) && previous) {
         updateCommittedRef.current.set(fields.id, getTodoUpdateState(previous));
@@ -262,7 +297,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
 
   const remove = useCallback(
     async (id: string): Promise<void> => {
-      if (pendingIdsRef.current.has(id)) return;
+      if (blockedIdsRef.current.has(id)) return;
       const previousIndex = todosRef.current.findIndex((todo) => todo.id === id);
       const previous = todosRef.current[previousIndex];
       beginMutation();
@@ -288,134 +323,133 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   );
 
   const reorder = useCallback(
-    async (priority: TodoPriority, orderedIds: string[]): Promise<void> => {
-      if (orderedIds.some((id) => pendingIdsRef.current.has(id))) return;
-      const orderedSortOrders = new Map(
-        orderedIds.map((id, sortOrder) => [id, sortOrder] as const),
-      );
-      if (!reorderQueuesRef.current.has(priority)) {
-        reorderCommittedRef.current.set(
-          priority,
-          new Map(
-            todosRef.current
-              .filter((todo) => todo.priority === priority)
-              .map((todo) => [todo.id, todo.sort_order] as const),
-          ),
+    (priority: TodoPriority, orderedIds: string[]): Promise<void> => {
+      if (orderedIds.some((id) => blockedIdsRef.current.has(id))) return Promise.resolve();
+
+      return runOrderingMutation(async () => {
+        if (orderedIds.some((id) => blockedIdsRef.current.has(id))) return;
+
+        const orderedSortOrders = new Map(
+          orderedIds.map((id, sortOrder) => [id, sortOrder] as const),
         );
-      }
-      const version = (reorderVersionsRef.current.get(priority) ?? 0) + 1;
-      reorderVersionsRef.current.set(priority, version);
-      beginMutation();
-      replaceTodos((current) =>
-        current.map((todo) => {
-          const sortOrder = orderedSortOrders.get(todo.id);
-          return todo.priority === priority && sortOrder !== undefined
-            ? { ...todo, sort_order: sortOrder }
-            : todo;
-        }),
-      );
+        const previousSortOrders = new Map(
+          todosRef.current
+            .filter((todo) => todo.priority === priority && orderedSortOrders.has(todo.id))
+            .map((todo) => [todo.id, todo.sort_order] as const),
+        );
 
-      const previousRequest = reorderQueuesRef.current.get(priority) ?? Promise.resolve();
-      const request = previousRequest.then(() =>
-        reorderTodos({
-          data: {
-            updates: orderedIds.map((id, sort_order) => ({ id, sort_order })),
-          },
-        }),
-      );
-      const queueTail = request.then(
-        () => undefined,
-        () => undefined,
-      );
-      reorderQueuesRef.current.set(priority, queueTail);
+        markPendingIds(orderedIds);
+        beginMutation();
+        replaceTodos((current) =>
+          current.map((todo) => {
+            const sortOrder = orderedSortOrders.get(todo.id);
+            return todo.priority === priority && sortOrder !== undefined
+              ? { ...todo, sort_order: sortOrder }
+              : todo;
+          }),
+        );
 
-      try {
-        await request;
-        const committed = new Map(reorderCommittedRef.current.get(priority));
-        for (const [id, sortOrder] of orderedSortOrders) committed.set(id, sortOrder);
-        reorderCommittedRef.current.set(priority, committed);
-      } catch {
-        if (reorderVersionsRef.current.get(priority) === version) {
-          const committed = reorderCommittedRef.current.get(priority);
+        try {
+          await reorderTodos({
+            data: {
+              updates: orderedIds.map((id, sort_order) => ({ id, sort_order })),
+            },
+          });
+        } catch {
           replaceTodos((current) =>
             current.map((todo) => {
-              const sortOrder = committed?.get(todo.id);
-              return sortOrder !== undefined ? { ...todo, sort_order: sortOrder } : todo;
+              if (!previousSortOrders.has(todo.id)) return todo;
+              return { ...todo, sort_order: previousSortOrders.get(todo.id)! };
             }),
           );
+          setMutationError(REORDER_ERROR);
+        } finally {
+          clearPendingIds(orderedIds);
+          endMutation();
         }
-        setMutationError(REORDER_ERROR);
-      } finally {
-        endMutation();
-        if (reorderQueuesRef.current.get(priority) === queueTail) {
-          reorderQueuesRef.current.delete(priority);
-          reorderVersionsRef.current.delete(priority);
-          reorderCommittedRef.current.delete(priority);
-        }
-      }
+      });
     },
-    [beginMutation, endMutation, replaceTodos],
+    [
+      beginMutation,
+      clearPendingIds,
+      endMutation,
+      markPendingIds,
+      replaceTodos,
+      runOrderingMutation,
+    ],
   );
 
   const move = useCallback(
-    async (id: string, targetPriority: TodoPriority, targetIndex: number): Promise<void> => {
-      if (pendingIdsRef.current.has(id)) return;
-      const previousTodos = todosRef.current;
-      const movedTodo = previousTodos.find((todo) => todo.id === id);
-      if (!movedTodo || movedTodo.priority === targetPriority) return;
+    (id: string, targetPriority: TodoPriority, targetIndex: number): Promise<void> => {
+      if (blockedIdsRef.current.has(id)) return Promise.resolve();
 
-      const groupedTodos = groupAndSortTodos(previousTodos);
-      const sourceTodos = groupedTodos[movedTodo.priority].filter((todo) => todo.id !== id);
-      const targetTodos = [...groupedTodos[targetPriority]];
-      const normalizedTargetIndex = Math.max(0, Math.min(targetIndex, targetTodos.length));
-      targetTodos.splice(normalizedTargetIndex, 0, { ...movedTodo, priority: targetPriority });
+      return runOrderingMutation(async () => {
+        if (blockedIdsRef.current.has(id)) return;
 
-      const normalizedSourceTodos = sourceTodos.map((todo, sort_order) => ({
-        ...todo,
-        sort_order,
-      }));
-      const normalizedTargetTodos = targetTodos.map((todo, sort_order) => ({
-        ...todo,
-        sort_order,
-      }));
-      const normalizedTodos = [...normalizedSourceTodos, ...normalizedTargetTodos];
-      const normalizedById = new Map(normalizedTodos.map((todo) => [todo.id, todo] as const));
-      const affectedIds = normalizedTodos.map((todo) => todo.id);
-      if (affectedIds.some((affectedId) => pendingIdsRef.current.has(affectedId))) return;
-      const previousPositions = new Map(
-        affectedIds.map((affectedId) => {
-          const todo = previousTodos.find((candidate) => candidate.id === affectedId)!;
-          return [affectedId, { priority: todo.priority, sort_order: todo.sort_order }] as const;
-        }),
-      );
+        const previousTodos = todosRef.current;
+        const movedTodo = previousTodos.find((todo) => todo.id === id);
+        if (!movedTodo || movedTodo.priority === targetPriority) return;
 
-      markPendingIds(affectedIds);
-      beginMutation();
-      replaceTodos((current) => current.map((todo) => normalizedById.get(todo.id) ?? todo));
+        const groupedTodos = groupAndSortTodos(previousTodos);
+        const sourceTodos = groupedTodos[movedTodo.priority].filter((todo) => todo.id !== id);
+        const targetTodos = [...groupedTodos[targetPriority]];
+        const normalizedTargetIndex = Math.max(0, Math.min(targetIndex, targetTodos.length));
+        targetTodos.splice(normalizedTargetIndex, 0, { ...movedTodo, priority: targetPriority });
 
-      try {
-        await moveTodo({
-          data: {
-            id,
-            target_priority: targetPriority,
-            source_ids: normalizedSourceTodos.map((todo) => todo.id),
-            target_ids: normalizedTargetTodos.map((todo) => todo.id),
-          },
-        });
-      } catch {
-        replaceTodos((current) =>
-          current.map((todo) => {
-            const previousPosition = previousPositions.get(todo.id);
-            return previousPosition ? { ...todo, ...previousPosition } : todo;
+        const normalizedSourceTodos = sourceTodos.map((todo, sort_order) => ({
+          ...todo,
+          sort_order,
+        }));
+        const normalizedTargetTodos = targetTodos.map((todo, sort_order) => ({
+          ...todo,
+          sort_order,
+        }));
+        const normalizedTodos = [...normalizedSourceTodos, ...normalizedTargetTodos];
+        const normalizedById = new Map(normalizedTodos.map((todo) => [todo.id, todo] as const));
+        const affectedIds = normalizedTodos.map((todo) => todo.id);
+        if (affectedIds.some((affectedId) => blockedIdsRef.current.has(affectedId))) return;
+        const previousPositions = new Map(
+          affectedIds.map((affectedId) => {
+            const todo = previousTodos.find((candidate) => candidate.id === affectedId)!;
+            return [affectedId, { priority: todo.priority, sort_order: todo.sort_order }] as const;
           }),
         );
-        setMutationError(REORDER_ERROR);
-      } finally {
-        clearPendingIds(affectedIds);
-        endMutation();
-      }
+
+        markBlockedPendingIds(affectedIds);
+        beginMutation();
+        replaceTodos((current) => current.map((todo) => normalizedById.get(todo.id) ?? todo));
+
+        try {
+          await moveTodo({
+            data: {
+              id,
+              target_priority: targetPriority,
+              source_ids: normalizedSourceTodos.map((todo) => todo.id),
+              target_ids: normalizedTargetTodos.map((todo) => todo.id),
+            },
+          });
+        } catch {
+          replaceTodos((current) =>
+            current.map((todo) => {
+              const previousPosition = previousPositions.get(todo.id);
+              return previousPosition ? { ...todo, ...previousPosition } : todo;
+            }),
+          );
+          setMutationError(REORDER_ERROR);
+        } finally {
+          clearBlockedPendingIds(affectedIds);
+          endMutation();
+        }
+      });
     },
-    [beginMutation, clearPendingIds, endMutation, markPendingIds, replaceTodos],
+    [
+      beginMutation,
+      clearBlockedPendingIds,
+      endMutation,
+      markBlockedPendingIds,
+      replaceTodos,
+      runOrderingMutation,
+    ],
   );
 
   const retry = useCallback(async (): Promise<void> => loadTodos(), [loadTodos]);

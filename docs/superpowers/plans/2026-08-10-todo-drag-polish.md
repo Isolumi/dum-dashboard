@@ -184,7 +184,7 @@ git add src/routes/_layout/todos/-AddTodoRow.tsx src/routes/_layout/todos/-AddTo
 git commit -m "style: polish Todo add controls"
 ```
 
-### Task 4: Full verification and live deployment
+### Task 4: Full verification, linked migration, and live deployment
 
 **Files:**
 
@@ -192,8 +192,8 @@ git commit -m "style: polish Todo add controls"
 
 **Interfaces:**
 
-- Consumes: repository CI, GHCR build workflow, Argo CD application `dum-dashboard-dumachine`.
-- Produces: merged PR, healthy live image, and browser evidence.
+- Consumes: repository CI, linked Supabase project, GHCR build workflow, Argo CD application `dum-dashboard-dumachine`.
+- Produces: verified remote migration `20260810214100`, merged PR, healthy live image, and browser evidence.
 
 - [ ] **Step 1: Run all local checks**
 
@@ -208,14 +208,39 @@ git diff --check origin/v1...HEAD
 
 Expected: every command exits zero.
 
-- [ ] **Step 2: Review and publish**
+- [ ] **Step 2: Apply and verify the atomic move migration on the linked Supabase project**
+
+Do this before the branch is pushed, merged, or deployed. Confirm the pending set, apply only the
+repository migration history, and confirm that `20260810214100_atomic_todo_priority_move.sql` is
+recorded remotely:
+
+```bash
+bunx supabase migration list --linked
+bunx supabase db push --linked --dry-run
+bunx supabase db push --linked
+bunx supabase migration list --linked
+```
+
+Do not use `--include-all`. In the final migration list, version `20260810214100` must appear in both
+the Local and Remote columns. Then verify the function and its execution grants without changing Todo
+data:
+
+```bash
+bunx supabase db query --linked "select p.proname, pg_get_function_identity_arguments(p.oid) as arguments, has_function_privilege('service_role', p.oid, 'EXECUTE') as service_role_execute, has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute, has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute from pg_proc as p join pg_namespace as n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'move_todo_between_priorities';"
+```
+
+Expected: one `move_todo_between_priorities` row with arguments `uuid, todo_priority, uuid[], uuid[]`;
+`service_role_execute` is true; `authenticated_execute` and `anon_execute` are false. Stop before
+publish or merge if migration application or either verification fails.
+
+- [ ] **Step 3: Review and publish**
 
 Review the complete diff, push `agent/todo-drag-polish`, open a PR to `v1`, wait for the required check, and squash-merge it.
 
-- [ ] **Step 3: Verify deployment**
+- [ ] **Step 4: Verify deployment**
 
 Wait for the build workflow and Argo CD. Confirm `dum-dashboard-dumachine` is `Synced` and `Healthy`, the deployment uses the merged commit image, and the pod is ready.
 
-- [ ] **Step 4: Verify the live UI**
+- [ ] **Step 5: Verify the live UI**
 
 At `https://doh.lumilumi.xyz`, verify desktop and 360 px mobile layouts, the left drag handle, no priority arrow controls, the full-width input, switch transition styles, no horizontal overflow, and no console errors. Do not submit or move a real Todo during this read-only browser check.

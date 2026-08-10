@@ -74,6 +74,11 @@ function PrioritySectionComponent({
   const todoIds = useMemo(() => todos.map((t) => t.id), [todos]);
   const hasPendingTodo = todos.some((todo) => isPending?.(todo.id));
   const { setNodeRef: setDroppableNodeRef } = useDroppable({ id: `priority-${priority}` });
+  const { isOver: isTrailingDropTargetActive, setNodeRef: setTrailingDropTargetRef } = useDroppable(
+    {
+      id: `priority-${priority}-end`,
+    },
+  );
 
   return (
     <div ref={setDroppableNodeRef} className={cn("flex flex-col", compact ? "gap-0.5" : "gap-1")}>
@@ -111,6 +116,17 @@ function PrioritySectionComponent({
             />
           ))}
         </div>
+        {todos.length > 0 && (
+          <div
+            ref={setTrailingDropTargetRef}
+            aria-hidden="true"
+            className={cn(
+              "rounded-sm transition-colors",
+              compact ? "h-2" : "h-3",
+              isTrailingDropTargetActive && "bg-accent",
+            )}
+          />
+        )}
       </SortableContext>
     </div>
   );

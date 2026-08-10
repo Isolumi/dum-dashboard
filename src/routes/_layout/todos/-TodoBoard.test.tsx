@@ -216,6 +216,25 @@ describe("TodoBoard", () => {
     expect(move).toHaveBeenCalledWith(highTodo.id, "low", 0);
   });
 
+  it("appends a High todo after the last Low todo through the trailing drop target", () => {
+    const highTodo = makeTodo("high-todo", "high", 0);
+    const lowTodo = makeTodo("low-todo", "low", 0);
+    const move = vi.fn().mockResolvedValue(undefined);
+    const controller = makeController({
+      todos: [highTodo, lowTodo],
+      grouped: { high: [highTodo], low: [lowTodo] },
+      move,
+    });
+    render(<TodoBoard controller={controller} variant="full" />);
+
+    dndTestState.onDragEndHandlers[0]?.({
+      active: { id: highTodo.id },
+      over: { id: "priority-low-end" },
+    });
+
+    expect(move).toHaveBeenCalledWith(highTodo.id, "low", 1);
+  });
+
   it("reorders High todos when the board drag ends in the same priority", () => {
     const first = makeTodo("first", "high", 0);
     const second = makeTodo("second", "high", 1);
@@ -230,6 +249,25 @@ describe("TodoBoard", () => {
     dndTestState.onDragEndHandlers[0]?.({
       active: { id: first.id },
       over: { id: second.id },
+    });
+
+    expect(reorder).toHaveBeenCalledWith("high", [second.id, first.id]);
+  });
+
+  it("moves a todo to the end of its priority through the trailing drop target", () => {
+    const first = makeTodo("first", "high", 0);
+    const second = makeTodo("second", "high", 1);
+    const reorder = vi.fn().mockResolvedValue(undefined);
+    const controller = makeController({
+      todos: [first, second],
+      grouped: { high: [first, second], low: [] },
+      reorder,
+    });
+    render(<TodoBoard controller={controller} variant="full" />);
+
+    dndTestState.onDragEndHandlers[0]?.({
+      active: { id: first.id },
+      over: { id: "priority-high-end" },
     });
 
     expect(reorder).toHaveBeenCalledWith("high", [second.id, first.id]);
