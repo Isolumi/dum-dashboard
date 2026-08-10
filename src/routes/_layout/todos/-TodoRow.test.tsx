@@ -228,6 +228,8 @@ describe("TodoRow", () => {
     expect(priorityControl.textContent).toBe("");
     expect(priorityControl.parentElement?.className).toContain("opacity-0");
     expect(priorityControl.parentElement?.className).toContain("group-hover:opacity-100");
+    expect(priorityControl.parentElement?.className).toContain("bg-accent");
+    expect(priorityControl.parentElement?.className).toContain("before:to-accent");
 
     priorityControl.focus();
     expect(document.activeElement).toBe(priorityControl);
