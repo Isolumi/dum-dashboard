@@ -88,6 +88,14 @@ describe("AddTodoRow (collapsed state)", () => {
     expect(screen.getByRole("button", { name: /add a new todo/i })).toBeTruthy();
   });
 
+  it("does not force keyboard focus onto the add control during initial render", () => {
+    renderCollapsed();
+
+    expect(document.activeElement).not.toBe(
+      screen.getByRole("button", { name: /add a new todo/i }),
+    );
+  });
+
   it("opens the form with Enter", () => {
     renderCollapsed();
 
@@ -139,15 +147,22 @@ describe("AddTodoRow (expanded state)", () => {
     expect(prioritySwitch.nextElementSibling?.getAttribute("data-slot")).toBe(
       "priority-switch-track",
     );
-    expect(
-      prioritySwitch.nextElementSibling?.querySelector('[data-slot="priority-switch-thumb"]'),
-    ).toBeTruthy();
+    const switchTrack = prioritySwitch.nextElementSibling as HTMLElement;
+    const switchThumb = switchTrack.querySelector('[data-slot="priority-switch-thumb"]');
+    expect(switchTrack.className).toContain("h-[1.875rem]");
+    expect(switchTrack.className).toContain("w-[4.375rem]");
+    expect(switchTrack.className).toContain("peer-focus-visible:ring-2");
+    expect(switchThumb).toBeTruthy();
+    expect(switchThumb?.getAttribute("class")).toContain("size-[1.375rem]");
     expect(prioritySwitch.nextElementSibling?.textContent).toBe("Low");
     expect(prioritySwitch.getAttribute("aria-checked")).toBe("false");
     expect(prioritySwitch.className).not.toContain("destructive");
     fireEvent.click(prioritySwitch);
     expect(prioritySwitch.nextElementSibling?.textContent).toBe("High");
     expect(prioritySwitch.getAttribute("aria-checked")).toBe("true");
+    expect(
+      switchTrack.querySelector('[data-slot="priority-switch-thumb"]')?.getAttribute("class"),
+    ).toContain("translate-x-10");
     expect(dateTrigger.querySelector("svg")).toBeTruthy();
     expect(dateTrigger.querySelector("svg")?.className.baseVal).not.toContain("opacity-0");
     expect(screen.getByRole("button", { name: /^add$/i })).toBeTruthy();
@@ -234,7 +249,9 @@ describe("AddTodoRow (expanded state)", () => {
     fireEvent.keyDown(screen.getByRole("textbox", { name: /new todo name/i }), { key: "Escape" });
 
     expect(screen.queryByRole("textbox", { name: /new todo name/i })).toBeNull();
-    expect(screen.getAllByRole("button", { name: /add a new todo/i })).toHaveLength(1);
+    const addControl = screen.getByRole("button", { name: /add a new todo/i });
+    expect(addControl).toBeTruthy();
+    expect(document.activeElement).toBe(addControl);
   });
 
   it("cancels with Escape from the High switch focus path", () => {
@@ -277,7 +294,9 @@ describe("AddTodoRow (compact state)", () => {
     const addControl = screen.getByRole("button", { name: /add a new todo/i });
 
     expect(addControl.className).toContain("min-h-[44px]");
-    expect(addControl.className).toContain("px-3");
+    expect(addControl.className).toContain("px-2");
+    expect(addControl.className).toContain("focus-visible:ring-2");
+    expect(addControl.className).not.toContain("focus-visible:ring-3");
     expect(screen.getByText("Add a todo...").className).toContain("text-xs");
     expect(addControl.className).toContain("motion-reduce:transition-none");
 
@@ -301,11 +320,31 @@ describe("AddTodoRow (compact state)", () => {
     const addButton = screen.getByRole("button", { name: /^add$/i });
 
     expect(controls?.className).toContain("min-h-[44px]");
-    expect(controls?.className).not.toMatch(/\bpy-/);
+    expect(controls?.className).toContain("px-2");
+    expect(controls?.className).toContain("py-1");
+    expect(controls?.className).toContain("sm:py-0");
     expect(nameInput.className).toContain("h-9");
-    expect(prioritySwitch.nextElementSibling?.className).toContain("h-7");
+    expect(prioritySwitch.nextElementSibling?.className).toContain("h-[1.875rem]");
     expect(dateTrigger.className).toContain("h-9");
     expect(addButton.className).toContain("h-9");
+  });
+
+  it("stacks the Add action below the compact controls on narrow screens", () => {
+    const { container } = render(
+      React.createElement(AddTodoRow, { compact: true, onCreate: noopCreate }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /add a new todo/i }));
+
+    const controls = container.querySelector("form")?.firstElementChild;
+    const alignmentSpacer = controls?.firstElementChild;
+    const addButton = screen.getByRole("button", { name: /^add$/i });
+
+    expect(controls?.className).toContain("grid-cols-[minmax(5rem,1fr)_auto_auto]");
+    expect(controls?.className).toContain("sm:grid-cols-[2.75rem_minmax(5rem,1fr)_auto_auto_auto]");
+    expect(alignmentSpacer?.className).toContain("hidden");
+    expect(alignmentSpacer?.className).toContain("sm:block");
+    expect(addButton.className).toContain("col-span-3");
+    expect(addButton.className).toContain("sm:col-span-1");
   });
 });
 
@@ -317,7 +356,7 @@ describe("AddTodoRow (compact state)", () => {
     const addControl = screen.getByRole("button", { name: /add a new todo/i });
 
     expect(addControl.className).toContain("min-h-[44px]");
-    expect(addControl.className).toContain("px-3");
+    expect(addControl.className).toContain("px-2");
     expect(screen.getByText("Add a todo...").className).toContain("text-xs");
     expect(addControl.className).toContain("motion-reduce:transition-none");
 

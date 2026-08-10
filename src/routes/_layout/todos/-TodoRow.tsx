@@ -136,7 +136,7 @@ function TodoRowComponent({
       role="listitem"
       className={cn(
         "group min-h-[44px] items-center rounded-md transition-colors motion-reduce:transition-none hover:bg-accent",
-        compact ? "grid grid-cols-[2.75rem_minmax(0,1fr)_auto] gap-1 px-3" : "flex gap-2 px-4",
+        compact ? "grid grid-cols-[2.75rem_minmax(0,1fr)_auto] gap-1 px-2" : "flex gap-2 px-4",
         todo.status === "complete" && "opacity-60",
       )}
     >
