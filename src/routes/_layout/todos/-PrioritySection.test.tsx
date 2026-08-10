@@ -47,9 +47,15 @@ describe("PrioritySection", () => {
 
     expect(container.firstElementChild?.className).toContain("gap-0.5");
     expect(screen.getByText("High priority").parentElement?.className).toContain("pl-5");
-    expect(
-      screen.getByRole("button", { name: /change "deploy app" priority to low/i }),
-    ).toBeTruthy();
+    const row = screen.getByRole("listitem");
+    const dragHandle = screen.getByRole("button", { name: /drag to move "deploy app"/i });
+    const statusControl = screen.getByRole("button", {
+      name: /mark "deploy app" as started/i,
+    });
+
+    expect(screen.queryAllByRole("button", { name: /^change/i })).toHaveLength(0);
+    expect(row.firstElementChild).toBe(dragHandle);
+    expect(row.children[1]).toBe(statusControl);
     expect(screen.queryByRole("button", { name: /add a new todo/i })).toBeNull();
   });
 

@@ -113,12 +113,10 @@ describe("TodoRow", () => {
     expect(onUpdate).toHaveBeenCalledWith({ id: "todo-high", name: "Ship app" });
   });
 
-  it("changes a High todo to Low when its priority control is clicked", () => {
-    const { onUpdate } = renderTodoRow();
+  it("does not render priority controls", () => {
+    renderTodoRow();
 
-    fireEvent.click(screen.getByRole("button", { name: /change "deploy app" priority to low/i }));
-
-    expect(onUpdate).toHaveBeenCalledWith({ id: "todo-high", priority: "low" });
+    expect(screen.queryAllByRole("button", { name: /^change/i })).toHaveLength(0);
   });
 
   it("sends the selected due date when its date control is used", () => {
@@ -214,9 +212,7 @@ describe("TodoRow", () => {
     renderTodoRow({ compact: true });
 
     const row = screen.getByRole("listitem");
-    const priorityControl = screen.getByRole("button", {
-      name: /change "deploy app" priority to low/i,
-    });
+    const dragControl = screen.getByRole("button", { name: /drag to move "deploy app"/i });
 
     expect(row.className).toContain("min-h-[44px]");
     expect(row.className).toContain("px-2");
@@ -225,38 +221,35 @@ describe("TodoRow", () => {
     expect(screen.getByRole("button", { name: /mark "deploy app" as started/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /edit due date for "deploy app"/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /delete "deploy app"/i })).toBeTruthy();
-    expect(priorityControl.textContent).toBe("");
-    expect(priorityControl.parentElement?.className).toContain("opacity-0");
-    expect(priorityControl.parentElement?.className).toContain("group-hover:opacity-100");
-    expect(priorityControl.parentElement?.className).toContain("bg-accent");
-    expect(priorityControl.parentElement?.className).toContain("before:to-accent");
-
-    priorityControl.focus();
-    expect(document.activeElement).toBe(priorityControl);
+    expect(dragControl).toBeTruthy();
+    dragControl.focus();
+    expect(document.activeElement).toBe(dragControl);
   });
 
-  it("uses one aligned compact grid without a hidden leading drag column", () => {
+  it("uses one aligned compact grid with a leading drag handle", () => {
     renderTodoRow({ compact: true });
 
     const row = screen.getByRole("listitem");
     const nameControl = screen.getByRole("button", { name: "Deploy app" });
     const statusControl = screen.getByRole("button", { name: /mark "deploy app" as started/i });
-    const dragControl = screen.getByRole("button", { name: /drag to reorder "deploy app"/i });
+    const dragControl = screen.getByRole("button", { name: /drag to move "deploy app"/i });
 
-    expect(row.className).toContain("grid-cols-[2.75rem_minmax(0,1fr)_auto]");
+    expect(row.className).toContain("grid-cols-[2.75rem_2.75rem_minmax(0,1fr)_auto]");
     expect(nameControl.className).toContain("min-w-0");
     expect(nameControl.className).toContain("overflow-hidden");
-    expect(row.firstElementChild).toBe(statusControl);
+    expect(row.firstElementChild).toBe(dragControl);
+    expect(row.children[1]).toBe(statusControl);
+    expect(screen.getAllByRole("button", { name: /drag to move "deploy app"/i })).toHaveLength(1);
     expect(
-      dragControl.compareDocumentPosition(nameControl) & Node.DOCUMENT_POSITION_PRECEDING,
-    ).toBe(Node.DOCUMENT_POSITION_PRECEDING);
+      dragControl.compareDocumentPosition(nameControl) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it("keeps the full-page drag handle before the status control", () => {
     renderTodoRow();
 
     const row = screen.getByRole("listitem");
-    const dragControl = screen.getByRole("button", { name: /drag to reorder "deploy app"/i });
+    const dragControl = screen.getByRole("button", { name: /drag to move "deploy app"/i });
     const statusControl = screen.getByRole("button", { name: /mark "deploy app" as started/i });
 
     expect(row.firstElementChild).toBe(dragControl);
@@ -277,18 +270,8 @@ describe("TodoRow", () => {
       ).disabled,
     ).toBe(true);
     expect(
-      (
-        screen.getByRole("button", {
-          name: /change "deploy app" priority to low/i,
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true);
-    expect(
-      (
-        screen.getByRole("button", {
-          name: /edit due date for "deploy app"/i,
-        }) as HTMLButtonElement
-      ).disabled,
+      (screen.getByRole("button", { name: /edit due date for "deploy app"/i }) as HTMLButtonElement)
+        .disabled,
     ).toBe(true);
     expect(
       (
@@ -299,20 +282,12 @@ describe("TodoRow", () => {
     ).toBe(true);
   });
 
-  it("keeps the priority control at least 44px wide", () => {
-    renderTodoRow();
-
-    expect(
-      screen.getByRole("button", { name: /change "deploy app" priority to low/i }).className,
-    ).toContain("min-w-11");
-  });
-
   it("makes drag and delete controls discoverable for coarse pointers", () => {
     renderTodoRow();
 
-    expect(
-      screen.getByRole("button", { name: /drag to reorder "deploy app"/i }).className,
-    ).toContain("[@media(pointer:coarse)]:opacity-100");
+    expect(screen.getByRole("button", { name: /drag to move "deploy app"/i }).className).toContain(
+      "[@media(pointer:coarse)]:opacity-100",
+    );
     expect(screen.getByRole("button", { name: /delete "deploy app"/i }).className).toContain(
       "[@media(pointer:coarse)]:opacity-100",
     );

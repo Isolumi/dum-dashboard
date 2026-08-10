@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 
@@ -309,18 +309,19 @@ describe("TodoBentoCard", () => {
     expectStillOnDashboard();
   });
 
-  it("switches a todo between High and Low from the card without navigating", async () => {
+  it("keeps the left drag handle and removes priority controls from the card", () => {
     const first = makeTodo();
     renderCard([first]);
 
-    fireEvent.click(screen.getByRole("button", { name: /change "first task" priority to low/i }));
+    const row = screen.getByRole("listitem");
+    const dragHandle = within(row).getByRole("button", { name: /drag to move "first task"/i });
+    const statusControl = within(row).getByRole("button", {
+      name: /mark "first task" as started/i,
+    });
 
-    await waitFor(() =>
-      expect(updateTodo).toHaveBeenCalledWith({ data: { id: first.id, priority: "low" } }),
-    );
-    expect(
-      screen.getByRole("button", { name: /change "first task" priority to high/i }),
-    ).toBeTruthy();
+    expect(screen.queryAllByRole("button", { name: /^change/i })).toHaveLength(0);
+    expect(row.firstElementChild).toBe(dragHandle);
+    expect(row.children[1]).toBe(statusControl);
     expectStillOnDashboard();
   });
 
@@ -366,7 +367,7 @@ describe("TodoBentoCard", () => {
     const second = makeTodo({ id: "second", name: "Second task", sort_order: 1 });
     renderCard([first, second]);
 
-    const dragHandle = screen.getByRole("button", { name: /drag to reorder "first task"/i });
+    const dragHandle = screen.getByRole("button", { name: /drag to move "first task"/i });
     fireEvent.click(dragHandle);
 
     await waitFor(() =>
