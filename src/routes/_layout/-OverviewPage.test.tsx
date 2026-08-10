@@ -86,6 +86,16 @@ describe("main dashboard composition", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Overview" })).toBeTruthy();
   });
 
+  it("keeps the Todo card at its content height instead of stretching it to the side column", async () => {
+    vi.spyOn(Route, "useLoaderData").mockReturnValue({});
+    const OverviewPage = Route.options.component as ComponentType;
+
+    await renderInsideLayout(<OverviewPage />);
+
+    const todoCard = screen.getByRole("region", { name: "Todos" });
+    expect(todoCard.parentElement?.className).toContain("items-start");
+  });
+
   it("catches the production break where the error wrapper nests a second main landmark", async () => {
     const OverviewError = Route.options.errorComponent as ComponentType<{
       error: Error;

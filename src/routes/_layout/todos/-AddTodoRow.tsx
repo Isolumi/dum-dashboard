@@ -30,14 +30,17 @@ function AddTodoRowComponent({
   const [dueDateHasTime, setDueDateHasTime] = useState(false);
 
   const collapsedRowRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef(false);
 
   useEffect(() => {
-    if (!isExpanded) {
+    if (!isExpanded && restoreFocusRef.current) {
+      restoreFocusRef.current = false;
       collapsedRowRef.current?.focus();
     }
   }, [isExpanded]);
 
   const resetForm = useCallback(() => {
+    restoreFocusRef.current = true;
     setName("");
     setPriority(defaultPriority);
     setDueDate(null);
@@ -61,8 +64,8 @@ function AddTodoRowComponent({
       <div
         ref={collapsedRowRef}
         className={cn(
-          "min-h-[44px] cursor-pointer items-center rounded-md transition-colors motion-reduce:transition-none hover:bg-accent focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-          compact ? "grid grid-cols-[2.75rem_minmax(0,1fr)] gap-1 px-3" : "flex gap-2 px-4",
+          "min-h-[44px] cursor-pointer items-center rounded-md transition-colors motion-reduce:transition-none hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40",
+          compact ? "grid grid-cols-[2.75rem_minmax(0,1fr)] gap-1 px-2" : "flex gap-2 px-4",
         )}
         onClick={() => {
           setIsExpanded(true);
@@ -105,7 +108,7 @@ function AddTodoRowComponent({
         className={cn(
           "min-h-[44px] items-center",
           compact
-            ? "grid grid-cols-[2.75rem_minmax(5rem,1fr)_auto_auto_auto] gap-1 px-3"
+            ? "grid grid-cols-[2.75rem_minmax(5rem,1fr)_auto_auto_auto] gap-1 px-2"
             : "flex gap-2 px-4",
         )}
       >
@@ -125,7 +128,7 @@ function AddTodoRowComponent({
           placeholder="Todo name..."
           autoFocus
           className={cn(
-            "h-9 flex-1 rounded-lg border border-input/40 bg-input/20 px-3 shadow-none transition-colors motion-reduce:transition-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:bg-input/30 focus-visible:ring-2 focus-visible:ring-ring/30",
+            "h-9 flex-1 rounded-lg border border-input/40 bg-input/20 px-3 shadow-none transition-colors motion-reduce:transition-none placeholder:text-muted-foreground/60 focus-visible:border-muted-foreground/70 focus-visible:bg-input/30 focus-visible:ring-1 focus-visible:ring-muted-foreground/30",
             compact ? "text-sm" : "text-base",
           )}
           aria-label="New todo name"
@@ -143,12 +146,12 @@ function AddTodoRowComponent({
           />
           <span
             data-slot="priority-switch-track"
-            className="relative block h-7 w-16 rounded-full border border-border/80 bg-muted/70 text-[10px] font-semibold text-muted-foreground shadow-inner transition-colors motion-reduce:transition-none peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50 peer-checked:bg-primary/25 peer-checked:text-foreground"
+            className="relative block h-[1.875rem] w-[4.375rem] rounded-full border border-border bg-muted/60 text-[10px] font-semibold text-muted-foreground shadow-inner transition-colors motion-reduce:transition-none peer-focus-visible:ring-2 peer-focus-visible:ring-muted-foreground/40 peer-checked:border-primary/40 peer-checked:bg-primary/20 peer-checked:text-foreground"
           >
             <span
               className={cn(
                 "absolute inset-y-0 flex items-center",
-                priority === "high" ? "left-2" : "right-2",
+                priority === "high" ? "left-2.5" : "right-2.5",
               )}
             >
               {priority === "high" ? "High" : "Low"}
@@ -157,8 +160,8 @@ function AddTodoRowComponent({
               data-slot="priority-switch-thumb"
               aria-hidden="true"
               className={cn(
-                "absolute top-[3px] left-[3px] size-5 rounded-full bg-foreground/65 shadow-sm transition-[transform,background-color] motion-reduce:transition-none",
-                priority === "high" && "translate-x-9 bg-primary",
+                "absolute top-[3px] left-[3px] size-[1.375rem] rounded-full bg-foreground/75 shadow-sm transition-[transform,background-color] motion-reduce:transition-none",
+                priority === "high" && "translate-x-10 bg-primary",
               )}
             />
           </span>

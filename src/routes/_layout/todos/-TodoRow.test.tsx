@@ -219,7 +219,7 @@ describe("TodoRow", () => {
     });
 
     expect(row.className).toContain("min-h-[44px]");
-    expect(row.className).toContain("px-3");
+    expect(row.className).toContain("px-2");
     expect(row.className).toContain("motion-reduce:transition-none");
     expect(screen.getByRole("button", { name: "Deploy app" }).className).toContain("text-sm");
     expect(screen.getByRole("button", { name: /mark "deploy app" as started/i })).toBeTruthy();
