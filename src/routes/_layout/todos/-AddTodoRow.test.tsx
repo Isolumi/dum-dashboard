@@ -340,9 +340,7 @@ describe("AddTodoRow (compact state)", () => {
     const addButton = screen.getByRole("button", { name: /^add$/i });
 
     expect(controls?.className).toContain("grid-cols-[minmax(5rem,1fr)_auto_auto]");
-    expect(controls?.className).toContain(
-      "sm:grid-cols-[2.75rem_minmax(5rem,1fr)_auto_auto_auto]",
-    );
+    expect(controls?.className).toContain("sm:grid-cols-[2.75rem_minmax(5rem,1fr)_auto_auto_auto]");
     expect(alignmentSpacer?.className).toContain("hidden");
     expect(alignmentSpacer?.className).toContain("sm:block");
     expect(addButton.className).toContain("col-span-3");
