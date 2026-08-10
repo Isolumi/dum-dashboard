@@ -108,11 +108,11 @@ function AddTodoRowComponent({
         className={cn(
           "min-h-[44px] items-center",
           compact
-            ? "grid grid-cols-[2.75rem_minmax(5rem,1fr)_auto_auto_auto] gap-1 px-2"
+            ? "grid grid-cols-[minmax(5rem,1fr)_auto_auto] gap-1 px-2 py-1 sm:grid-cols-[2.75rem_minmax(5rem,1fr)_auto_auto_auto] sm:py-0"
             : "flex gap-2 px-4",
         )}
       >
-        {compact && <span aria-hidden="true" />}
+        {compact && <span className="hidden sm:block" aria-hidden="true" />}
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -180,7 +180,14 @@ function AddTodoRowComponent({
           />
         </div>
 
-        <Button type="submit" size="sm" className="h-9 min-h-0 shrink-0">
+        <Button
+          type="submit"
+          size="sm"
+          className={cn(
+            "h-9 min-h-0 shrink-0",
+            compact && "col-span-3 w-full sm:col-span-1 sm:w-auto",
+          )}
+        >
           Add
         </Button>
       </div>

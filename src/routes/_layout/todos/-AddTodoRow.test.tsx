@@ -321,11 +321,32 @@ describe("AddTodoRow (compact state)", () => {
 
     expect(controls?.className).toContain("min-h-[44px]");
     expect(controls?.className).toContain("px-2");
-    expect(controls?.className).not.toMatch(/\bpy-/);
+    expect(controls?.className).toContain("py-1");
+    expect(controls?.className).toContain("sm:py-0");
     expect(nameInput.className).toContain("h-9");
     expect(prioritySwitch.nextElementSibling?.className).toContain("h-[1.875rem]");
     expect(dateTrigger.className).toContain("h-9");
     expect(addButton.className).toContain("h-9");
+  });
+
+  it("stacks the Add action below the compact controls on narrow screens", () => {
+    const { container } = render(
+      React.createElement(AddTodoRow, { compact: true, onCreate: noopCreate }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /add a new todo/i }));
+
+    const controls = container.querySelector("form")?.firstElementChild;
+    const alignmentSpacer = controls?.firstElementChild;
+    const addButton = screen.getByRole("button", { name: /^add$/i });
+
+    expect(controls?.className).toContain("grid-cols-[minmax(5rem,1fr)_auto_auto]");
+    expect(controls?.className).toContain(
+      "sm:grid-cols-[2.75rem_minmax(5rem,1fr)_auto_auto_auto]",
+    );
+    expect(alignmentSpacer?.className).toContain("hidden");
+    expect(alignmentSpacer?.className).toContain("sm:block");
+    expect(addButton.className).toContain("col-span-3");
+    expect(addButton.className).toContain("sm:col-span-1");
   });
 });
 
