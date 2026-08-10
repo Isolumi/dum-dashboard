@@ -217,9 +217,9 @@ function installTodoServer(initialTodos: Todo[]) {
   });
   vi.mocked(moveTodo).mockResolvedValue(undefined);
   vi.mocked(reorderTodos).mockImplementation(async ({ data }) => {
-    for (const update of data.updates) {
-      const current = serverTodos.get(update.id);
-      if (current) serverTodos.set(update.id, { ...current, sort_order: update.sort_order });
+    for (const [sortOrder, id] of data.ordered_ids.entries()) {
+      const current = serverTodos.get(id);
+      if (current) serverTodos.set(id, { ...current, sort_order: sortOrder });
     }
   });
 }
@@ -373,10 +373,8 @@ describe("TodoBentoCard", () => {
     await waitFor(() =>
       expect(reorderTodos).toHaveBeenCalledWith({
         data: {
-          updates: [
-            { id: second.id, sort_order: 0 },
-            { id: first.id, sort_order: 1 },
-          ],
+          expected_ids: [first.id, second.id],
+          ordered_ids: [second.id, first.id],
         },
       }),
     );

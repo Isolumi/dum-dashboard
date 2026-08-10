@@ -329,6 +329,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
       return runOrderingMutation(async () => {
         if (orderedIds.some((id) => blockedIdsRef.current.has(id))) return;
 
+        const expectedIds = groupAndSortTodos(todosRef.current)[priority].map((todo) => todo.id);
         const orderedSortOrders = new Map(
           orderedIds.map((id, sortOrder) => [id, sortOrder] as const),
         );
@@ -352,7 +353,8 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
         try {
           await reorderTodos({
             data: {
-              updates: orderedIds.map((id, sort_order) => ({ id, sort_order })),
+              expected_ids: expectedIds,
+              ordered_ids: orderedIds,
             },
           });
         } catch {

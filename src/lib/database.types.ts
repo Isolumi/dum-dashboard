@@ -219,6 +219,13 @@ export type Database = {
         };
         Returns: undefined;
       };
+      reorder_todos_atomically: {
+        Args: {
+          p_expected_ids: string[];
+          p_ordered_ids: string[];
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       category: "food" | "transportation" | "entertainment" | "essentials" | "bills" | "other";

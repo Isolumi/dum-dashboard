@@ -193,7 +193,7 @@ git commit -m "style: polish Todo add controls"
 **Interfaces:**
 
 - Consumes: repository CI, linked Supabase project, GHCR build workflow, Argo CD application `dum-dashboard-dumachine`.
-- Produces: verified remote migration `20260810214100`, merged PR, healthy live image, and browser evidence.
+- Produces: verified remote migrations `20260810214100` and `20260810233000`, merged PR, healthy live image, and browser evidence.
 
 - [ ] **Step 1: Run all local checks**
 
@@ -208,11 +208,11 @@ git diff --check origin/v1...HEAD
 
 Expected: every command exits zero.
 
-- [ ] **Step 2: Apply and verify the atomic move migration on the linked Supabase project**
+- [ ] **Step 2: Apply and verify the atomic ordering migrations on the linked Supabase project**
 
 Do this before the branch is pushed, merged, or deployed. Confirm the pending set, apply only the
-repository migration history, and confirm that `20260810214100_atomic_todo_priority_move.sql` is
-recorded remotely:
+repository migration history, and confirm that `20260810214100_atomic_todo_priority_move.sql` and
+`20260810233000_atomic_todo_reorder.sql` are recorded remotely:
 
 ```bash
 bunx supabase migration list --linked
@@ -221,17 +221,17 @@ bunx supabase db push --linked
 bunx supabase migration list --linked
 ```
 
-Do not use `--include-all`. In the final migration list, version `20260810214100` must appear in both
-the Local and Remote columns. Then verify the function and its execution grants without changing Todo
-data:
+Do not use `--include-all`. In the final migration list, versions `20260810214100` and
+`20260810233000` must appear in both the Local and Remote columns. Then verify both functions and
+their execution grants without changing Todo data:
 
 ```bash
-bunx supabase db query --linked "select p.proname, pg_get_function_identity_arguments(p.oid) as arguments, has_function_privilege('service_role', p.oid, 'EXECUTE') as service_role_execute, has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute, has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute from pg_proc as p join pg_namespace as n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'move_todo_between_priorities';"
+bunx supabase db query --linked "select p.proname, pg_get_function_identity_arguments(p.oid) as arguments, has_function_privilege('service_role', p.oid, 'EXECUTE') as service_role_execute, has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute, has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute from pg_proc as p join pg_namespace as n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in ('move_todo_between_priorities', 'reorder_todos_atomically') order by p.proname;"
 ```
 
-Expected: one `move_todo_between_priorities` row with arguments `uuid, todo_priority, uuid[], uuid[]`;
-`service_role_execute` is true; `authenticated_execute` and `anon_execute` are false. Stop before
-publish or merge if migration application or either verification fails.
+Expected: one row for each function; `service_role_execute` is true for both, and
+`authenticated_execute` and `anon_execute` are false for both. Stop before publish or merge if
+migration application or either verification fails.
 
 - [ ] **Step 3: Review and publish**
 

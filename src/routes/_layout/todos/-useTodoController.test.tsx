@@ -416,6 +416,21 @@ describe("useTodoController", () => {
     expect(result.current.pendingIds.size).toBe(0);
   });
 
+  it("persists the expected and requested orders in one reorder call", async () => {
+    const first = makeTodo({ id: "first", name: "First", sort_order: 0 });
+    const second = makeTodo({ id: "second", name: "Second", sort_order: 1 });
+    const { result } = renderHook(() => useTodoController([first, second]));
+
+    await act(async () => result.current.reorder("high", [second.id, first.id]));
+
+    expect(reorderTodos).toHaveBeenCalledWith({
+      data: {
+        expected_ids: [first.id, second.id],
+        ordered_ids: [second.id, first.id],
+      },
+    });
+  });
+
   it("starts an atomic move only after an earlier reorder write finishes", async () => {
     const first = makeTodo({ id: "first", name: "First", sort_order: 0 });
     const second = makeTodo({ id: "second", name: "Second", sort_order: 1 });

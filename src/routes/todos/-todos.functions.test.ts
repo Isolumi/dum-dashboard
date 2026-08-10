@@ -42,6 +42,7 @@ const {
   MoveTodoInputSchema,
   normalizeCreateTodoFields,
   normalizeUpdateTodoFields,
+  reorderTodos,
   ReorderTodosSchema,
   UpdateTodoSchema,
 } = await import("./todos.functions");
@@ -326,15 +327,51 @@ describe("DeleteTodoSchema", () => {
 
 describe("ReorderTodosSchema", () => {
   it("rejects empty reorder batches", () => {
-    const result = ReorderTodosSchema.safeParse({ updates: [] });
+    const result = ReorderTodosSchema.safeParse({ expected_ids: [], ordered_ids: [] });
     expect(result.success).toBe(false);
   });
 
-  it("rejects negative sort order values", () => {
-    const result = ReorderTodosSchema.safeParse({
-      updates: [{ id: TODO_ID, sort_order: -1 }],
+  it.each([
+    ["duplicate expected id", [TODO_ID, TODO_ID], [SECOND_TODO_ID, TODO_ID]],
+    ["duplicate ordered id", [TODO_ID, SECOND_TODO_ID], [TODO_ID, TODO_ID]],
+    ["different Todo sets", [TODO_ID, SECOND_TODO_ID], [TODO_ID, LOW_TODO_ID]],
+  ])("rejects %s", (_name, expected_ids, ordered_ids) => {
+    expect(ReorderTodosSchema.safeParse({ expected_ids, ordered_ids }).success).toBe(false);
+  });
+});
+
+describe("reorderTodos", () => {
+  it("calls one stale-state-validating atomic database RPC", async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: null });
+
+    await expect(
+      reorderTodos({
+        data: {
+          expected_ids: [TODO_ID, SECOND_TODO_ID],
+          ordered_ids: [SECOND_TODO_ID, TODO_ID],
+        },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(rpcMock).toHaveBeenCalledOnce();
+    expect(rpcMock).toHaveBeenCalledWith("reorder_todos_atomically", {
+      p_expected_ids: [TODO_ID, SECOND_TODO_ID],
+      p_ordered_ids: [SECOND_TODO_ID, TODO_ID],
     });
-    expect(result.success).toBe(false);
+    expect(assertSameOrigin).toHaveBeenCalledOnce();
+  });
+
+  it("reports an atomic database reorder failure", async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: { message: "stale Todo order" } });
+
+    await expect(
+      reorderTodos({
+        data: {
+          expected_ids: [TODO_ID, SECOND_TODO_ID],
+          ordered_ids: [SECOND_TODO_ID, TODO_ID],
+        },
+      }),
+    ).rejects.toThrow("Failed to reorder todos: stale Todo order");
   });
 });
 
