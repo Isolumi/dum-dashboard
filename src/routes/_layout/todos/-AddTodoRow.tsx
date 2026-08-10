@@ -61,8 +61,8 @@ function AddTodoRowComponent({
       <div
         ref={collapsedRowRef}
         className={cn(
-          "flex min-h-[44px] cursor-pointer items-center rounded-md transition-colors motion-reduce:transition-none hover:bg-accent focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-          compact ? "gap-1 px-2" : "gap-2 px-4",
+          "min-h-[44px] cursor-pointer items-center rounded-md transition-colors motion-reduce:transition-none hover:bg-accent focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          compact ? "grid grid-cols-[2.75rem_minmax(0,1fr)] gap-1 px-3" : "flex gap-2 px-4",
         )}
         onClick={() => {
           setIsExpanded(true);
@@ -80,7 +80,7 @@ function AddTodoRowComponent({
         role="button"
         aria-label="Add a new todo"
       >
-        <Plus className="text-muted-foreground" />
+        <Plus className={cn("text-muted-foreground", compact && "justify-self-center")} />
         <span className={cn("italic text-muted-foreground", compact ? "text-xs" : "text-sm")}>
           Add a todo...
         </span>
@@ -90,7 +90,7 @@ function AddTodoRowComponent({
 
   return (
     <form
-      className="rounded-md bg-accent/50"
+      className="rounded-md bg-accent/30 ring-1 ring-inset ring-border/50"
       onKeyDown={(event) => {
         if (event.key !== "Escape" || event.defaultPrevented) return;
         event.preventDefault();
@@ -101,7 +101,15 @@ function AddTodoRowComponent({
         handleSubmit();
       }}
     >
-      <div className={cn("flex min-h-[44px] items-center", compact ? "gap-1 px-2" : "gap-2 px-4")}>
+      <div
+        className={cn(
+          "min-h-[44px] items-center",
+          compact
+            ? "grid grid-cols-[2.75rem_minmax(5rem,1fr)_auto_auto_auto] gap-1 px-3"
+            : "flex gap-2 px-4",
+        )}
+      >
+        {compact && <span aria-hidden="true" />}
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -123,19 +131,38 @@ function AddTodoRowComponent({
           aria-label="New todo name"
         />
 
-        <button
-          type="button"
-          role="switch"
-          aria-label="High priority"
-          aria-checked={priority === "high"}
-          onClick={() => setPriority((current) => (current === "high" ? "low" : "high"))}
-          className={cn(
-            "flex h-9 min-w-[3.75rem] shrink-0 cursor-pointer items-center justify-center rounded-full border border-border bg-muted/50 px-2 text-muted-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-checked:bg-accent aria-checked:text-foreground",
-            compact ? "text-xs" : "text-sm",
-          )}
-        >
-          {priority === "high" ? "High" : "Low"}
-        </button>
+        <label className="relative inline-flex h-9 shrink-0 cursor-pointer items-center rounded-full focus-within:outline-none">
+          <input
+            type="checkbox"
+            role="switch"
+            aria-label="High priority"
+            aria-checked={priority === "high"}
+            checked={priority === "high"}
+            onChange={(event) => setPriority(event.target.checked ? "high" : "low")}
+            className="peer absolute inset-0 z-10 size-full cursor-pointer opacity-0"
+          />
+          <span
+            data-slot="priority-switch-track"
+            className="relative block h-7 w-16 rounded-full border border-border/80 bg-muted/70 text-[10px] font-semibold text-muted-foreground shadow-inner transition-colors motion-reduce:transition-none peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50 peer-checked:bg-primary/25 peer-checked:text-foreground"
+          >
+            <span
+              className={cn(
+                "absolute inset-y-0 flex items-center",
+                priority === "high" ? "left-2" : "right-2",
+              )}
+            >
+              {priority === "high" ? "High" : "Low"}
+            </span>
+            <span
+              data-slot="priority-switch-thumb"
+              aria-hidden="true"
+              className={cn(
+                "absolute top-[3px] left-[3px] size-5 rounded-full bg-foreground/65 shadow-sm transition-[transform,background-color] motion-reduce:transition-none",
+                priority === "high" && "translate-x-9 bg-primary",
+              )}
+            />
+          </span>
+        </label>
 
         <div className="w-11 shrink-0">
           <TodoDueDatePicker

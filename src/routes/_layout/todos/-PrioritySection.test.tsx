@@ -38,6 +38,7 @@ describe("PrioritySection", () => {
     );
 
     expect(container.firstElementChild?.className).toContain("gap-0.5");
+    expect(screen.getByText("High priority").parentElement?.className).toContain("pl-[3.75rem]");
     expect(
       screen.getByRole("button", { name: /change "deploy app" priority to low/i }),
     ).toBeTruthy();
