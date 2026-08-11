@@ -5,8 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 
+let dialogContentKeyDownHandler: React.KeyboardEventHandler<HTMLDivElement> | undefined;
+
 afterEach(() => {
   cleanup();
+  dialogContentKeyDownHandler = undefined;
 });
 
 vi.mock("#/components/ui/popover", () => {
@@ -60,6 +63,78 @@ vi.mock("#/components/ui/popover", () => {
   };
 });
 
+vi.mock("#/components/ui/dialog", () => {
+  const DialogContext = React.createContext<{
+    open: boolean;
+    onOpenChange?: (open: boolean) => void;
+  } | null>(null);
+
+  return {
+    Dialog: ({
+      open = false,
+      onOpenChange,
+      children,
+    }: {
+      open?: boolean;
+      onOpenChange?: (open: boolean) => void;
+      children: React.ReactNode;
+    }) => (
+      <DialogContext.Provider value={{ open, onOpenChange }}>{children}</DialogContext.Provider>
+    ),
+    DialogTrigger: ({
+      render: trigger,
+      children,
+    }: {
+      render: React.ReactElement<{ onClick?: React.MouseEventHandler<HTMLElement> }>;
+      children: React.ReactNode;
+    }) => {
+      const context = React.useContext(DialogContext);
+      return React.cloneElement(
+        trigger,
+        {
+          onClick: (event: React.MouseEvent<HTMLElement>) => {
+            trigger.props.onClick?.(event);
+            if (!event.defaultPrevented) context?.onOpenChange?.(!context.open);
+          },
+        },
+        children,
+      );
+    },
+    DialogContent: ({
+      children,
+      closeLabel = "Close",
+      onKeyDown,
+      ...props
+    }: React.ComponentProps<"div"> & { closeLabel?: string }) => {
+      const context = React.useContext(DialogContext);
+      dialogContentKeyDownHandler = onKeyDown;
+      return context?.open ? (
+        <div role="dialog" onKeyDown={onKeyDown} {...props}>
+          {children}
+          <button
+            type="button"
+            aria-label={closeLabel}
+            onClick={() => context.onOpenChange?.(false)}
+          >
+            Close
+          </button>
+        </div>
+      ) : null;
+    },
+    DialogTitle: ({ children, ...props }: React.ComponentProps<"h2">) => (
+      <h2 {...props}>{children}</h2>
+    ),
+    DialogClose: ({ children, ...props }: React.ComponentProps<"button">) => {
+      const context = React.useContext(DialogContext);
+      return (
+        <button type="button" {...props} onClick={() => context?.onOpenChange?.(false)}>
+          {children}
+        </button>
+      );
+    },
+  };
+});
+
 vi.mock("#/components/ui/calendar", () => ({
   Calendar: ({ onSelect }: { onSelect: (date: Date) => void }) => (
     <button type="button" onClick={() => onSelect(new Date(2026, 11, 25))}>
@@ -71,6 +146,47 @@ vi.mock("#/components/ui/calendar", () => ({
 const { TodoDueDatePicker } = await import("./-TodoDueDatePicker");
 
 describe("TodoDueDatePicker", () => {
+  it("uses an anchored popover by default", () => {
+    render(<TodoDueDatePicker value={null} onChange={vi.fn()} label="Edit due date" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit due date" }));
+
+    expect(screen.getByTestId("due-date-popover")).toBeTruthy();
+    expect(screen.queryByTestId("due-date-dialog")).toBeNull();
+  });
+
+  it("uses a centered dialog when requested", () => {
+    render(
+      <TodoDueDatePicker
+        value={null}
+        onChange={vi.fn()}
+        label="Choose date and time"
+        presentation="dialog"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose date and time" }));
+
+    expect(screen.getByTestId("due-date-dialog")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /close date and time picker/i })).toBeTruthy();
+    expect(screen.queryByTestId("due-date-popover")).toBeNull();
+  });
+
+  it("delegates Escape dismissal to the Dialog wrapper", () => {
+    render(
+      <TodoDueDatePicker
+        value={null}
+        onChange={vi.fn()}
+        label="Choose date and time"
+        presentation="dialog"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose date and time" }));
+
+    expect(dialogContentKeyDownHandler).toBeUndefined();
+  });
+
   it("keeps the empty trigger icon-only and exposes accessible native inputs", () => {
     render(
       <TodoDueDatePicker
