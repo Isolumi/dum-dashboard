@@ -26,11 +26,6 @@ const dndTestState = vi.hoisted(() => ({
   nextSortableId: new Map<string, string>(),
 }));
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({ to, children, ...props }: { to: string; children: React.ReactNode }) =>
-    React.createElement("a", { href: to, ...props }, children),
-}));
-
 vi.mock("#/routes/todos/todos.functions", () => ({
   createTodo: vi.fn(),
   deleteTodo: vi.fn(),
