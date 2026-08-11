@@ -283,6 +283,28 @@ describe("TodoDueDatePicker", () => {
     expect(trigger.querySelector("svg")?.className.baseVal).not.toContain("opacity-0");
   });
 
+  it("sizes and centers an empty compact calendar trigger", () => {
+    render(
+      <TodoDueDatePicker
+        value={null}
+        compact
+        onChange={vi.fn()}
+        label={'Edit due date for "Deploy app"'}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: /edit due date for "deploy app"/i,
+    });
+    const icon = trigger.querySelector("svg");
+
+    expect(trigger.className).toContain("size-9");
+    expect(trigger.className).toContain("[@media(pointer:coarse)]:size-11");
+    expect(trigger.className).toContain("justify-center");
+    expect(icon?.className.baseVal).not.toContain("ml-auto");
+    expect(icon?.className.baseVal).toContain("group-focus-within:opacity-100");
+  });
+
   it("keeps a selected value inside the trigger overflow contract", () => {
     render(
       <TodoDueDatePicker
