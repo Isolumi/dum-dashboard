@@ -147,10 +147,13 @@ describe("AddTodoRow (expanded state)", () => {
     expect(checkboxBox?.textContent).toContain("High");
     expect(checkboxBox?.textContent).not.toContain("Low");
     expect(checkboxBox?.getAttribute("data-slot")).toBe("priority-checkbox-box");
+    const checkboxCheck = checkboxBox?.querySelector('[data-slot="priority-checkbox-check"]');
+    expect(checkboxCheck).toBeTruthy();
+    expect(checkboxCheck?.getAttribute("class")).toContain("opacity-0");
 
     fireEvent.click(highCheckbox);
     expect(highCheckbox.checked).toBe(true);
-    expect(checkboxBox?.querySelector('[data-slot="priority-checkbox-check"]')).toBeTruthy();
+    expect(checkboxCheck?.getAttribute("class")).toContain("opacity-100");
     expect(dateTrigger.querySelector("svg")).toBeTruthy();
     expect(dateTrigger.querySelector("svg")?.className.baseVal).not.toContain("opacity-0");
     expect(screen.getByRole("button", { name: /^add$/i })).toBeTruthy();
