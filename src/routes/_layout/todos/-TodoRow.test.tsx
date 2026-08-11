@@ -251,6 +251,45 @@ describe("TodoRow", () => {
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
+  it("clamps compact names to two lines without changing the full-page name", () => {
+    renderTodoRow({ compact: true });
+
+    const compactName = screen.getByRole("button", { name: "Deploy app" }).querySelector("span");
+    expect(compactName?.className).toContain("line-clamp-2");
+    expect(compactName?.className).toContain("leading-5");
+    expect(compactName?.className).not.toContain("truncate");
+
+    cleanup();
+    renderTodoRow();
+
+    const fullName = screen.getByRole("button", { name: "Deploy app" }).querySelector("span");
+    expect(fullName?.className).toContain("truncate");
+    expect(fullName?.className).not.toContain("line-clamp-2");
+  });
+
+  it("keeps compact actions stable with calendar before trash", () => {
+    renderTodoRow({ compact: true, todo: { ...highTodo, due_date: null } });
+
+    const calendar = screen.getByRole("button", {
+      name: /edit due date for "deploy app"/i,
+    });
+    const trash = screen.getByRole("button", { name: /delete "deploy app"/i });
+    const calendarWrapper = calendar.parentElement;
+    const actionRail = calendarWrapper?.parentElement;
+
+    expect(calendar.compareDocumentPosition(trash) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(actionRail?.className).toContain("gap-0.5");
+    expect(calendarWrapper?.className).toContain("w-9");
+    expect(calendarWrapper?.className).toContain("[@media(pointer:coarse)]:w-11");
+    expect(trash.className).toContain("size-9");
+    expect(trash.className).toContain("[@media(pointer:coarse)]:size-11");
+    expect(trash.className).toContain("opacity-0");
+    expect(trash.className).toContain("group-hover:opacity-100");
+    expect(trash.className).toContain("group-focus-within:opacity-100");
+  });
+
   it("keeps the full-page drag handle before the status control", () => {
     renderTodoRow();
 
