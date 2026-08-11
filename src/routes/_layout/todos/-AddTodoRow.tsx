@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
@@ -133,46 +133,26 @@ function AddTodoRowComponent({
           aria-label="New todo name"
         />
 
-        <label className="relative inline-flex h-9 shrink-0 cursor-pointer items-center rounded-full focus-within:outline-none">
+        <label className="relative inline-flex h-9 shrink-0 cursor-pointer items-center rounded-md">
           <input
             type="checkbox"
-            role="switch"
             aria-label="High priority"
-            aria-checked={priority === "high"}
             checked={priority === "high"}
             onChange={(event) => setPriority(event.target.checked ? "high" : "low")}
             className="peer absolute inset-0 z-10 size-full cursor-pointer opacity-0"
           />
           <span
-            data-slot="priority-switch-track"
-            className="relative block h-[1.875rem] w-[4.375rem] rounded-full border border-border bg-muted/60 text-[10px] font-semibold text-muted-foreground shadow-inner transition-colors duration-200 ease-out motion-reduce:transition-none peer-focus-visible:ring-2 peer-focus-visible:ring-muted-foreground/40 peer-checked:border-primary/40 peer-checked:bg-primary/20 peer-checked:text-foreground"
+            data-slot="priority-checkbox-box"
+            className="inline-flex h-9 min-w-[3.75rem] items-center justify-center gap-1 rounded-md border border-border bg-muted/40 px-2 text-xs font-medium text-muted-foreground transition-colors duration-150 ease-out motion-reduce:transition-none peer-focus-visible:ring-2 peer-focus-visible:ring-muted-foreground/40 peer-checked:border-primary/40 peer-checked:bg-primary/15 peer-checked:text-foreground"
           >
-            <span
-              data-slot="priority-switch-low-label"
+            <Check
+              data-slot="priority-checkbox-check"
               className={cn(
-                "absolute inset-y-0 right-2.5 flex items-center transition-opacity duration-200 ease-out motion-reduce:transition-none",
-                priority === "low" ? "opacity-100" : "opacity-0",
-              )}
-            >
-              Low
-            </span>
-            <span
-              data-slot="priority-switch-high-label"
-              className={cn(
-                "absolute inset-y-0 left-2.5 flex items-center transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                "size-3.5 transition-opacity duration-150 ease-out motion-reduce:transition-none",
                 priority === "high" ? "opacity-100" : "opacity-0",
               )}
-            >
-              High
-            </span>
-            <span
-              data-slot="priority-switch-thumb"
-              aria-hidden="true"
-              className={cn(
-                "absolute top-[3px] left-[3px] size-[1.375rem] rounded-full bg-foreground/75 shadow-sm transition-[transform,background-color] duration-200 ease-out motion-reduce:transition-none",
-                priority === "high" && "translate-x-10 bg-primary",
-              )}
             />
+            <span>High</span>
           </span>
         </label>
 

@@ -117,15 +117,15 @@ function TodoRowComponent({
       className={cn(
         "group min-h-[44px] items-center rounded-md transition-colors motion-reduce:transition-none hover:bg-accent",
         compact
-          ? "grid grid-cols-[2.75rem_2.75rem_minmax(0,1fr)_auto] gap-1 px-2"
-          : "flex gap-2 px-4",
+          ? "grid grid-cols-[1.5rem_2.75rem_minmax(0,1fr)_auto] gap-1 px-2"
+          : "flex gap-1 px-4",
         todo.status === "complete" && "opacity-60",
       )}
     >
       <button
         {...dragListeners}
         disabled={dragDisabled || isPending}
-        className="min-h-11 min-w-11 shrink-0 cursor-grab rounded-md text-muted-foreground opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing disabled:cursor-default"
+        className="h-11 w-6 min-w-0 shrink-0 cursor-grab rounded-md text-muted-foreground opacity-40 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:cursor-grabbing disabled:cursor-default"
         aria-label={`Drag to move "${todo.name}"`}
       >
         <GripVertical className="size-4" />
