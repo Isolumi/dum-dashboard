@@ -1,10 +1,9 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { Check, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 import { cn } from "#/lib/utils";
-import type { TodoPriority } from "#/lib/database.types";
 import { TodoDueDatePicker } from "./-TodoDueDatePicker";
 
 export interface AddTodoRowProps {
@@ -14,18 +13,12 @@ export interface AddTodoRowProps {
     due_date: string | null;
     due_date_has_time: boolean;
   }) => void;
-  defaultPriority?: TodoPriority;
   compact?: boolean;
 }
 
-function AddTodoRowComponent({
-  onCreate,
-  defaultPriority = "low",
-  compact = false,
-}: AddTodoRowProps) {
+function AddTodoRowComponent({ onCreate, compact = false }: AddTodoRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [name, setName] = useState("");
-  const [priority, setPriority] = useState<TodoPriority>(defaultPriority);
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [dueDateHasTime, setDueDateHasTime] = useState(false);
 
@@ -42,22 +35,21 @@ function AddTodoRowComponent({
   const resetForm = useCallback(() => {
     restoreFocusRef.current = true;
     setName("");
-    setPriority(defaultPriority);
     setDueDate(null);
     setDueDateHasTime(false);
     setIsExpanded(false);
-  }, [defaultPriority]);
+  }, []);
 
   const handleSubmit = useCallback(() => {
     if (name.trim().length === 0) return;
     onCreate({
       name: name.trim(),
-      priority,
+      priority: "low",
       due_date: dueDate,
       due_date_has_time: dueDateHasTime,
     });
     resetForm();
-  }, [name, priority, dueDate, dueDateHasTime, onCreate, resetForm]);
+  }, [name, dueDate, dueDateHasTime, onCreate, resetForm]);
 
   if (!isExpanded) {
     return (
@@ -108,7 +100,7 @@ function AddTodoRowComponent({
         className={cn(
           "min-h-[44px] items-center",
           compact
-            ? "grid grid-cols-[minmax(5rem,1fr)_auto_auto] gap-1 px-2 py-1 sm:grid-cols-[minmax(5rem,1fr)_auto_auto_auto] sm:py-0"
+            ? "grid grid-cols-[minmax(5rem,1fr)_auto_auto] gap-1 px-2 py-1 sm:py-0"
             : "flex gap-2 px-4",
         )}
       >
@@ -133,31 +125,9 @@ function AddTodoRowComponent({
           aria-label="New todo name"
         />
 
-        <label className="relative inline-flex h-9 shrink-0 cursor-pointer items-center rounded-md">
-          <input
-            type="checkbox"
-            aria-label="High priority"
-            checked={priority === "high"}
-            onChange={(event) => setPriority(event.target.checked ? "high" : "low")}
-            className="peer absolute inset-0 z-10 size-full cursor-pointer opacity-0"
-          />
-          <span
-            data-slot="priority-checkbox-box"
-            className="inline-flex h-9 min-w-[3.75rem] items-center justify-center gap-1 rounded-md border border-border bg-muted/40 px-2 text-xs font-medium text-muted-foreground transition-colors duration-150 ease-out motion-reduce:transition-none peer-focus-visible:ring-2 peer-focus-visible:ring-muted-foreground/40 peer-checked:border-primary/40 peer-checked:bg-primary/15 peer-checked:text-foreground"
-          >
-            <Check
-              data-slot="priority-checkbox-check"
-              className={cn(
-                "size-3.5 transition-opacity duration-150 ease-out motion-reduce:transition-none",
-                priority === "high" ? "opacity-100" : "opacity-0",
-              )}
-            />
-            <span>High</span>
-          </span>
-        </label>
-
         <div className="w-11 shrink-0">
           <TodoDueDatePicker
+            presentation="dialog"
             value={dueDate}
             onChange={(value, hasTime) => {
               setDueDate(value);
@@ -169,14 +139,7 @@ function AddTodoRowComponent({
           />
         </div>
 
-        <Button
-          type="submit"
-          size="sm"
-          className={cn(
-            "h-9 min-h-0 shrink-0",
-            compact && "col-span-3 w-full sm:col-span-1 sm:w-auto",
-          )}
-        >
+        <Button type="submit" size="sm" className="h-9 min-h-0 shrink-0">
           Add
         </Button>
       </div>
