@@ -255,6 +255,7 @@ describe("TodoRow", () => {
     const dragControl = screen.getByRole("button", { name: /drag to move "deploy app"/i });
     const statusControl = screen.getByRole("button", { name: /mark "deploy app" as started/i });
 
+    expect(row.className).toContain("flex gap-1 px-4");
     expect(row.firstElementChild).toBe(dragControl);
     expect(row.children[1]).toBe(statusControl);
   });
