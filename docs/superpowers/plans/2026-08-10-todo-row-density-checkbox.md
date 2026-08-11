@@ -63,15 +63,14 @@ Expected: FAIL because the row still uses `2.75rem` for the drag column and the 
 Change the row layout to:
 
 ```tsx
-compact
-  ? "grid grid-cols-[1.5rem_2.75rem_minmax(0,1fr)_auto] gap-1 px-2"
-  : "flex gap-1 px-4"
+compact ? "grid grid-cols-[1.5rem_2.75rem_minmax(0,1fr)_auto] gap-1 px-2" : "flex gap-1 px-4";
 ```
 
 Change the drag button sizing and resting opacity to:
 
 ```tsx
-className="h-11 w-6 min-w-0 shrink-0 cursor-grab rounded-md text-muted-foreground opacity-40 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:cursor-grabbing disabled:cursor-default"
+className =
+  "h-11 w-6 min-w-0 shrink-0 cursor-grab rounded-md text-muted-foreground opacity-40 transition-opacity motion-reduce:transition-none group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:cursor-grabbing disabled:cursor-default";
 ```
 
 Do not change drag listeners, ordering, status behavior, or action controls.
