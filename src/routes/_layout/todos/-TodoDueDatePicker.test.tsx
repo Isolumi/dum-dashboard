@@ -60,6 +60,76 @@ vi.mock("#/components/ui/popover", () => {
   };
 });
 
+vi.mock("#/components/ui/dialog", () => {
+  const DialogContext = React.createContext<{
+    open: boolean;
+    onOpenChange?: (open: boolean) => void;
+  } | null>(null);
+
+  return {
+    Dialog: ({
+      open = false,
+      onOpenChange,
+      children,
+    }: {
+      open?: boolean;
+      onOpenChange?: (open: boolean) => void;
+      children: React.ReactNode;
+    }) => (
+      <DialogContext.Provider value={{ open, onOpenChange }}>{children}</DialogContext.Provider>
+    ),
+    DialogTrigger: ({
+      render: trigger,
+      children,
+    }: {
+      render: React.ReactElement<{ onClick?: React.MouseEventHandler<HTMLElement> }>;
+      children: React.ReactNode;
+    }) => {
+      const context = React.useContext(DialogContext);
+      return React.cloneElement(
+        trigger,
+        {
+          onClick: (event: React.MouseEvent<HTMLElement>) => {
+            trigger.props.onClick?.(event);
+            if (!event.defaultPrevented) context?.onOpenChange?.(!context.open);
+          },
+        },
+        children,
+      );
+    },
+    DialogContent: ({
+      children,
+      closeLabel = "Close",
+      ...props
+    }: React.ComponentProps<"div"> & { closeLabel?: string }) => {
+      const context = React.useContext(DialogContext);
+      return context?.open ? (
+        <div role="dialog" {...props}>
+          {children}
+          <button
+            type="button"
+            aria-label={closeLabel}
+            onClick={() => context.onOpenChange?.(false)}
+          >
+            Close
+          </button>
+        </div>
+      ) : null;
+    },
+    DialogTitle: ({ children, ...props }: React.ComponentProps<"h2">) => (
+      <h2 {...props}>{children}</h2>
+    ),
+    DialogClose: ({ children, ...props }: React.ComponentProps<"button">) => {
+      const context = React.useContext(DialogContext);
+      return (
+        <button type="button" {...props} onClick={() => context?.onOpenChange?.(false)}>
+          {children}
+        </button>
+      );
+    },
+  };
+});
+
 vi.mock("#/components/ui/calendar", () => ({
   Calendar: ({ onSelect }: { onSelect: (date: Date) => void }) => (
     <button type="button" onClick={() => onSelect(new Date(2026, 11, 25))}>
@@ -71,6 +141,32 @@ vi.mock("#/components/ui/calendar", () => ({
 const { TodoDueDatePicker } = await import("./-TodoDueDatePicker");
 
 describe("TodoDueDatePicker", () => {
+  it("uses an anchored popover by default", () => {
+    render(<TodoDueDatePicker value={null} onChange={vi.fn()} label="Edit due date" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit due date" }));
+
+    expect(screen.getByTestId("due-date-popover")).toBeTruthy();
+    expect(screen.queryByTestId("due-date-dialog")).toBeNull();
+  });
+
+  it("uses a centered dialog when requested", () => {
+    render(
+      <TodoDueDatePicker
+        value={null}
+        onChange={vi.fn()}
+        label="Choose date and time"
+        presentation="dialog"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose date and time" }));
+
+    expect(screen.getByTestId("due-date-dialog")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /close date and time picker/i })).toBeTruthy();
+    expect(screen.queryByTestId("due-date-popover")).toBeNull();
+  });
+
   it("keeps the empty trigger icon-only and exposes accessible native inputs", () => {
     render(
       <TodoDueDatePicker
