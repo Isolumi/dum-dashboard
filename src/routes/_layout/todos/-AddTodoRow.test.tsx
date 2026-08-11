@@ -136,51 +136,19 @@ describe("AddTodoRow (expanded state)", () => {
   it("focuses the name input and exposes the compact inline controls", () => {
     renderExpanded();
     const nameInput = screen.getByRole("textbox", { name: /new todo name/i });
-    const prioritySwitch = screen.getByRole("switch", { name: /high priority/i });
+    const highCheckbox = screen.getByRole("checkbox", { name: /high priority/i });
+    const checkboxBox = highCheckbox.nextElementSibling;
     const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
 
     expect(document.activeElement).toBe(nameInput);
-    expect(prioritySwitch.tagName).toBe("INPUT");
-    expect(prioritySwitch.getAttribute("type")).toBe("checkbox");
-    expect(prioritySwitch.className).toContain("inset-0");
-    expect(prioritySwitch.className).toContain("size-full");
-    expect(prioritySwitch.nextElementSibling?.getAttribute("data-slot")).toBe(
-      "priority-switch-track",
-    );
-    const switchTrack = prioritySwitch.nextElementSibling as HTMLElement;
-    const switchThumb = switchTrack.querySelector('[data-slot="priority-switch-thumb"]');
-    expect(switchTrack.className).toContain("h-[1.875rem]");
-    expect(switchTrack.className).toContain("w-[4.375rem]");
-    expect(switchTrack.className).toContain("peer-focus-visible:ring-2");
-    expect(switchTrack.className).toContain("duration-200");
-    expect(switchTrack.className).toContain("ease-out");
-    expect(switchTrack.className).toContain("motion-reduce:transition-none");
-    expect(switchThumb).toBeTruthy();
-    expect(switchThumb?.getAttribute("class")).toContain("size-[1.375rem]");
-    expect(switchThumb?.getAttribute("class")).toContain("duration-200");
-    expect(switchThumb?.getAttribute("class")).toContain("ease-out");
-    expect(switchThumb?.getAttribute("class")).toContain("motion-reduce:transition-none");
-    const lowLabel = switchTrack.querySelector('[data-slot="priority-switch-low-label"]');
-    const highLabel = switchTrack.querySelector('[data-slot="priority-switch-high-label"]');
-    expect(lowLabel?.textContent).toBe("Low");
-    expect(highLabel?.textContent).toBe("High");
-    expect(lowLabel?.getAttribute("class")).toContain("duration-200");
-    expect(lowLabel?.getAttribute("class")).toContain("ease-out");
-    expect(lowLabel?.getAttribute("class")).toContain("motion-reduce:transition-none");
-    expect(highLabel?.getAttribute("class")).toContain("duration-200");
-    expect(highLabel?.getAttribute("class")).toContain("ease-out");
-    expect(highLabel?.getAttribute("class")).toContain("motion-reduce:transition-none");
-    expect(prioritySwitch.nextElementSibling?.textContent).toContain("Low");
-    expect(prioritySwitch.nextElementSibling?.textContent).toContain("High");
-    expect(prioritySwitch.getAttribute("aria-checked")).toBe("false");
-    expect(prioritySwitch.className).not.toContain("destructive");
-    fireEvent.click(prioritySwitch);
-    expect(prioritySwitch.nextElementSibling?.textContent).toContain("Low");
-    expect(prioritySwitch.nextElementSibling?.textContent).toContain("High");
-    expect(prioritySwitch.getAttribute("aria-checked")).toBe("true");
-    expect(
-      switchTrack.querySelector('[data-slot="priority-switch-thumb"]')?.getAttribute("class"),
-    ).toContain("translate-x-10");
+    expect(highCheckbox.checked).toBe(false);
+    expect(checkboxBox?.textContent).toContain("High");
+    expect(checkboxBox?.textContent).not.toContain("Low");
+    expect(checkboxBox?.getAttribute("data-slot")).toBe("priority-checkbox-box");
+
+    fireEvent.click(highCheckbox);
+    expect(highCheckbox.checked).toBe(true);
+    expect(checkboxBox?.querySelector('[data-slot="priority-checkbox-check"]')).toBeTruthy();
     expect(dateTrigger.querySelector("svg")).toBeTruthy();
     expect(dateTrigger.querySelector("svg")?.className.baseVal).not.toContain("opacity-0");
     expect(screen.getByRole("button", { name: /^add$/i })).toBeTruthy();
@@ -214,7 +182,7 @@ describe("AddTodoRow (expanded state)", () => {
     });
   });
 
-  it("submits high priority when the switch is turned on", () => {
+  it("submits high priority when the checkbox is checked", () => {
     const onCreate = vi.fn();
     render(React.createElement(AddTodoRow, { onCreate }));
 
@@ -222,7 +190,7 @@ describe("AddTodoRow (expanded state)", () => {
     fireEvent.change(screen.getByRole("textbox", { name: /new todo name/i }), {
       target: { value: "Handle outage" },
     });
-    fireEvent.click(screen.getByRole("switch", { name: /high priority/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /high priority/i }));
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
     expect(onCreate).toHaveBeenCalledWith({
@@ -272,12 +240,12 @@ describe("AddTodoRow (expanded state)", () => {
     expect(document.activeElement).toBe(addControl);
   });
 
-  it("cancels with Escape from the High switch focus path", () => {
+  it("cancels with Escape from the High checkbox focus path", () => {
     renderExpanded();
 
-    const prioritySwitch = screen.getByRole("switch", { name: /high priority/i });
-    prioritySwitch.focus();
-    fireEvent.keyDown(prioritySwitch, { key: "Escape" });
+    const highCheckbox = screen.getByRole("checkbox", { name: /high priority/i });
+    highCheckbox.focus();
+    fireEvent.keyDown(highCheckbox, { key: "Escape" });
 
     expect(screen.queryByRole("textbox", { name: /new todo name/i })).toBeNull();
     expect(screen.getAllByRole("button", { name: /add a new todo/i })).toHaveLength(1);
@@ -333,7 +301,7 @@ describe("AddTodoRow (compact state)", () => {
     const form = container.querySelector("form");
     const controls = form?.firstElementChild;
     const nameInput = screen.getByRole("textbox", { name: /new todo name/i });
-    const prioritySwitch = screen.getByRole("switch", { name: /high priority/i });
+    const highCheckbox = screen.getByRole("checkbox", { name: /high priority/i });
     const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
     const addButton = screen.getByRole("button", { name: /^add$/i });
 
@@ -342,7 +310,7 @@ describe("AddTodoRow (compact state)", () => {
     expect(controls?.className).toContain("py-1");
     expect(controls?.className).toContain("sm:py-0");
     expect(nameInput.className).toContain("h-9");
-    expect(prioritySwitch.nextElementSibling?.className).toContain("h-[1.875rem]");
+    expect(highCheckbox.nextElementSibling?.className).toContain("h-9");
     expect(dateTrigger.className).toContain("h-9");
     expect(addButton.className).toContain("h-9");
   });
