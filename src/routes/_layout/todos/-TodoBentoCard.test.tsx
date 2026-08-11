@@ -26,11 +26,6 @@ const dndTestState = vi.hoisted(() => ({
   nextSortableId: new Map<string, string>(),
 }));
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({ to, children, ...props }: { to: string; children: React.ReactNode }) =>
-    React.createElement("a", { href: to, ...props }, children),
-}));
-
 vi.mock("#/routes/todos/todos.functions", () => ({
   createTodo: vi.fn(),
   deleteTodo: vi.fn(),
@@ -244,15 +239,14 @@ afterEach(() => {
 });
 
 describe("TodoBentoCard", () => {
-  it("keeps only the Todos heading linked to the full page", () => {
+  it("removes the visible card header while keeping an accessible region name", () => {
     renderCard([]);
 
-    expect(screen.queryByLabelText("Open Todos tool")).toBeNull();
-    expect(screen.getByRole("region", { name: /todos/i }).tagName).toBe("SECTION");
-    const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(1);
-    expect(screen.queryByRole("link", { name: /open full page/i })).toBeNull();
-    expect(screen.getByRole("link", { name: "Todos" }).getAttribute("href")).toBe("/todos");
+    const region = screen.getByRole("region", { name: "Todos" });
+    expect(region.tagName).toBe("SECTION");
+    expect(within(region).queryByRole("heading")).toBeNull();
+    expect(within(region).queryByRole("link")).toBeNull();
+    expect(screen.queryByText("Open full page")).toBeNull();
   });
 
   it("creates a todo from the card without navigating", async () => {
