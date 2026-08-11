@@ -131,6 +131,8 @@ export function TodoDueDatePicker({
     return formatTodoDueDate(toTodoDueDate(dateValue, timeValue), true);
   }, [dateValue, timeValue]);
 
+  const compactIconOnly = compact && showValue && !value;
+
   function updateDueDate(nextDateValue: string, nextTimeValue: string) {
     setDateValue(nextDateValue);
     setTimeValue(nextTimeValue);
@@ -152,7 +154,11 @@ export function TodoDueDatePicker({
         disabled={disabled}
         className={cn(
           "group/date w-full min-w-0 overflow-hidden text-inherit hover:text-inherit",
-          showValue ? "min-h-11 justify-end px-2 text-right" : "h-9 min-h-0 justify-center px-0",
+          compactIconOnly
+            ? "size-9 min-h-0 justify-center px-0 [@media(pointer:coarse)]:size-11"
+            : showValue
+              ? "min-h-11 justify-end px-2 text-right"
+              : "h-9 min-h-0 justify-center px-0",
         )}
       />
     );
@@ -167,8 +173,10 @@ export function TodoDueDatePicker({
       <CalendarIcon
         className={cn(
           "size-4 text-muted-foreground",
+          showValue && !compactIconOnly && "ml-auto",
           showValue &&
-            "ml-auto opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-visible/date:opacity-100 [@media(pointer:coarse)]:opacity-100",
+            "opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-visible/date:opacity-100 [@media(pointer:coarse)]:opacity-100",
+          compact && "group-focus-within:opacity-100",
         )}
       />
     );

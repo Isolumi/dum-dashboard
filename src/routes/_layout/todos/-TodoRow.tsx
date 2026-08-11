@@ -167,7 +167,9 @@ function TodoRowComponent({
           disabled={isPending}
           aria-label={isPending ? `${todo.name} (saving)` : undefined}
         >
-          <span className="truncate">{todo.name}</span>
+          <span className={cn("min-w-0", compact ? "line-clamp-2 leading-5" : "truncate")}>
+            {todo.name}
+          </span>
           {isPending && (
             <span className="ml-2 shrink-0 text-xs text-muted-foreground">Saving…</span>
           )}
@@ -175,24 +177,11 @@ function TodoRowComponent({
       )}
 
       {compact ? (
-        <div className="relative flex min-w-11 shrink-0 items-center">
-          <div className="absolute right-full z-10 flex items-center rounded-md bg-accent opacity-0 transition-opacity before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-8 before:bg-gradient-to-r before:from-transparent before:to-accent motion-reduce:transition-none group-hover:opacity-100 focus-within:opacity-100 [@media(pointer:coarse)]:static [@media(pointer:coarse)]:opacity-100 [@media(pointer:coarse)]:before:hidden">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onDelete(todo.id)}
-              disabled={isPending}
-              aria-label={`Delete "${todo.name}"`}
-              className="size-11 shrink-0 hover:text-destructive"
-            >
-              <Trash2 />
-            </Button>
-          </div>
-
+        <div className="flex shrink-0 items-center gap-0.5">
           <div
             className={cn(
               "shrink-0 text-right",
-              todo.due_date ? "w-32" : "w-11",
+              todo.due_date ? "w-32" : "w-9 [@media(pointer:coarse)]:w-11",
               todo.due_date && (isOverdue ? "text-destructive" : "text-muted-foreground"),
             )}
           >
@@ -207,6 +196,17 @@ function TodoRowComponent({
               disabled={isPending}
             />
           </div>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onDelete(todo.id)}
+            disabled={isPending}
+            aria-label={`Delete "${todo.name}"`}
+            className="size-9 shrink-0 opacity-0 transition-opacity motion-reduce:transition-none hover:text-destructive group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:opacity-100"
+          >
+            <Trash2 />
+          </Button>
         </div>
       ) : (
         <>
