@@ -1,6 +1,6 @@
 # Remove the Todo Bento Header
 
-**Status:** Approved design; implementation pending
+**Status:** Implemented; merge and deployment pending
 
 ## Goal
 
