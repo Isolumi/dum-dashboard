@@ -37,11 +37,13 @@
 ### Task 1: Standard Base UI dialog and due-date presentations
 
 **Files:**
+
 - Create: `src/components/ui/dialog.tsx`
 - Modify: `src/routes/_layout/todos/-TodoDueDatePicker.tsx`
 - Test: `src/routes/_layout/todos/-TodoDueDatePicker.test.tsx`
 
 **Interfaces:**
+
 - Produces: `Dialog`, `DialogTrigger`, `DialogContent`, `DialogTitle`, and `DialogClose` wrappers over `@base-ui/react/dialog`.
 - Produces: `TodoDueDatePickerProps.presentation?: "popover" | "dialog"`, defaulting to `"popover"`.
 - Preserves: `onChange(value: string | null, hasTime: boolean): void`.
@@ -52,9 +54,7 @@ Add a `#/components/ui/dialog` mock with controlled open state. Add tests that p
 
 ```tsx
 it("uses an anchored popover by default", () => {
-  render(
-    <TodoDueDatePicker value={null} onChange={vi.fn()} label="Edit due date" />,
-  );
+  render(<TodoDueDatePicker value={null} onChange={vi.fn()} label="Edit due date" />);
   fireEvent.click(screen.getByRole("button", { name: "Edit due date" }));
   expect(screen.getByTestId("due-date-popover")).toBeTruthy();
   expect(screen.queryByTestId("due-date-dialog")).toBeNull();
@@ -130,7 +130,14 @@ function DialogContent({ className, children, ...props }: DialogPrimitive.Popup.
       >
         {children}
         <DialogPrimitive.Close
-          render={<Button type="button" variant="ghost" size="icon-sm" className="absolute right-2 top-2" />}
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="absolute right-2 top-2"
+            />
+          }
           aria-label="Close date and time picker"
         >
           <XIcon />
@@ -168,7 +175,9 @@ if (presentation === "dialog") {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={renderTrigger()} />
       <DialogContent data-testid="due-date-dialog" aria-labelledby={titleId}>
-        <DialogTitle id={titleId} className="sr-only">{label}</DialogTitle>
+        <DialogTitle id={titleId} className="sr-only">
+          {label}
+        </DialogTitle>
         {panel}
       </DialogContent>
     </Dialog>
@@ -184,7 +193,9 @@ return (
       className="w-auto p-0"
       align="end"
     >
-      <PopoverTitle id={titleId} className="sr-only">{label}</PopoverTitle>
+      <PopoverTitle id={titleId} className="sr-only">
+        {label}
+      </PopoverTitle>
       {panel}
     </PopoverContent>
   </Popover>
@@ -217,11 +228,13 @@ git commit -m "refactor: standardize Todo date overlays"
 ### Task 2: Make all new Todos Low and simplify the inline form
 
 **Files:**
+
 - Modify: `src/routes/_layout/todos/-AddTodoRow.tsx`
 - Modify: `src/routes/_layout/todos/-TodoBoard.tsx`
 - Test: `src/routes/_layout/todos/-AddTodoRow.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `TodoDueDatePicker presentation="dialog"` from Task 1.
 - Produces: `AddTodoRowProps` with only `onCreate` and optional `compact`.
 - Preserves: `onCreate` payload shape, with `priority` fixed to `"low"`.
@@ -285,9 +298,7 @@ priority: "low",
 Use the approved three-control compact grid:
 
 ```tsx
-compact
-  ? "grid grid-cols-[minmax(5rem,1fr)_auto_auto] gap-1 px-2 py-1 sm:py-0"
-  : "flex gap-2 px-4"
+compact ? "grid grid-cols-[minmax(5rem,1fr)_auto_auto] gap-1 px-2 py-1 sm:py-0" : "flex gap-2 px-4";
 ```
 
 Use the centered presentation:
@@ -341,10 +352,12 @@ git commit -m "feat: default new Todos to low priority"
 ### Task 3: Tighten compact Todo row geometry
 
 **Files:**
+
 - Modify: `src/routes/_layout/todos/-TodoRow.tsx`
 - Test: `src/routes/_layout/todos/-TodoRow.test.tsx`
 
 **Interfaces:**
+
 - Preserves all `TodoRowProps` and callbacks.
 - Produces the compact geometry `1rem + 0.125rem + 2.75rem + 0.125rem`, with 4 px row padding.
 
@@ -377,9 +390,7 @@ Expected: the new compact geometry assertions fail against the 24 px grip, 4 px 
 Change only the compact row classes:
 
 ```tsx
-compact
-  ? "grid grid-cols-[1rem_2.75rem_minmax(0,1fr)_auto] gap-0.5 px-1"
-  : "flex gap-1 px-4"
+compact ? "grid grid-cols-[1rem_2.75rem_minmax(0,1fr)_auto] gap-0.5 px-1" : "flex gap-1 px-4";
 ```
 
 Change the drag button width to `w-4` while keeping `h-11`, its focus ring, cursor behavior, opacity behavior, and accessible label. Use `GripVertical className="size-3.5"` if the 16 px column clips the current icon.
@@ -407,10 +418,12 @@ git commit -m "style: tighten compact Todo rows"
 ### Task 4: Integration review and repository verification
 
 **Files:**
+
 - Review: all files changed in Tasks 1 through 3
 - Modify: only changed files if verification finds a concrete defect
 
 **Interfaces:**
+
 - Consumes all prior task outputs.
 - Produces one reviewed, formatted, test-passing branch ready to publish.
 
@@ -484,9 +497,11 @@ Skip this commit when review requires no changes.
 ### Task 5: Publish, deploy, and verify the live UI
 
 **Files:**
+
 - No planned source changes
 
 **Interfaces:**
+
 - Consumes the verified feature branch.
 - Produces a merged change and a healthy live deployment.
 
