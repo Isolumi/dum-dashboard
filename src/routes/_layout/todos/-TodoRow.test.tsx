@@ -215,7 +215,7 @@ describe("TodoRow", () => {
     const dragControl = screen.getByRole("button", { name: /drag to move "deploy app"/i });
 
     expect(row.className).toContain("min-h-[44px]");
-    expect(row.className).toContain("px-2");
+    expect(row.className).toContain("px-1");
     expect(row.className).toContain("motion-reduce:transition-none");
     expect(screen.getByRole("button", { name: "Deploy app" }).className).toContain("text-sm");
     expect(screen.getByRole("button", { name: /mark "deploy app" as started/i })).toBeTruthy();
@@ -234,8 +234,11 @@ describe("TodoRow", () => {
     const statusControl = screen.getByRole("button", { name: /mark "deploy app" as started/i });
     const dragControl = screen.getByRole("button", { name: /drag to move "deploy app"/i });
 
-    expect(row.className).toContain("grid-cols-[1.5rem_2.75rem_minmax(0,1fr)_auto]");
-    expect(dragControl.className).toContain("w-6");
+    expect(row.className).toContain("grid-cols-[1rem_2.75rem_minmax(0,1fr)_auto]");
+    expect(row.className).toContain("gap-0.5");
+    expect(row.className).toContain("px-1");
+    expect(dragControl.className).toContain("w-4");
+    expect(dragControl.className).not.toContain("w-6");
     expect(dragControl.className).toContain("opacity-40");
     expect(dragControl.className).not.toContain("min-w-11");
     expect(nameControl.className).toContain("min-w-0");
