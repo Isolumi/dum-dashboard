@@ -225,7 +225,6 @@ export function TodoDueDatePicker({
           data-testid="due-date-dialog"
           aria-labelledby={titleId}
           closeLabel="Close date and time picker"
-          onKeyDown={closeOnEscape}
         >
           <DialogTitle id={titleId} className="sr-only">
             {label}

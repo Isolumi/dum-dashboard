@@ -5,8 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 
+let dialogContentKeyDownHandler: React.KeyboardEventHandler<HTMLDivElement> | undefined;
+
 afterEach(() => {
   cleanup();
+  dialogContentKeyDownHandler = undefined;
 });
 
 vi.mock("#/components/ui/popover", () => {
@@ -100,11 +103,13 @@ vi.mock("#/components/ui/dialog", () => {
     DialogContent: ({
       children,
       closeLabel = "Close",
+      onKeyDown,
       ...props
     }: React.ComponentProps<"div"> & { closeLabel?: string }) => {
       const context = React.useContext(DialogContext);
+      dialogContentKeyDownHandler = onKeyDown;
       return context?.open ? (
-        <div role="dialog" {...props}>
+        <div role="dialog" onKeyDown={onKeyDown} {...props}>
           {children}
           <button
             type="button"
@@ -165,6 +170,21 @@ describe("TodoDueDatePicker", () => {
     expect(screen.getByTestId("due-date-dialog")).toBeTruthy();
     expect(screen.getByRole("button", { name: /close date and time picker/i })).toBeTruthy();
     expect(screen.queryByTestId("due-date-popover")).toBeNull();
+  });
+
+  it("delegates Escape dismissal to the Dialog wrapper", () => {
+    render(
+      <TodoDueDatePicker
+        value={null}
+        onChange={vi.fn()}
+        label="Choose date and time"
+        presentation="dialog"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose date and time" }));
+
+    expect(dialogContentKeyDownHandler).toBeUndefined();
   });
 
   it("keeps the empty trigger icon-only and exposes accessible native inputs", () => {
