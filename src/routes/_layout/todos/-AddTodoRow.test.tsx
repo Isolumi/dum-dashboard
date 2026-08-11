@@ -136,7 +136,9 @@ describe("AddTodoRow (expanded state)", () => {
   it("focuses the name input and exposes the compact inline controls", () => {
     renderExpanded();
     const nameInput = screen.getByRole("textbox", { name: /new todo name/i });
-    const highCheckbox = screen.getByRole("checkbox", { name: /high priority/i });
+    const highCheckbox = screen.getByRole<HTMLInputElement>("checkbox", {
+      name: /high priority/i,
+    });
     const checkboxBox = highCheckbox.nextElementSibling;
     const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
 
