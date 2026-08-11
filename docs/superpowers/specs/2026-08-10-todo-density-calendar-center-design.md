@@ -136,4 +136,3 @@ Use tests before source changes.
 - Base UI Dialog: https://base-ui.com/react/components/dialog
 - Base UI Popover: https://base-ui.com/react/components/popover
 - React DayPicker input and dialog guide: https://daypicker.dev/guides/input-fields
-

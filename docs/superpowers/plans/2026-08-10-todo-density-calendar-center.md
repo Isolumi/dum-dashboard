@@ -538,4 +538,3 @@ At a 360 px viewport:
 - [ ] **Step 7: Record final evidence**
 
 Report the PR, merge commit, deployed revision, automated check results, and desktop/mobile browser findings.
-
