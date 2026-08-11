@@ -1,7 +1,7 @@
 # Todo Bento Actions and Text Wrap Design
 
 Date: 2026-08-11
-Status: Approved for implementation
+Status: Implemented; merge and deployment pending
 
 ## Goal
 
