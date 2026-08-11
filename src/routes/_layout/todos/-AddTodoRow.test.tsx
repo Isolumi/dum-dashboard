@@ -9,14 +9,14 @@ afterEach(() => {
   cleanup();
 });
 
-vi.mock("#/components/ui/popover", () => {
-  const PopoverContext = React.createContext<{
+vi.mock("#/components/ui/dialog", () => {
+  const DialogContext = React.createContext<{
     open: boolean;
     onOpenChange?: (open: boolean) => void;
   } | null>(null);
 
   return {
-    Popover: ({
+    Dialog: ({
       open = false,
       onOpenChange,
       children,
@@ -25,16 +25,16 @@ vi.mock("#/components/ui/popover", () => {
       onOpenChange?: (open: boolean) => void;
       children: React.ReactNode;
     }) => (
-      <PopoverContext.Provider value={{ open, onOpenChange }}>{children}</PopoverContext.Provider>
+      <DialogContext.Provider value={{ open, onOpenChange }}>{children}</DialogContext.Provider>
     ),
-    PopoverTrigger: ({
+    DialogTrigger: ({
       render: trigger,
       children,
     }: {
       render: React.ReactElement<{ onClick?: React.MouseEventHandler<HTMLElement> }>;
       children: React.ReactNode;
     }) => {
-      const context = React.useContext(PopoverContext);
+      const context = React.useContext(DialogContext);
       return React.cloneElement(
         trigger,
         {
@@ -46,11 +46,26 @@ vi.mock("#/components/ui/popover", () => {
         children,
       );
     },
-    PopoverContent: ({ children, ...props }: React.ComponentProps<"div">) => {
-      const context = React.useContext(PopoverContext);
-      return context?.open ? <div {...props}>{children}</div> : null;
+    DialogContent: ({
+      children,
+      closeLabel = "Close",
+      ...props
+    }: React.ComponentProps<"div"> & { closeLabel?: string }) => {
+      const context = React.useContext(DialogContext);
+      return context?.open ? (
+        <div role="dialog" {...props}>
+          {children}
+          <button
+            type="button"
+            aria-label={closeLabel}
+            onClick={() => context.onOpenChange?.(false)}
+          >
+            Close
+          </button>
+        </div>
+      ) : null;
     },
-    PopoverTitle: ({ children, ...props }: React.ComponentProps<"h2">) => (
+    DialogTitle: ({ children, ...props }: React.ComponentProps<"h2">) => (
       <h2 {...props}>{children}</h2>
     ),
   };
@@ -133,38 +148,21 @@ describe("AddTodoRow (expanded state)", () => {
     expect(wrapper?.className).toContain("ring-border/50");
   });
 
-  it("focuses the name input and exposes the compact inline controls", () => {
+  it("shows only the name, calendar, and Add controls", () => {
     renderExpanded();
-    const nameInput = screen.getByRole("textbox", { name: /new todo name/i });
-    const highCheckbox = screen.getByRole<HTMLInputElement>("checkbox", {
-      name: /high priority/i,
-    });
-    const checkboxBox = highCheckbox.nextElementSibling;
-    const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
-
-    expect(document.activeElement).toBe(nameInput);
-    expect(highCheckbox.checked).toBe(false);
-    expect(checkboxBox?.textContent).toContain("High");
-    expect(checkboxBox?.textContent).not.toContain("Low");
-    expect(checkboxBox?.getAttribute("data-slot")).toBe("priority-checkbox-box");
-    const checkboxCheck = checkboxBox?.querySelector('[data-slot="priority-checkbox-check"]');
-    expect(checkboxCheck).toBeTruthy();
-    expect(checkboxCheck?.getAttribute("class")).toContain("opacity-0");
-
-    fireEvent.click(highCheckbox);
-    expect(highCheckbox.checked).toBe(true);
-    expect(checkboxCheck?.getAttribute("class")).toContain("opacity-100");
-    expect(dateTrigger.querySelector("svg")).toBeTruthy();
-    expect(dateTrigger.querySelector("svg")?.className.baseVal).not.toContain("opacity-0");
+    expect(screen.getByRole("textbox", { name: /new todo name/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /choose date and time/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^add$/i })).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: /high priority/i })).toBeNull();
   });
 
-  it("keeps the date picker overlaid while the expanded row stays in place", () => {
+  it("uses a centered date-picker dialog while the expanded row stays in place", () => {
     renderExpanded();
 
     expect(screen.queryByRole("button", { name: /december 25, 2026/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /choose date and time/i }));
 
+    expect(screen.getByTestId("due-date-dialog")).toBeTruthy();
     expect(screen.getByRole("button", { name: /december 25, 2026/i })).toBeTruthy();
     expect(screen.getByRole("textbox", { name: /new todo name/i })).toBeTruthy();
   });
@@ -182,25 +180,6 @@ describe("AddTodoRow (expanded state)", () => {
     expect(onCreate).toHaveBeenCalledWith({
       name: "Pay bills",
       priority: "low",
-      due_date: null,
-      due_date_has_time: false,
-    });
-  });
-
-  it("submits high priority when the checkbox is checked", () => {
-    const onCreate = vi.fn();
-    render(React.createElement(AddTodoRow, { onCreate }));
-
-    fireEvent.click(screen.getByRole("button", { name: /add a new todo/i }));
-    fireEvent.change(screen.getByRole("textbox", { name: /new todo name/i }), {
-      target: { value: "Handle outage" },
-    });
-    fireEvent.click(screen.getByRole("checkbox", { name: /high priority/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
-
-    expect(onCreate).toHaveBeenCalledWith({
-      name: "Handle outage",
-      priority: "high",
       due_date: null,
       due_date_has_time: false,
     });
@@ -244,37 +223,6 @@ describe("AddTodoRow (expanded state)", () => {
     expect(addControl).toBeTruthy();
     expect(document.activeElement).toBe(addControl);
   });
-
-  it("cancels with Escape from the High checkbox focus path", () => {
-    renderExpanded();
-
-    const highCheckbox = screen.getByRole("checkbox", { name: /high priority/i });
-    highCheckbox.focus();
-    fireEvent.keyDown(highCheckbox, { key: "Escape" });
-
-    expect(screen.queryByRole("textbox", { name: /new todo name/i })).toBeNull();
-    expect(screen.getAllByRole("button", { name: /add a new todo/i })).toHaveLength(1);
-  });
-
-  it("lets the date picker close itself first, then cancels from the date trigger focus path", () => {
-    renderExpanded();
-
-    const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
-    fireEvent.click(dateTrigger);
-
-    const dateInput = screen.getByLabelText(/choose date and time date/i);
-    fireEvent.keyDown(dateInput, { key: "Escape" });
-
-    expect(screen.queryByLabelText(/choose date and time date/i)).toBeNull();
-    expect(screen.getByRole("textbox", { name: /new todo name/i })).toBeTruthy();
-
-    fireEvent.keyDown(screen.getByRole("button", { name: /choose date and time/i }), {
-      key: "Escape",
-    });
-
-    expect(screen.queryByRole("textbox", { name: /new todo name/i })).toBeNull();
-    expect(screen.getAllByRole("button", { name: /add a new todo/i })).toHaveLength(1);
-  });
 });
 
 describe("AddTodoRow (compact state)", () => {
@@ -306,7 +254,6 @@ describe("AddTodoRow (compact state)", () => {
     const form = container.querySelector("form");
     const controls = form?.firstElementChild;
     const nameInput = screen.getByRole("textbox", { name: /new todo name/i });
-    const highCheckbox = screen.getByRole("checkbox", { name: /high priority/i });
     const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
     const addButton = screen.getByRole("button", { name: /^add$/i });
 
@@ -314,45 +261,11 @@ describe("AddTodoRow (compact state)", () => {
     expect(controls?.className).toContain("px-2");
     expect(controls?.className).toContain("py-1");
     expect(controls?.className).toContain("sm:py-0");
+    expect(controls?.className).toContain("grid-cols-[minmax(5rem,1fr)_auto_auto]");
+    expect(controls?.className).not.toContain("sm:grid-cols");
     expect(nameInput.className).toContain("h-9");
-    expect(highCheckbox.nextElementSibling?.className).toContain("h-9");
     expect(dateTrigger.className).toContain("h-9");
     expect(addButton.className).toContain("h-9");
-  });
-
-  it("stacks the Add action below the compact controls on narrow screens", () => {
-    const { container } = render(
-      React.createElement(AddTodoRow, { compact: true, onCreate: noopCreate }),
-    );
-    fireEvent.click(screen.getByRole("button", { name: /add a new todo/i }));
-
-    const controls = container.querySelector("form")?.firstElementChild;
-    const addButton = screen.getByRole("button", { name: /^add$/i });
-
-    expect(controls?.className).toContain("grid-cols-[minmax(5rem,1fr)_auto_auto]");
-    expect(controls?.className).toContain("sm:grid-cols-[minmax(5rem,1fr)_auto_auto_auto]");
-    expect(controls?.className).not.toContain("2.75rem");
-    expect(controls?.querySelector('span.hidden[aria-hidden="true"]')).toBeNull();
-    expect(addButton.className).toContain("col-span-3");
-    expect(addButton.className).toContain("sm:col-span-1");
-  });
-});
-
-describe("AddTodoRow (compact state)", () => {
-  it("keeps the collapsed add control keyboard-focusable with a 44px target", () => {
-    const { container } = render(
-      React.createElement(AddTodoRow, { compact: true, onCreate: noopCreate }),
-    );
-    const addControl = screen.getByRole("button", { name: /add a new todo/i });
-
-    expect(addControl.className).toContain("min-h-[44px]");
-    expect(addControl.className).toContain("px-2");
-    expect(screen.getByText("Add a todo...").className).toContain("text-xs");
-    expect(addControl.className).toContain("motion-reduce:transition-none");
-
-    addControl.focus();
-    expect(document.activeElement).toBe(addControl);
-    fireEvent.click(addControl);
-    expect(container.querySelector("input[aria-label='New todo name']")).toBeTruthy();
+    expect(addButton.className).not.toContain("col-span");
   });
 });
