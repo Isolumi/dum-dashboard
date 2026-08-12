@@ -1,5 +1,58 @@
 grafana:
-  enabled: false
+  enabled: true
+  defaultDashboardsEnabled: false
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    hosts:
+      - grafana.doh.lumilumi.xyz
+    tls:
+      - secretName: grafana-lumilumi-tls
+        hosts:
+          - grafana.doh.lumilumi.xyz
+  grafana.ini:
+    server:
+      root_url: https://grafana.doh.lumilumi.xyz
+    auth:
+      disable_login_form: true
+      disable_signout_menu: true
+    auth.anonymous:
+      enabled: true
+      org_name: Main Org.
+      org_role: Viewer
+      hide_version: true
+    users:
+      viewers_can_edit: false
+    dashboards:
+      default_home_dashboard_path: /tmp/dashboards/uwumi-failures.json
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+      provider:
+        allowUiUpdates: false
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: true
+      isDefaultDatasource: true
+      label: grafana_datasource
+      labelValue: "1"
+      alertmanager:
+        enabled: false
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
 alertmanager:
   enabled: false
@@ -28,6 +81,15 @@ kubeProxy:
 prometheus:
   prometheusSpec:
     retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 20Gi
     resources:
       requests:
         cpu: 250m
