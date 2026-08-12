@@ -39,7 +39,7 @@ const expectExact = (label: string, actual: unknown, wanted: unknown): void => {
   }
 };
 
-const readYaml = (path: URL, label: string): YamlMap =>
+const readYaml = (path: string | URL, label: string): YamlMap =>
   asMap(parse(readFileSync(path, "utf8")), label);
 
 const readPermissions = (value: unknown, label: string): ResourcePermission[] => {
@@ -70,11 +70,13 @@ const expectExactPermissions = (
 };
 
 const values = readYaml(
-  new URL("../k8s/argocd/prometheus-values.yml", import.meta.url),
+  process.env.PROMETHEUS_VALUES_PATH ??
+    new URL("../k8s/argocd/prometheus-values.yml", import.meta.url),
   "prometheus-values.yml",
 );
 const project = readYaml(
-  new URL("../k8s/argocd/prometheus-project.yml", import.meta.url),
+  process.env.PROMETHEUS_PROJECT_PATH ??
+    new URL("../k8s/argocd/prometheus-project.yml", import.meta.url),
   "prometheus-project.yml",
 );
 
@@ -135,6 +137,7 @@ expectExact("grafana", grafana, {
       isDefaultDatasource: true,
       label: "grafana_datasource",
       labelValue: "1",
+      searchNamespace: "ALL",
       alertmanager: {
         enabled: false,
       },
@@ -156,6 +159,12 @@ expectExact("grafana", grafana, {
 });
 
 const prometheus = asMap(values.prometheus, "prometheus");
+if ("ingress" in prometheus) {
+  fail("prometheus.ingress must not be configured; Prometheus is private and cluster-internal.");
+}
+if ("loki" in values) {
+  fail("loki must not be configured in this kube-prometheus-stack values scope.");
+}
 const prometheusSpec = asMap(prometheus.prometheusSpec, "prometheus.prometheusSpec");
 expectExact("prometheus.prometheusSpec.retention", prometheusSpec.retention, expected.retention);
 expectExact("prometheus.prometheusSpec.storageSpec", prometheusSpec.storageSpec, {
