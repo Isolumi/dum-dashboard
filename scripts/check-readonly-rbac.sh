@@ -441,6 +441,8 @@ bun --eval '
       "rbac.authorization.k8s.io/ClusterRoleBinding",
     ]) ||
     !same(prometheusNamespaceKinds, [
+      "/ConfigMap",
+      "/Secret",
       "/Service",
       "/ServiceAccount",
       "apps/DaemonSet",
@@ -448,6 +450,9 @@ bun --eval '
       "monitoring.coreos.com/Prometheus",
       "monitoring.coreos.com/PrometheusRule",
       "monitoring.coreos.com/ServiceMonitor",
+      "networking.k8s.io/Ingress",
+      "rbac.authorization.k8s.io/Role",
+      "rbac.authorization.k8s.io/RoleBinding",
     ])
   ) {
     fail("The Prometheus AppProject differs from its exact reviewed resource boundary.");
