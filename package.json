@@ -13,6 +13,7 @@
     "start:gateway": "node gateway/dist/index.js",
     "preview": "vite preview",
     "test": "vitest run",
+    "verify:monitoring": "bun scripts/verify-monitoring-values.ts",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "fmt": "oxfmt",

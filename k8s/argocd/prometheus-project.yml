@@ -38,3 +38,13 @@ spec:
       kind: PrometheusRule
     - group: monitoring.coreos.com
       kind: ServiceMonitor
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Secret
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding

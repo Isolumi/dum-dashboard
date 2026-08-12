@@ -40,6 +40,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Verify monitoring values
+        run: bun run verify:monitoring
+
+      - name: Render monitoring chart
+        run: bash scripts/render-monitoring.sh
+
       - name: Test
         run: bun run test
 
