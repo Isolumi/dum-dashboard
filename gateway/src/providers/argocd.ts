@@ -220,6 +220,46 @@ function optionalDataRecord(
   return parsed;
 }
 
+function revisionFromRecord(
+  record: ReadonlyMap<PropertyKey, unknown>,
+  required: boolean,
+): string | null {
+  const direct = record.get("revision");
+  if (isRequiredString(direct)) return direct;
+  if (direct !== undefined && direct !== null && direct !== "") {
+    throw new Error("invalid revision");
+  }
+
+  if (record.has("revisions")) {
+    const revisions = parseDenseArray(record.get("revisions"), 32, (revision) =>
+      isRequiredString(revision) ? revision : null,
+    );
+    if (!revisions || revisions.length === 0) throw new Error("invalid revisions");
+    return revisions.join(",");
+  }
+
+  if (required) throw new Error("missing revision");
+  return null;
+}
+
+function operationImages(syncResult: ReadonlyMap<PropertyKey, unknown> | null): string[] {
+  if (!syncResult?.has("resources")) return [];
+  const resources = readDenseArray(
+    syncResult.get("resources"),
+    RUNTIME_COLLECTION_LIMITS.argoResources,
+  );
+  if (!resources) throw new Error("invalid operation resources");
+
+  return resources.flatMap((resource) => {
+    const fields = readOwnDataRecord(resource);
+    if (!fields) throw new Error("invalid operation resource");
+    if (!fields.has("images")) return [];
+    const images = readDenseArray(fields.get("images"), RUNTIME_COLLECTION_LIMITS.argoImages);
+    if (!images) throw new Error("invalid operation resource images");
+    return images.map(requiredString);
+  });
+}
+
 function requestOptions(signal: AbortSignal): ConfigurationOptions {
   const signalMiddleware: ObservableMiddleware = {
     pre(context: RequestContext) {
@@ -242,12 +282,14 @@ function mapApplication(payload: unknown): ArgoApplicationState {
   if (!metadata || !status) {
     throw new Error("invalid application");
   }
-  const sync = readOwnDataProperties(status.get("sync"), ["status", "revision"]);
+  const sync = readOwnDataRecord(status.get("sync"));
   const health = readOwnDataRecord(status.get("health"));
   const operationState = readOwnDataRecord(status.get("operationState"));
-  if (!sync || !health?.has("status") || !operationState?.has("phase")) {
+  if (!sync?.has("status") || !health?.has("status") || !operationState?.has("phase")) {
     throw new Error("invalid application status");
   }
+  const syncRevision = revisionFromRecord(sync, true);
+  if (!syncRevision) throw new Error("missing sync revision");
   const syncResult = optionalDataRecord(operationState, "syncResult");
   if (syncResult && !syncResult.has("revision")) throw new Error("invalid sync result");
   const resourcesValue = status.has("resources") ? status.get("resources") : [];
@@ -256,7 +298,12 @@ function mapApplication(payload: unknown): ArgoApplicationState {
   const imagesValue = summary?.has("images") ? summary.get("images") : [];
   const imageEntries = readDenseArray(imagesValue, RUNTIME_COLLECTION_LIMITS.argoImages);
   if (!resources || !imageEntries) throw new Error("invalid application collections");
-  const images = imageEntries.map(requiredString);
+  const images = [
+    ...new Set([...imageEntries.map(requiredString), ...operationImages(syncResult)]),
+  ];
+  if (images.length > RUNTIME_COLLECTION_LIMITS.argoImages) {
+    throw new Error("too many application images");
+  }
 
   const phase = operationState.get("phase");
   const operationMessage = operationState.get("message");
@@ -267,8 +314,8 @@ function mapApplication(payload: unknown): ArgoApplicationState {
     name: requiredString(metadata.name),
     namespace: requiredString(metadata.namespace),
     sync: {
-      status: requiredString(sync.status),
-      revision: requiredString(sync.revision),
+      status: requiredString(sync.get("status")),
+      revision: syncRevision,
     },
     health: {
       status: requiredString(health.get("status")),
@@ -278,7 +325,7 @@ function mapApplication(payload: unknown): ArgoApplicationState {
     operation: {
       phase: requiredString(phase),
       message: optionalString(operationMessage),
-      revision: optionalString(syncResult?.get("revision")),
+      revision: syncResult ? revisionFromRecord(syncResult, false) : null,
       startedAt: optionalString(startedAt),
       finishedAt: optionalString(finishedAt),
     },
