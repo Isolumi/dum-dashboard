@@ -1,4 +1,20 @@
+import { differenceInCalendarDays, format, parseISO } from "date-fns";
+
 import type { CalendarEvent } from "./-calendar.api";
+
+export function formatCalendarDateLabel(isoDate: string, today = new Date()): string {
+  const date = parseISO(isoDate);
+  const daysAway = differenceInCalendarDays(date, today);
+
+  if (daysAway === 0) return "Today";
+  if (daysAway === 1) return "Tomorrow";
+  if (daysAway >= 2 && daysAway < 7) return format(date, "EEEE");
+
+  return format(
+    date,
+    date.getFullYear() === today.getFullYear() ? "EEE, MMM d" : "EEE, MMM d, yyyy",
+  );
+}
 
 function eventStartDate(event: CalendarEvent): Date {
   if (event.start.dateTime) return new Date(event.start.dateTime);

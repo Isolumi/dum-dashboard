@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { CalendarEvent } from "./-calendar.api";
-import { formatEventTime, getUpcomingEvents, groupEventsByDay } from "./-calendarUtils";
+import {
+  formatCalendarDateLabel,
+  formatEventTime,
+  getUpcomingEvents,
+  groupEventsByDay,
+} from "./-calendarUtils";
 
 function makeEvent(id: string, summary: string, start: CalendarEvent["start"]): CalendarEvent {
   return { id, summary, start, end: {} };
@@ -71,5 +76,20 @@ describe("formatEventTime", () => {
     const result = formatEventTime(event);
     expect(result).not.toBe("All day");
     expect(result.length).toBeGreaterThan(0);
+  });
+});
+
+describe("formatCalendarDateLabel", () => {
+  const today = new Date(2026, 7, 13, 12);
+
+  it.each([
+    ["2026-08-13", "Today"],
+    ["2026-08-14", "Tomorrow"],
+    ["2026-08-15", "Saturday"],
+    ["2026-08-19", "Wednesday"],
+    ["2026-08-20", "Thu, Aug 20"],
+    ["2027-01-02", "Sat, Jan 2, 2027"],
+  ])("formats %s as %s", (isoDate, expected) => {
+    expect(formatCalendarDateLabel(isoDate, today)).toBe(expected);
   });
 });
