@@ -21,22 +21,80 @@ afterEach(async () => {
 });
 
 describe("loadServiceCatalog", () => {
-  it("loads the configured private service entry", async () => {
-    const catalog = await loadServiceCatalog(
-      join(import.meta.dirname, "../../config/homelab-services.yml"),
-    );
+  it("loads applications and resolves each service reference", async () => {
+    const path = await writeCatalog(`
+applications:
+  - id: yootoob-mp3
+    name: Yootoob MP3
+    namespace: yootoob-mp3
+    argoApplication: yootoob-mp3-dumachine
+    github:
+      repository: Isolumi/youtube-mp3
+      branch: development
+      workflow: build-images.yml
+    workloads:
+      - kind: Deployment
+        name: yootoob-mp3-api
+        imageRepository: ghcr.io/isolumi/yootoob-mp3-api
+        tracksSource: true
+  - id: monitoring
+    name: Monitoring
+    namespace: monitoring
+    argoApplication: kube-prometheus-stack
+    workloads:
+      - kind: Deployment
+        name: kube-prometheus-stack-grafana
+        imageRepository: docker.io/grafana/grafana
+        tracksSource: false
+services:
+  - id: yootoob-mp3
+    name: Yootoob MP3
+    description: Private YouTube MP3 downloader
+    url: https://yootoob.doh.lumilumi.xyz
+    application: yootoob-mp3
+  - id: grafana
+    name: Grafana
+    description: Private monitoring dashboards
+    url: https://grafana.doh.lumilumi.xyz
+    application: monitoring
+`);
 
-    expect(catalog).toEqual([
+    const catalog = await loadServiceCatalog(path);
+
+    expect(catalog.applications).toHaveLength(2);
+    expect(catalog.services).toEqual([
       {
         id: "yootoob-mp3",
-        name: "yootoob-mp3",
+        name: "Yootoob MP3",
         description: "Private YouTube MP3 downloader",
         url: "https://yootoob.doh.lumilumi.xyz",
+        applicationId: "yootoob-mp3",
         namespace: "yootoob-mp3",
         argoApplication: "yootoob-mp3-dumachine",
         workloads: [
-          { kind: "Deployment", name: "yootoob-mp3-api" },
-          { kind: "Deployment", name: "yootoob-mp3-frontend" },
+          {
+            kind: "Deployment",
+            name: "yootoob-mp3-api",
+            imageRepository: "ghcr.io/isolumi/yootoob-mp3-api",
+            tracksSource: true,
+          },
+        ],
+      },
+      {
+        id: "grafana",
+        name: "Grafana",
+        description: "Private monitoring dashboards",
+        url: "https://grafana.doh.lumilumi.xyz",
+        applicationId: "monitoring",
+        namespace: "monitoring",
+        argoApplication: "kube-prometheus-stack",
+        workloads: [
+          {
+            kind: "Deployment",
+            name: "kube-prometheus-stack-grafana",
+            imageRepository: "docker.io/grafana/grafana",
+            tracksSource: false,
+          },
         ],
       },
     ]);
@@ -44,16 +102,22 @@ describe("loadServiceCatalog", () => {
 
   it("rejects unknown catalog keys", async () => {
     const path = await writeCatalog(`
-services:
+applications:
   - id: yootoob-mp3
-    name: yootoob-mp3
-    description: Private YouTube MP3 downloader
-    url: https://yootoob.doh.lumilumi.xyz
+    name: Yootoob MP3
     namespace: yootoob-mp3
     argoApplication: yootoob-mp3-dumachine
     workloads:
       - kind: Deployment
         name: yootoob-mp3-api
+        imageRepository: ghcr.io/isolumi/yootoob-mp3-api
+        tracksSource: true
+services:
+  - id: yootoob-mp3
+    name: Yootoob MP3
+    description: Private YouTube MP3 downloader
+    url: https://yootoob.doh.lumilumi.xyz
+    application: yootoob-mp3
     unexpected: value
 `);
 
@@ -62,27 +126,74 @@ services:
 
   it("rejects duplicate service IDs", async () => {
     const path = await writeCatalog(`
-services:
+applications:
   - id: yootoob-mp3
-    name: yootoob-mp3
-    description: Private YouTube MP3 downloader
-    url: https://yootoob.doh.lumilumi.xyz
+    name: Yootoob MP3
     namespace: yootoob-mp3
     argoApplication: yootoob-mp3-dumachine
     workloads:
       - kind: Deployment
         name: yootoob-mp3-api
+        imageRepository: ghcr.io/isolumi/yootoob-mp3-api
+        tracksSource: true
+services:
+  - id: yootoob-mp3
+    name: Yootoob MP3
+    description: Private YouTube MP3 downloader
+    url: https://yootoob.doh.lumilumi.xyz
+    application: yootoob-mp3
   - id: yootoob-mp3
     name: duplicate
     description: Duplicate ID
     url: https://duplicate.doh.lumilumi.xyz
-    namespace: duplicate
-    argoApplication: duplicate
-    workloads:
-      - kind: Deployment
-        name: duplicate
+    application: yootoob-mp3
 `);
 
     await expect(loadServiceCatalog(path)).rejects.toThrow(/duplicate service ID/i);
+  });
+
+  it("rejects source tracking when an application has no GitHub pipeline", async () => {
+    const path = await writeCatalog(`
+applications:
+  - id: monitoring
+    name: Monitoring
+    namespace: monitoring
+    argoApplication: kube-prometheus-stack
+    workloads:
+      - kind: Deployment
+        name: kube-prometheus-stack-grafana
+        imageRepository: docker.io/grafana/grafana
+        tracksSource: true
+services: []
+`);
+
+    await expect(loadServiceCatalog(path)).rejects.toThrow(/tracksSource requires GitHub/i);
+  });
+
+  it("rejects two applications that claim the same workload", async () => {
+    const path = await writeCatalog(`
+applications:
+  - id: first
+    name: First
+    namespace: shared
+    argoApplication: first
+    workloads:
+      - kind: Deployment
+        name: api
+        imageRepository: ghcr.io/isolumi/api
+        tracksSource: false
+  - id: second
+    name: Second
+    namespace: shared
+    argoApplication: second
+    workloads:
+      - kind: Deployment
+        name: api
+        imageRepository: ghcr.io/isolumi/api
+        tracksSource: false
+services: []
+`);
+
+    await expect(loadServiceCatalog(path)).rejects.toThrow(/duplicate workload ownership/i);
   });
 });

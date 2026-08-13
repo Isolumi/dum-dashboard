@@ -223,7 +223,6 @@ bun --eval '
     apiGroups: ["argoproj.io"],
     resources: ["applications"],
     verbs: ["get"],
-    resourceNames: ["yootoob-mp3-dumachine"],
   });
   if (argoRole.metadata?.namespace !== "argocd") {
     fail("Argo CD read access must be confined to the argocd namespace.");

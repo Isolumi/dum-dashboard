@@ -9,14 +9,11 @@ import {
 import type { Provider, ProviderObservation } from "./provider";
 
 const GITHUB_API_VERSION = "2022-11-28";
-const DEFAULT_REPOSITORY = "Isolumi/youtube-mp3";
-const DEFAULT_BRANCH = "development";
-const WORKFLOW_FILE = "build-images.yml";
 const REPOSITORY_COMPONENT = /^[A-Za-z0-9_.-]+$/;
 const COMMIT_SHA = /^[0-9a-f]{40}$/i;
 const RUN_ID = /^[1-9][0-9]*$/;
 const PUBLIC_CACHE_TTL_MS = 5 * 60_000;
-const PUBLIC_FRESH_FOR_MS = PUBLIC_CACHE_TTL_MS;
+const AUTHENTICATED_CACHE_TTL_MS = 10_000;
 const PUBLIC_FAILURE_BACKOFF_MS = 60_000;
 const PUBLIC_MAX_FAILURE_BACKOFF_MS = 15 * 60_000;
 
@@ -81,6 +78,9 @@ export interface WorkflowRun {
 }
 
 export interface GitHubProviderOptions {
+  repository: string;
+  branch: string;
+  workflow: string;
   token?: string;
   environment?: NodeJS.ProcessEnv;
   fetchApi?: FetchApi;
@@ -107,11 +107,19 @@ export function parseWorkflowRun(value: unknown): WorkflowRun | null {
   const commit = fields
     ? readOwnDataProperties(fields.commit, ["sha", "message", "author", "committedAt", "url"])
     : null;
+  let repository: [string, string] | null = null;
+  if (fields && isString(fields.repository)) {
+    try {
+      repository = repositoryParts(fields.repository);
+    } catch {
+      repository = null;
+    }
+  }
   if (
     !fields ||
     !commit ||
-    fields.repository !== DEFAULT_REPOSITORY ||
-    fields.branch !== DEFAULT_BRANCH ||
+    !repository ||
+    !isString(fields.branch) ||
     !isString(fields.name) ||
     !isString(fields.status) ||
     (fields.conclusion !== null && !isString(fields.conclusion)) ||
@@ -130,11 +138,25 @@ export function parseWorkflowRun(value: unknown): WorkflowRun | null {
     return null;
   }
 
+  const [owner, name] = repository;
+  let workflowUrl: URL;
+  try {
+    workflowUrl = new URL(fields.url);
+  } catch {
+    return null;
+  }
+  const workflowPrefix = `/${owner}/${name}/actions/runs/`;
+  const workflowRunId = workflowUrl.pathname.slice(workflowPrefix.length);
   if (
-    !new RegExp("^https://github\\.com/Isolumi/youtube-mp3/actions/runs/[1-9][0-9]*$").test(
-      fields.url,
-    ) ||
-    commit.url !== `https://github.com/Isolumi/youtube-mp3/commit/${commit.sha}`
+    workflowUrl.protocol !== "https:" ||
+    workflowUrl.hostname !== "github.com" ||
+    workflowUrl.username ||
+    workflowUrl.password ||
+    workflowUrl.search ||
+    workflowUrl.hash ||
+    !workflowUrl.pathname.startsWith(workflowPrefix) ||
+    !RUN_ID.test(workflowRunId) ||
+    commit.url !== githubUrl(owner, name, "commit", commit.sha)
   ) {
     return null;
   }
@@ -208,13 +230,24 @@ export class GitHubProvider implements Provider<WorkflowRun> {
   private readonly token: string | undefined;
   private readonly fetchApi: FetchApi;
   private readonly baseUrl: URL;
-  private cachedPublicWorkflow: { value: WorkflowRun; observedAt: number } | undefined;
-  private publicRequest: Promise<WorkflowRun> | undefined;
-  private publicRetryAt = 0;
-  private publicFailureCount = 0;
+  private readonly repository: string;
+  private readonly branch: string;
+  private readonly workflow: string;
+  private readonly cacheTtlMs: number;
+  private cachedWorkflow: { value: WorkflowRun; observedAt: number } | undefined;
+  private workflowRequest: Promise<WorkflowRun> | undefined;
+  private retryAt = 0;
+  private failureCount = 0;
 
-  constructor(options: GitHubProviderOptions = {}) {
+  constructor(options: GitHubProviderOptions) {
+    repositoryParts(options.repository);
+    requiredString(options.branch);
+    requiredString(options.workflow);
+    this.repository = options.repository;
+    this.branch = options.branch;
+    this.workflow = options.workflow;
     this.token = options.token ?? (options.environment ?? process.env).GITHUB_READ_TOKEN;
+    this.cacheTtlMs = this.token ? AUTHENTICATED_CACHE_TTL_MS : PUBLIC_CACHE_TTL_MS;
     this.fetchApi = options.fetchApi ?? fetch;
     this.baseUrl = new URL(options.baseUrl ?? "https://api.github.com/");
   }
@@ -242,12 +275,13 @@ export class GitHubProvider implements Provider<WorkflowRun> {
   private async latestWorkflow(
     repository: string,
     branch: string,
+    workflow: string,
     signal?: AbortSignal,
   ): Promise<WorkflowRun> {
     const [owner, name] = repositoryParts(repository);
     const path = [owner, name].map(encodeURIComponent).join("/");
     const runsUrl = new URL(
-      `repos/${path}/actions/workflows/${encodeURIComponent(WORKFLOW_FILE)}/runs`,
+      `repos/${path}/actions/workflows/${encodeURIComponent(workflow)}/runs`,
       this.baseUrl,
     );
     runsUrl.searchParams.set("branch", branch);
@@ -321,14 +355,18 @@ export class GitHubProvider implements Provider<WorkflowRun> {
     }
   }
 
-  getLatestWorkflow(repository: string, branch: string): Promise<WorkflowRun> {
-    return this.latestWorkflow(repository, branch);
+  getLatestWorkflow(
+    repository: string,
+    branch: string,
+    workflow = this.workflow,
+  ): Promise<WorkflowRun> {
+    return this.latestWorkflow(repository, branch, workflow);
   }
 
   observation(): ProviderObservation | undefined {
-    if (this.token || !this.cachedPublicWorkflow) return undefined;
-    const observedAt = this.cachedPublicWorkflow.observedAt;
-    const stale = Date.now() - observedAt > PUBLIC_FRESH_FOR_MS;
+    if (!this.cachedWorkflow) return undefined;
+    const observedAt = this.cachedWorkflow.observedAt;
+    const stale = Date.now() - observedAt > this.cacheTtlMs;
     return {
       observedAt: new Date(observedAt).toISOString(),
       stale,
@@ -337,20 +375,18 @@ export class GitHubProvider implements Provider<WorkflowRun> {
   }
 
   collect(signal: AbortSignal): Promise<WorkflowRun> {
-    if (this.token) return this.latestWorkflow(DEFAULT_REPOSITORY, DEFAULT_BRANCH, signal);
-
     const now = Date.now();
-    const cached = this.cachedPublicWorkflow;
-    if (cached && now - cached.observedAt < PUBLIC_CACHE_TTL_MS) {
+    const cached = this.cachedWorkflow;
+    if (cached && now - cached.observedAt < this.cacheTtlMs) {
       return waitForCaller(Promise.resolve(structuredClone(cached.value)), signal);
     }
-    if (this.publicRequest) {
+    if (this.workflowRequest) {
       return waitForCaller(
-        this.publicRequest.then((value) => structuredClone(value)),
+        this.workflowRequest.then((value) => structuredClone(value)),
         signal,
       );
     }
-    if (now < this.publicRetryAt) {
+    if (now < this.retryAt) {
       return waitForCaller(
         cached
           ? Promise.resolve(structuredClone(cached.value))
@@ -359,28 +395,28 @@ export class GitHubProvider implements Provider<WorkflowRun> {
       );
     }
 
-    const request = this.latestWorkflow(DEFAULT_REPOSITORY, DEFAULT_BRANCH)
+    const request = this.latestWorkflow(this.repository, this.branch, this.workflow)
       .then((value) => {
-        this.cachedPublicWorkflow = { value: structuredClone(value), observedAt: Date.now() };
-        this.publicRetryAt = 0;
-        this.publicFailureCount = 0;
+        this.cachedWorkflow = { value: structuredClone(value), observedAt: Date.now() };
+        this.retryAt = 0;
+        this.failureCount = 0;
         return value;
       })
       .catch((error: unknown) => {
-        this.publicFailureCount += 1;
+        this.failureCount += 1;
         const fallback = Math.min(
-          PUBLIC_FAILURE_BACKOFF_MS * 2 ** (this.publicFailureCount - 1),
+          PUBLIC_FAILURE_BACKOFF_MS * 2 ** (this.failureCount - 1),
           PUBLIC_MAX_FAILURE_BACKOFF_MS,
         );
         const responseRetryAt = error instanceof GitHubRequestError ? error.retryAt : undefined;
-        this.publicRetryAt = Math.max(Date.now() + fallback, responseRetryAt ?? 0);
-        if (this.cachedPublicWorkflow) return structuredClone(this.cachedPublicWorkflow.value);
+        this.retryAt = Math.max(Date.now() + fallback, responseRetryAt ?? 0);
+        if (this.cachedWorkflow) return structuredClone(this.cachedWorkflow.value);
         throw error;
       })
       .finally(() => {
-        this.publicRequest = undefined;
+        this.workflowRequest = undefined;
       });
-    this.publicRequest = request;
+    this.workflowRequest = request;
     return waitForCaller(
       request.then((value) => structuredClone(value)),
       signal,

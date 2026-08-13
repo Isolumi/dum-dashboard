@@ -269,12 +269,12 @@ export interface DeploymentWorkloadSummary {
 export interface ApplicationPipelineSummary {
   application: string;
   namespace: string;
-  repository: string;
-  branch: string;
+  repository: string | null;
+  branch: string | null;
   status: HealthStatus;
   commit: DeploymentCommitSummary | null;
   argoRevision: string | null;
-  workflow: WorkflowPipelineStage;
+  workflow: WorkflowPipelineStage | null;
   argo: ArgoPipelineStage;
   rollout: PipelineStage;
   workloads: DeploymentWorkloadSummary[];

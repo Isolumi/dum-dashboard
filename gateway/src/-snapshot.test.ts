@@ -3,6 +3,7 @@ import type { ClusterData, DeploymentSnapshot } from "../../shared/homelab/contr
 import type { ArgoApplicationState } from "./providers/argocd";
 import type { WorkflowRun } from "./providers/github";
 import type { Provider } from "./providers/provider";
+import type { ApplicationCatalogEntry } from "./service-catalog";
 import {
   CertificateActivityTracker,
   collectClusterSnapshot,
@@ -17,6 +18,31 @@ const SOURCE_SHA = "1829d6ba3b55e66a2134ae64161b9e48ad39a197";
 const API_REPOSITORY = "ghcr.io/isolumi/yootoob-mp3-api";
 const FRONTEND_REPOSITORY = "ghcr.io/isolumi/yootoob-mp3-frontend";
 const invalidReplicaValues = [-1, -0.5, 0.5, 1.5, Number.NaN, Infinity, "1", null];
+const YOOTOOB_APPLICATION: ApplicationCatalogEntry = {
+  id: "yootoob-mp3",
+  name: "Yootoob MP3",
+  namespace: "yootoob-mp3",
+  argoApplication: "yootoob-mp3-dumachine",
+  github: {
+    repository: "Isolumi/youtube-mp3",
+    branch: "development",
+    workflow: "build-images.yml",
+  },
+  workloads: [
+    {
+      kind: "Deployment",
+      name: "yootoob-mp3-api",
+      imageRepository: API_REPOSITORY,
+      tracksSource: true,
+    },
+    {
+      kind: "Deployment",
+      name: "yootoob-mp3-frontend",
+      imageRepository: FRONTEND_REPOSITORY,
+      tracksSource: true,
+    },
+  ],
+};
 
 function validWorkflow(): WorkflowRun {
   return {
@@ -127,9 +153,17 @@ function validServiceProbeResult() {
       name: "yootoob-mp3",
       description: "Private YouTube MP3 downloader",
       url: "https://yootoob.doh.lumilumi.xyz",
+      applicationId: "yootoob-mp3",
       namespace: "yootoob-mp3",
       argoApplication: "yootoob-mp3-dumachine",
-      workloads: [{ kind: "Deployment", name: "yootoob-mp3-api" }],
+      workloads: [
+        {
+          kind: "Deployment",
+          name: "yootoob-mp3-api",
+          imageRepository: API_REPOSITORY,
+          tracksSource: true,
+        },
+      ],
     },
     id: "yootoob-mp3",
     reachable: true,
@@ -148,7 +182,9 @@ function withLeadingHole<T>(values: readonly T[]): T[] {
 }
 
 async function expectInvalidClusterResult(cluster: unknown, secret?: string) {
-  const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now);
+  const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now, [
+    YOOTOOB_APPLICATION,
+  ]);
 
   expect(snapshot).toMatchObject({
     status: "unknown",
@@ -299,6 +335,8 @@ describe("collectClusterSnapshot", () => {
       ],
       1_000,
       now,
+      undefined,
+      [YOOTOOB_APPLICATION],
     );
 
     expect(snapshot).toMatchObject({ status: "unknown", stale: true });
@@ -510,8 +548,18 @@ describe("collectServiceSnapshot", () => {
       entry: {
         ...validServiceProbeResult().entry,
         workloads: [
-          { kind: "Deployment", name: "yootoob-mp3-api" },
-          { kind: "Deployment", name: "yootoob-mp3-frontend" },
+          {
+            kind: "Deployment",
+            name: "yootoob-mp3-api",
+            imageRepository: API_REPOSITORY,
+            tracksSource: true,
+          },
+          {
+            kind: "Deployment",
+            name: "yootoob-mp3-frontend",
+            imageRepository: FRONTEND_REPOSITORY,
+            tracksSource: true,
+          },
         ],
       },
     };
@@ -626,7 +674,9 @@ describe("collectOverviewSnapshot", () => {
       collect: async () => [validServiceProbeResult()],
     };
 
-    const deployment = await collectDeploymentSnapshot([github, argocd, kubernetes], 1_000, now);
+    const deployment = await collectDeploymentSnapshot([github, argocd, kubernetes], 1_000, now, [
+      YOOTOOB_APPLICATION,
+    ]);
     expect(deployment).toMatchObject({
       status: "unknown",
       stale: true,
@@ -672,9 +722,17 @@ describe("collectOverviewSnapshot", () => {
             name: "yootoob-mp3",
             description: "Private YouTube MP3 downloader",
             url: "https://yootoob.doh.lumilumi.xyz",
+            applicationId: "yootoob-mp3",
             namespace: "yootoob-mp3",
             argoApplication: "yootoob-mp3-dumachine",
-            workloads: [{ kind: "Deployment", name: "yootoob-mp3-api" }],
+            workloads: [
+              {
+                kind: "Deployment",
+                name: "yootoob-mp3-api",
+                imageRepository: API_REPOSITORY,
+                tracksSource: true,
+              },
+            ],
           },
           id: "yootoob-mp3",
           reachable: true,
@@ -687,12 +745,16 @@ describe("collectOverviewSnapshot", () => {
     };
     const providers = { cluster: [], deployments: [], services: [serviceProbe] };
 
-    const initial = await collectOverviewSnapshot(providers, 1_000, clock, tracker);
+    const initial = await collectOverviewSnapshot(providers, 1_000, clock, tracker, [
+      YOOTOOB_APPLICATION,
+    ]);
     expect(initial.data?.recentActivity).toEqual([]);
 
     certificateExpiresAt = "2026-11-01T00:00:00.000Z";
     currentNow = new Date("2026-08-04T00:00:10.000Z");
-    const renewed = await collectOverviewSnapshot(providers, 1_000, clock, tracker);
+    const renewed = await collectOverviewSnapshot(providers, 1_000, clock, tracker, [
+      YOOTOOB_APPLICATION,
+    ]);
     expect(renewed.data?.recentActivity).toEqual([
       expect.objectContaining({
         resource: "Certificate/yootoob-mp3",
@@ -706,7 +768,9 @@ describe("collectOverviewSnapshot", () => {
     ]);
 
     currentNow = new Date("2026-10-20T00:00:00.000Z");
-    const expiring = await collectOverviewSnapshot(providers, 1_000, clock, tracker);
+    const expiring = await collectOverviewSnapshot(providers, 1_000, clock, tracker, [
+      YOOTOOB_APPLICATION,
+    ]);
     expect(expiring.data?.recentActivity).toEqual([
       expect.objectContaining({
         resource: "Certificate/yootoob-mp3",
@@ -722,7 +786,9 @@ describe("collectOverviewSnapshot", () => {
     ]);
 
     currentNow = new Date("2026-10-20T00:00:10.000Z");
-    const unchanged = await collectOverviewSnapshot(providers, 1_000, clock, tracker);
+    const unchanged = await collectOverviewSnapshot(providers, 1_000, clock, tracker, [
+      YOOTOOB_APPLICATION,
+    ]);
     expect(unchanged.data?.recentActivity).toEqual(expiring.data?.recentActivity);
   });
 
@@ -758,9 +824,17 @@ describe("collectOverviewSnapshot", () => {
                   name: "yootoob-mp3",
                   description: "Private YouTube MP3 downloader",
                   url: "https://yootoob.doh.lumilumi.xyz",
+                  applicationId: "yootoob-mp3",
                   namespace: "yootoob-mp3",
                   argoApplication: "yootoob-mp3-dumachine",
-                  workloads: [{ kind: "Deployment", name: "yootoob-mp3-api" }],
+                  workloads: [
+                    {
+                      kind: "Deployment",
+                      name: "yootoob-mp3-api",
+                      imageRepository: API_REPOSITORY,
+                      tracksSource: true,
+                    },
+                  ],
                 },
                 id: "yootoob-mp3",
                 reachable: true,
@@ -777,6 +851,8 @@ describe("collectOverviewSnapshot", () => {
       },
       1_000,
       now,
+      undefined,
+      [YOOTOOB_APPLICATION],
     );
 
     expect(kubernetesCalls).toBe(1);
@@ -819,6 +895,8 @@ describe("collectOverviewSnapshot", () => {
       },
       1_000,
       now,
+      undefined,
+      [YOOTOOB_APPLICATION],
     );
 
     expect(snapshot.data?.recentActivity).toEqual([
@@ -850,6 +928,78 @@ describe("collectOverviewSnapshot", () => {
 });
 
 describe("collectDeploymentSnapshot", () => {
+  it("builds one pipeline for each catalog application", async () => {
+    const uwumiRepository = "ghcr.io/isolumi/uwumi-hermes";
+    const uwumi: ApplicationCatalogEntry = {
+      id: "uwumi",
+      name: "Uwumi",
+      namespace: "uwumi",
+      argoApplication: "uwumi-dumachine",
+      github: { repository: "Isolumi/uwumi", branch: "main", workflow: "ci-cd.yml" },
+      workloads: [
+        {
+          kind: "Deployment",
+          name: "uwumi-hermes",
+          imageRepository: uwumiRepository,
+          tracksSource: true,
+        },
+      ],
+    };
+    const uwumiWorkflow: WorkflowRun = {
+      ...validWorkflow(),
+      repository: "Isolumi/uwumi",
+      branch: "main",
+      commit: {
+        ...validWorkflow().commit,
+        url: `https://github.com/Isolumi/uwumi/commit/${SOURCE_SHA}`,
+      },
+      url: "https://github.com/Isolumi/uwumi/actions/runs/987654321",
+    };
+    const uwumiApplication: ArgoApplicationState = {
+      ...validApplication(),
+      name: "uwumi-dumachine",
+      images: [`${uwumiRepository}:${SOURCE_SHA}`],
+    };
+    const cluster = validCluster();
+    cluster.workloads.push({
+      ...cluster.workloads[0]!,
+      name: "uwumi-hermes",
+      namespace: "uwumi",
+    });
+    cluster.pods.push({
+      ...cluster.pods[0]!,
+      name: "uwumi-hermes-abc",
+      namespace: "uwumi",
+      image: `${uwumiRepository}@sha256:${"c".repeat(64)}`,
+      imageTag: `${uwumiRepository}:${SOURCE_SHA}`,
+      imageDigest: `sha256:${"c".repeat(64)}`,
+      containerImages: [
+        {
+          name: "uwumi-hermes",
+          repository: uwumiRepository,
+          reference: `${uwumiRepository}:${SOURCE_SHA}`,
+          tag: SOURCE_SHA,
+          digest: `sha256:${"c".repeat(64)}`,
+        },
+      ],
+    });
+    const providers: Provider<unknown>[] = [
+      { source: "github", collect: async () => [validWorkflow(), uwumiWorkflow] },
+      { source: "argocd", collect: async () => [validApplication(), uwumiApplication] },
+      { source: "kubernetes", collect: async () => cluster },
+    ];
+
+    const snapshot = await collectDeploymentSnapshot(providers, 1_000, now, [
+      YOOTOOB_APPLICATION,
+      uwumi,
+    ]);
+
+    expect(snapshot.data?.applications).toEqual([
+      expect.objectContaining({ application: "yootoob-mp3-dumachine", status: "healthy" }),
+      expect.objectContaining({ application: "uwumi-dumachine", status: "healthy" }),
+    ]);
+  });
+
   it.each([
     { name: "plain-object ClusterData", cluster: () => validCluster() },
     {
@@ -858,7 +1008,9 @@ describe("collectDeploymentSnapshot", () => {
     },
   ])("accepts valid $name", async ({ cluster }) => {
     const value = cluster();
-    const snapshot = await collectDeploymentSnapshot(deploymentProviders(value), 1_000, now);
+    const snapshot = await collectDeploymentSnapshot(deploymentProviders(value), 1_000, now, [
+      YOOTOOB_APPLICATION,
+    ]);
 
     expect(snapshot).toMatchObject({
       status: "healthy",
@@ -880,6 +1032,7 @@ describe("collectDeploymentSnapshot", () => {
       deploymentProviders(validCluster(), application),
       1_000,
       now,
+      [YOOTOOB_APPLICATION],
     );
 
     expect(snapshot.status).toBe("unknown");
@@ -901,7 +1054,9 @@ describe("collectDeploymentSnapshot", () => {
       conditions: [],
     }));
 
-    const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now);
+    const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now, [
+      YOOTOOB_APPLICATION,
+    ]);
 
     expect(snapshot.sources[2]).toMatchObject({
       source: "kubernetes",
@@ -979,7 +1134,9 @@ describe("collectDeploymentSnapshot", () => {
     };
     cluster.pods[1] = { ...cluster.pods[1]!, status: "critical", ready: false };
 
-    const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now);
+    const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now, [
+      YOOTOOB_APPLICATION,
+    ]);
 
     expect(snapshot.status).toBe("critical");
     expect(snapshot.sources[2]).toMatchObject({
@@ -1003,7 +1160,9 @@ describe("collectDeploymentSnapshot", () => {
     const cluster = validCluster();
     (cluster.workloads[0] as unknown as Record<typeof field, unknown>)[field] = value;
 
-    const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now);
+    const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now, [
+      YOOTOOB_APPLICATION,
+    ]);
 
     expect(snapshot.status).toBe("unknown");
     expect(snapshot.sources).toContainEqual(
@@ -1216,7 +1375,9 @@ describe("collectDeploymentSnapshot", () => {
       { source: "kubernetes", collect: async () => cluster },
     ];
 
-    const snapshot: DeploymentSnapshot = await collectDeploymentSnapshot(providers, 1_000, now);
+    const snapshot: DeploymentSnapshot = await collectDeploymentSnapshot(providers, 1_000, now, [
+      YOOTOOB_APPLICATION,
+    ]);
 
     expect(snapshot).toMatchObject({
       status: "unknown",
@@ -1299,7 +1460,7 @@ describe("collectDeploymentSnapshot", () => {
       { source: "kubernetes", collect: async () => cluster },
     ];
 
-    const snapshot = await collectDeploymentSnapshot(providers, 1_000, now);
+    const snapshot = await collectDeploymentSnapshot(providers, 1_000, now, [YOOTOOB_APPLICATION]);
 
     expect(snapshot.status).toBe("unknown");
     expect(snapshot.data?.applications).toHaveLength(1);
@@ -1403,7 +1564,7 @@ describe("collectDeploymentSnapshot", () => {
       { source: "kubernetes", collect: async () => malformedCluster },
     ];
 
-    const snapshot = await collectDeploymentSnapshot(providers, 1_000, now);
+    const snapshot = await collectDeploymentSnapshot(providers, 1_000, now, [YOOTOOB_APPLICATION]);
 
     expect(snapshot).toMatchObject({
       status: "unknown",
@@ -1443,7 +1604,9 @@ describe("collectDeploymentSnapshot", () => {
     const cluster = validCluster();
     delete (cluster.pods[0] as Partial<(typeof cluster.pods)[number]>).containerImages;
 
-    const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now);
+    const snapshot = await collectDeploymentSnapshot(deploymentProviders(cluster), 1_000, now, [
+      YOOTOOB_APPLICATION,
+    ]);
 
     expect(snapshot.sources[2]).toMatchObject({
       source: "kubernetes",

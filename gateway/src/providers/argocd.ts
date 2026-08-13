@@ -17,7 +17,6 @@ import {
 } from "../runtime-validation";
 
 const ARGO_NAMESPACE = "argocd";
-const ARGO_APPLICATION = "yootoob-mp3-dumachine";
 
 interface CustomObjectsReadApi {
   getNamespacedCustomObject(
@@ -60,6 +59,7 @@ export interface ArgoApplicationState {
 }
 
 export interface ArgoProviderOptions {
+  applicationName: string;
   environment?: NodeJS.ProcessEnv;
   kubeConfig?: KubeConfig;
   customObjectsApi?: CustomObjectsReadApi;
@@ -115,7 +115,7 @@ export function parseArgoApplicationState(value: unknown): ArgoApplicationState 
     : null;
   if (
     !fields ||
-    fields.name !== ARGO_APPLICATION ||
+    !isRequiredString(fields.name) ||
     fields.namespace !== ARGO_NAMESPACE ||
     !sync ||
     !isRequiredString(sync.status) ||
@@ -305,10 +305,12 @@ export class ArgoProvider implements Provider<ArgoApplicationState> {
   readonly source = "argocd" as const;
 
   private readonly environment: NodeJS.ProcessEnv;
+  private readonly applicationName: string;
   private kubeConfig: KubeConfig | undefined;
   private customObjectsApi: CustomObjectsReadApi | undefined;
 
-  constructor(options: ArgoProviderOptions = {}) {
+  constructor(options: ArgoProviderOptions) {
+    this.applicationName = requiredString(options.applicationName);
     this.environment = options.environment ?? process.env;
     this.kubeConfig = options.kubeConfig;
     this.customObjectsApi = options.customObjectsApi;
@@ -349,6 +351,6 @@ export class ArgoProvider implements Provider<ArgoApplicationState> {
   }
 
   collect(signal: AbortSignal): Promise<ArgoApplicationState> {
-    return this.application(ARGO_APPLICATION, signal);
+    return this.application(this.applicationName, signal);
   }
 }

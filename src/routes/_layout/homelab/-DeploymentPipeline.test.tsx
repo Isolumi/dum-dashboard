@@ -123,6 +123,36 @@ describe("DeploymentPipeline", () => {
     expect(within(liveImages).getByText(`sha256:${"a".repeat(64)}`)).toBeTruthy();
   });
 
+  it("renders an Argo-only application without fake GitHub stages", () => {
+    const monitoring: ApplicationPipelineSummary = {
+      ...application,
+      application: "kube-prometheus-stack",
+      namespace: "monitoring",
+      repository: null,
+      branch: null,
+      commit: null,
+      workflow: null,
+    };
+
+    const parsed = DeploymentSnapshotSchema.parse({
+      data: { applications: [monitoring] },
+      status: "healthy",
+      observedAt: "2026-08-04T12:02:00Z",
+      stale: false,
+      issues: [],
+      sources: [],
+    });
+    render(<DeploymentPipeline application={parsed.data!.applications[0]!} />);
+
+    const pipeline = screen.getByRole("article", {
+      name: "kube-prometheus-stack pipeline",
+    });
+    expect(within(pipeline).queryByRole("heading", { name: "Commit" })).toBeNull();
+    expect(within(pipeline).queryByRole("heading", { name: "GitHub Actions" })).toBeNull();
+    expect(within(pipeline).getByText("Argo CD managed")).toBeTruthy();
+    expect(within(pipeline).getByRole("heading", { name: "Container images" })).toBeTruthy();
+  });
+
   it("marks the image stage unknown when live tag and digest evidence are missing", () => {
     const missingLiveEvidence: ApplicationPipelineSummary = {
       ...application,
@@ -139,7 +169,7 @@ describe("DeploymentPipeline", () => {
 
     render(<DeploymentPipeline application={missingLiveEvidence} />);
 
-    const heading = screen.getByRole("heading", { name: "GHCR image" });
+    const heading = screen.getByRole("heading", { name: "Container images" });
     const stage = heading.closest("section");
     expect(stage).not.toBeNull();
     expect(within(stage!).getByRole("status", { name: "Status: Unknown" })).toBeTruthy();
@@ -153,7 +183,7 @@ describe("DeploymentPipeline", () => {
 
     render(<DeploymentPipeline application={tagBased} />);
 
-    const heading = screen.getByRole("heading", { name: "GHCR image" });
+    const heading = screen.getByRole("heading", { name: "Container images" });
     const stage = heading.closest("section");
     expect(stage).not.toBeNull();
     expect(within(stage!).getByRole("status", { name: "Status: Healthy" })).toBeTruthy();
@@ -177,7 +207,7 @@ describe("DeploymentPipeline", () => {
 
     render(<DeploymentPipeline application={partialDigestEvidence} />);
 
-    const heading = screen.getByRole("heading", { name: "GHCR image" });
+    const heading = screen.getByRole("heading", { name: "Container images" });
     const stage = heading.closest("section");
     expect(stage).not.toBeNull();
     expect(within(stage!).getByRole("status", { name: "Status: Unknown" })).toBeTruthy();

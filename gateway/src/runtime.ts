@@ -4,7 +4,7 @@ import { GitHubProvider } from "./providers/github";
 import { KubernetesProvider } from "./providers/kubernetes";
 import { PrometheusProvider } from "./providers/prometheus";
 import type { Provider } from "./providers/provider";
-import { loadServiceCatalog } from "./service-catalog";
+import { loadServiceCatalog, type ApplicationCatalogEntry } from "./service-catalog";
 import { probeService } from "./service-probe";
 
 export interface ProductionGatewayRuntime {
@@ -19,6 +19,7 @@ const productionRuntime: ProductionGatewayRuntime = {
 
 export interface ProductionGatewayDependencies {
   kubernetesProvider: KubernetesProvider;
+  applications: readonly ApplicationCatalogEntry[];
   providers: {
     cluster: readonly Provider<unknown>[];
     deployments: readonly Provider<unknown>[];
@@ -26,30 +27,43 @@ export interface ProductionGatewayDependencies {
   };
 }
 
-export function createProductionGatewayDependencies(
+export async function createProductionGatewayDependencies(
   environment: NodeJS.ProcessEnv = process.env,
   runtime: ProductionGatewayRuntime = productionRuntime,
-): ProductionGatewayDependencies {
+): Promise<ProductionGatewayDependencies> {
   const kubernetesProvider = new KubernetesProvider({ environment });
   const { githubReadToken, prometheusUrl, serviceCatalogPath } = getGatewayConfig(environment);
-  const githubProvider = new GitHubProvider({ token: githubReadToken, environment });
-  const argoProvider = new ArgoProvider({ environment });
+  const catalog = await runtime.loadServiceCatalog(serviceCatalogPath);
+  const githubProviders = catalog.applications.flatMap((application) =>
+    application.github
+      ? [
+          new GitHubProvider({
+            ...application.github,
+            token: githubReadToken,
+            environment,
+          }),
+        ]
+      : [],
+  );
+  const argoProviders = [
+    ...new Set(catalog.applications.map(({ argoApplication }) => argoApplication)),
+  ].map((applicationName) => new ArgoProvider({ applicationName, environment }));
   const cluster: Provider<unknown>[] = [kubernetesProvider];
   if (prometheusUrl) cluster.push(new PrometheusProvider({ baseUrl: prometheusUrl }));
   const serviceProbeProvider: Provider<unknown> = {
     source: "service-probe",
     async collect(signal) {
-      const catalog = await runtime.loadServiceCatalog(serviceCatalogPath);
-      return Promise.all(catalog.map((entry) => runtime.probeService(entry, signal)));
+      return Promise.all(catalog.services.map((entry) => runtime.probeService(entry, signal)));
     },
   };
 
   return {
     kubernetesProvider,
+    applications: catalog.applications,
     providers: {
       cluster,
-      deployments: [githubProvider, argoProvider, kubernetesProvider],
-      services: [serviceProbeProvider, argoProvider, kubernetesProvider],
+      deployments: [...githubProviders, ...argoProviders, kubernetesProvider],
+      services: [serviceProbeProvider, ...argoProviders, kubernetesProvider],
     },
   };
 }
