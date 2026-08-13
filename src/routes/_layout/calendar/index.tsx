@@ -8,6 +8,7 @@ import type { CalendarEvent } from "./-calendar.api";
 import { getCalendarEvents, startCalendarOAuth } from "./-calendar.functions";
 import {
   type DayGroup,
+  formatCalendarDateLabel,
   formatEventTime,
   getUpcomingEvents,
   groupEventsByDay,
@@ -18,14 +19,6 @@ export const Route = createFileRoute("/_layout/calendar/")({
 });
 
 type PageStatus = "loading" | "ready" | "disconnected" | "auth_expired" | "error";
-
-function formatDayLabel(isoDate: string): string {
-  const [y, m, d] = isoDate.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
 
 function CalendarPage() {
   const today = useMemo(() => new Date(), []);
@@ -171,7 +164,7 @@ function CalendarPage() {
               {upcomingGroups.map((group) => (
                 <div key={group.isoDate}>
                   <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    {formatDayLabel(group.isoDate)}
+                    {formatCalendarDateLabel(group.isoDate)}
                   </div>
                   <div className="flex flex-col gap-1">
                     {group.events.map((event) => (

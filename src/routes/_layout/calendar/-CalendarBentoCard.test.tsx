@@ -8,6 +8,7 @@ import type { ToolEntry } from "#/tools/registry";
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
@@ -44,6 +45,8 @@ function makeEvent(id: string, summary: string, dateTime: string) {
 
 describe("CalendarBentoCard", () => {
   it("shows upcoming events once loaded", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 7, 13, 12));
     vi.mocked(getCalendarEvents).mockResolvedValue({
       status: "ready",
       events: [
@@ -56,6 +59,10 @@ describe("CalendarBentoCard", () => {
 
     await waitFor(() => expect(screen.getByText("Team standup")).toBeTruthy());
     expect(screen.getByText("Dentist")).toBeTruthy();
+    expect(screen.getByText("Sun, Apr 14, 2030")).toBeTruthy();
+
+    const eventRow = screen.getByText("Team standup").parentElement;
+    expect(eventRow?.className).toContain("grid-cols-[minmax(0,1fr)_auto]");
   });
 
   it("shows 'No upcoming events' when event list is empty", async () => {
