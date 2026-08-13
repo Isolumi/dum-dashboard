@@ -124,18 +124,8 @@ applications:
         name: kube-prometheus-stack-operator
         imageRepository: quay.io/prometheus-operator/prometheus-operator
         tracksSource: false
-      - kind: StatefulSet
-        name: prometheus-kube-prometheus-stack-prometheus
-        imageRepository: quay.io/prometheus/prometheus
-        tracksSource: false
 
 services:
-  - id: dum-dashboard
-    name: Dum Dashboard
-    description: Private dashboard for the Doh homelab
-    url: https://doh.lumilumi.xyz
-    application: dum-dashboard
-
   - id: yootoob-mp3
     name: Yootoob MP3
     description: Private YouTube MP3 downloader
