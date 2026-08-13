@@ -123,7 +123,7 @@ export async function probeService(
     if (timedOut) return probeFailure(entry, latencyMs, "Service probe timed out");
     if (
       response.status !== "fulfilled" ||
-      !response.value.ok ||
+      response.value.status >= 500 ||
       certificate.status !== "fulfilled"
     ) {
       return probeFailure(entry, latencyMs, "Service endpoint unavailable");
@@ -138,7 +138,7 @@ export async function probeService(
       {
         status: "healthy",
         ruleId: "service-reachable",
-        reason: "Service endpoint responded successfully.",
+        reason: "Service endpoint responded.",
         evidence: {},
       },
       {

@@ -15,11 +15,22 @@ function service(id: string): ServiceCatalogEntry {
     name: "yootoob-mp3",
     description: "Private YouTube MP3 downloader",
     url: "https://yootoob.doh.lumilumi.xyz",
+    applicationId: "yootoob-mp3",
     namespace: "yootoob-mp3",
     argoApplication: "yootoob-mp3-dumachine",
     workloads: [
-      { kind: "Deployment", name: "yootoob-mp3-api" },
-      { kind: "Deployment", name: "yootoob-mp3-frontend" },
+      {
+        kind: "Deployment",
+        name: "yootoob-mp3-api",
+        imageRepository: "ghcr.io/isolumi/yootoob-mp3-api",
+        tracksSource: true,
+      },
+      {
+        kind: "Deployment",
+        name: "yootoob-mp3-frontend",
+        imageRepository: "ghcr.io/isolumi/yootoob-mp3-frontend",
+        tracksSource: true,
+      },
     ],
   };
 }
@@ -84,6 +95,19 @@ describe("probeService", () => {
     );
   });
 
+  it("treats a route-specific 4xx response as reachable", async () => {
+    completeTlsHandshake();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
+
+    await expect(
+      probeService(service("route-specific-api"), new AbortController().signal),
+    ).resolves.toMatchObject({
+      reachable: true,
+      status: "healthy",
+      consecutiveFailures: 0,
+    });
+  });
+
   it("reports one failed probe as warning and two consecutive failures as critical", async () => {
     completeTlsHandshake();
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
@@ -140,7 +164,7 @@ describe("probeService", () => {
     });
   });
 
-  it("cancels response bodies after successful and non-2xx probes", async () => {
+  it("cancels response bodies after successful and 5xx probes", async () => {
     completeTlsHandshake();
     const successfulBody = { cancel: vi.fn().mockResolvedValue(undefined) };
     const failedBody = { cancel: vi.fn().mockResolvedValue(undefined) };
@@ -148,8 +172,8 @@ describe("probeService", () => {
       "fetch",
       vi
         .fn()
-        .mockResolvedValueOnce({ ok: true, body: successfulBody })
-        .mockResolvedValueOnce({ ok: false, body: failedBody }),
+        .mockResolvedValueOnce({ status: 204, body: successfulBody })
+        .mockResolvedValueOnce({ status: 503, body: failedBody }),
     );
 
     await expect(
