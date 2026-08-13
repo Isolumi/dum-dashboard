@@ -17,23 +17,10 @@ import {
   readOwnDataRecord,
   RUNTIME_COLLECTION_LIMITS,
 } from "./runtime-validation";
+import type { ApplicationCatalogEntry } from "./service-catalog";
 
-const DEPLOYMENT_NAMESPACE = "yootoob-mp3";
-const ARGO_APPLICATION = "yootoob-mp3-dumachine";
-const GITHUB_REPOSITORY = "Isolumi/youtube-mp3";
-const GITHUB_BRANCH = "development";
 const UNKNOWN_OBSERVED_AT = "1970-01-01T00:00:00.000Z";
-const TARGETS = [
-  {
-    name: "yootoob-mp3-api",
-    repository: "ghcr.io/isolumi/yootoob-mp3-api",
-  },
-  {
-    name: "yootoob-mp3-frontend",
-    repository: "ghcr.io/isolumi/yootoob-mp3-frontend",
-  },
-] as const;
-export type DeploymentTargetName = (typeof TARGETS)[number]["name"];
+export type DeploymentTargetName = string;
 
 export interface KubernetesDeploymentEvidence {
   workloads: Array<{
@@ -175,15 +162,20 @@ interface ParsedPodEvidence {
   invalidContainerTarget: DeploymentTargetName | null;
 }
 
-function targetForPod(name: unknown, namespace: unknown): DeploymentTargetName | null {
-  if (typeof name !== "string" || namespace !== DEPLOYMENT_NAMESPACE) return null;
+function targetForPod(
+  name: unknown,
+  namespace: unknown,
+  definition: ApplicationCatalogEntry,
+): DeploymentTargetName | null {
+  if (typeof name !== "string" || namespace !== definition.namespace) return null;
   return (
-    TARGETS.find((target) => name === target.name || name.startsWith(`${target.name}-`))?.name ??
-    null
+    definition.workloads.find(
+      (target) => name === target.name || name.startsWith(`${target.name}-`),
+    )?.name ?? null
   );
 }
 
-function parsePodEvidence(value: unknown): ParsedPodEvidence {
+function parsePodEvidence(value: unknown, definition: ApplicationCatalogEntry): ParsedPodEvidence {
   const properties = readOwnDataRecord(value);
   if (!properties) return { data: null, invalidContainerTarget: null };
   const name = properties.get("name");
@@ -210,7 +202,7 @@ function parsePodEvidence(value: unknown): ParsedPodEvidence {
   if (!containerImages) {
     return {
       data: null,
-      invalidContainerTarget: targetForPod(name, namespace),
+      invalidContainerTarget: targetForPod(name, namespace, definition),
     };
   }
 
@@ -226,7 +218,10 @@ function parsePodEvidence(value: unknown): ParsedPodEvidence {
   };
 }
 
-function normalizeKubernetesEvidence(value: unknown): NormalizedKubernetesEvidence {
+function normalizeKubernetesEvidence(
+  value: unknown,
+  definition: ApplicationCatalogEntry,
+): NormalizedKubernetesEvidence {
   if (value === null) return { evidence: null, invalid: false, invalidContainerTargets: [] };
   const properties = readOwnDataProperties(value, ["workloads", "pods"]);
   if (!properties) return { evidence: null, invalid: true, invalidContainerTargets: [] };
@@ -241,7 +236,7 @@ function normalizeKubernetesEvidence(value: unknown): NormalizedKubernetesEviden
   const invalidContainerTargets = new Set<DeploymentTargetName>();
   let podsValid = podEntries !== null;
   for (const entry of podEntries ?? []) {
-    const parsed = parsePodEvidence(entry);
+    const parsed = parsePodEvidence(entry, definition);
     if (parsed.invalidContainerTarget) invalidContainerTargets.add(parsed.invalidContainerTarget);
     if (parsed.data) pods.push(parsed.data);
     else podsValid = false;
@@ -262,14 +257,17 @@ function normalizeKubernetesEvidence(value: unknown): NormalizedKubernetesEviden
   };
 }
 
-function normalizeDeploymentCorrelationInput(value: unknown): NormalizedDeploymentCorrelationInput {
+function normalizeDeploymentCorrelationInput(
+  value: unknown,
+  definition: ApplicationCatalogEntry,
+): NormalizedDeploymentCorrelationInput {
   const properties = readOwnDataProperties(value, [
     "workflow",
     "application",
     "kubernetes",
     "observedAt",
   ]);
-  const kubernetes = normalizeKubernetesEvidence(properties?.kubernetes);
+  const kubernetes = normalizeKubernetesEvidence(properties?.kubernetes, definition);
   return {
     input: {
       workflow: parseWorkflowRun(properties?.workflow),
@@ -331,21 +329,25 @@ function issue(
 
 function workloadState(
   input: DeploymentCorrelationInput,
-  target: (typeof TARGETS)[number],
+  definition: ApplicationCatalogEntry,
+  target: ApplicationCatalogEntry["workloads"][number],
 ): { state: DeploymentWorkloadSummary; issues: HealthIssue[] } {
-  const resource = `Deployment/${target.name}`;
+  const resource = `${target.kind}/${target.name}`;
   const workload = input.kubernetes?.workloads.find(
-    (candidate) => candidate.namespace === DEPLOYMENT_NAMESPACE && candidate.name === target.name,
+    (candidate) =>
+      candidate.namespace === definition.namespace &&
+      candidate.kind === target.kind &&
+      candidate.name === target.name,
   );
   const pods =
     input.kubernetes?.pods.filter(
       (pod) =>
-        pod.namespace === DEPLOYMENT_NAMESPACE &&
+        pod.namespace === definition.namespace &&
         (pod.name === target.name || pod.name.startsWith(`${target.name}-`)),
     ) ?? [];
-  const expected = expectedImage(input.application, target.repository);
+  const expected = expectedImage(input.application, target.imageRepository);
   const targetContainers = pods.flatMap((pod) =>
-    pod.containerImages.filter((container) => container.repository === target.repository),
+    pod.containerImages.filter((container) => container.repository === target.imageRepository),
   );
   const liveImages = unique(targetContainers.map((container) => container.reference));
   const liveTags = unique(targetContainers.map((container) => container.tag));
@@ -413,10 +415,10 @@ function workloadState(
         "argocd",
         resource,
         input.observedAt,
-        { repository: target.repository, expectedImage: null },
+        { repository: target.imageRepository, expectedImage: null },
       ),
     );
-  } else if (!expected.tag) {
+  } else if (!expected.tag && !expected.digest) {
     issues.push(
       issue(
         "deployment-expected-tag-unavailable",
@@ -425,7 +427,7 @@ function workloadState(
         "argocd",
         resource,
         input.observedAt,
-        { repository: target.repository, expectedImage: expected.reference },
+        { repository: target.imageRepository, expectedImage: expected.reference },
       ),
     );
   }
@@ -439,12 +441,13 @@ function workloadState(
         "kubernetes",
         resource,
         input.observedAt,
-        { podCount: 0, repository: target.repository },
+        { podCount: 0, repository: target.imageRepository },
       ),
     );
   } else if (pods.length > 0) {
     const missingTag =
-      targetContainers.length === 0 || targetContainers.some((container) => !container.tag);
+      expected.tag !== null &&
+      (targetContainers.length === 0 || targetContainers.some((container) => !container.tag));
     const missingDigest =
       targetContainers.length === 0 || targetContainers.some((container) => !container.digest);
     if (missingTag) {
@@ -456,7 +459,7 @@ function workloadState(
           "kubernetes",
           resource,
           input.observedAt,
-          { repository: target.repository, containerCount: targetContainers.length },
+          { repository: target.imageRepository, containerCount: targetContainers.length },
         ),
       );
     }
@@ -469,7 +472,7 @@ function workloadState(
           "kubernetes",
           resource,
           input.observedAt,
-          { repository: target.repository, containerCount: targetContainers.length },
+          { repository: target.imageRepository, containerCount: targetContainers.length },
         ),
       );
     }
@@ -515,7 +518,12 @@ function workloadState(
     );
   }
 
-  if (input.workflow && expected.tag && input.workflow.commit.sha !== expected.tag) {
+  if (
+    target.tracksSource &&
+    input.workflow &&
+    expected.tag &&
+    input.workflow.commit.sha !== expected.tag
+  ) {
     issues.push(
       issue(
         "deployment-source-tag-mismatch",
@@ -532,7 +540,7 @@ function workloadState(
   return {
     state: {
       name: target.name,
-      namespace: DEPLOYMENT_NAMESPACE,
+      namespace: definition.namespace,
       status: issues.length === 0 ? "healthy" : worstStatus(issues.map(({ status }) => status)),
       desiredReplicas,
       availableReplicas,
@@ -618,11 +626,12 @@ function argoStage(
 function correlateNormalizedDeployment(
   input: DeploymentCorrelationInput,
   normalizedKubernetes: NormalizedKubernetesEvidence,
+  definition: ApplicationCatalogEntry,
 ): DeploymentState {
-  const correlated = TARGETS.map((target) => workloadState(input, target));
+  const correlated = definition.workloads.map((target) => workloadState(input, definition, target));
   const workloads = correlated.map(({ state }) => state);
   const issues = correlated.flatMap(({ issues: workloadIssues }) => workloadIssues);
-  const workflow = workflowStage(input.workflow, input.observedAt);
+  const workflow = definition.github ? workflowStage(input.workflow, input.observedAt) : null;
   const argo = argoStage(input.application, input.observedAt);
 
   if (normalizedKubernetes.invalid) {
@@ -632,7 +641,7 @@ function correlateNormalizedDeployment(
         "unknown",
         "Kubernetes deployment evidence is invalid.",
         "kubernetes",
-        DEPLOYMENT_NAMESPACE,
+        definition.id,
         input.observedAt,
         { valid: false },
       ),
@@ -640,7 +649,8 @@ function correlateNormalizedDeployment(
   }
 
   for (const targetName of normalizedKubernetes.invalidContainerTargets) {
-    const target = TARGETS.find(({ name }) => name === targetName)!;
+    const target = definition.workloads.find(({ name }) => name === targetName);
+    if (!target) continue;
     issues.push(
       issue(
         "deployment-container-images-unavailable",
@@ -649,19 +659,19 @@ function correlateNormalizedDeployment(
         "kubernetes",
         `Deployment/${target.name}`,
         input.observedAt,
-        { repository: target.repository, valid: false },
+        { repository: target.imageRepository, valid: false },
       ),
     );
   }
 
-  if (workflow.status !== "healthy") {
+  if (workflow && workflow.status !== "healthy") {
     issues.push(
       issue(
         input.workflow ? "deployment-workflow-not-successful" : "deployment-workflow-unavailable",
         workflow.status,
         workflow.summary,
         "github",
-        input.workflow?.repository ?? GITHUB_REPOSITORY,
+        input.workflow?.repository ?? definition.github?.repository ?? definition.id,
         workflow.observedAt,
         {
           conclusion: input.workflow?.conclusion ?? null,
@@ -677,7 +687,7 @@ function correlateNormalizedDeployment(
         argo.status,
         argo.summary,
         "argocd",
-        input.application?.name ?? ARGO_APPLICATION,
+        input.application?.name ?? definition.argoApplication,
         argo.observedAt,
         {
           syncStatus: input.application?.sync.status ?? null,
@@ -692,18 +702,18 @@ function correlateNormalizedDeployment(
     status: rolloutStatus,
     summary:
       rolloutStatus === "healthy"
-        ? "Both deployments are available and running the expected images."
-        : "One or more deployments lack evidence or do not match the expected live state.",
+        ? `${workloads.length} ${workloads.length === 1 ? "workload is" : "workloads are"} available and running the expected images.`
+        : "One or more workloads lack evidence or do not match the expected live state.",
     observedAt: input.observedAt,
     url: null,
   };
 
   return {
-    application: input.application?.name ?? ARGO_APPLICATION,
-    namespace: DEPLOYMENT_NAMESPACE,
-    repository: input.workflow?.repository ?? GITHUB_REPOSITORY,
-    branch: input.workflow?.branch ?? GITHUB_BRANCH,
-    status: worstStatus([workflow.status, argo.status, rollout.status]),
+    application: input.application?.name ?? definition.argoApplication,
+    namespace: definition.namespace,
+    repository: input.workflow?.repository ?? definition.github?.repository ?? null,
+    branch: input.workflow?.branch ?? definition.github?.branch ?? null,
+    status: worstStatus([...(workflow ? [workflow.status] : []), argo.status, rollout.status]),
     commit: input.workflow?.commit ?? null,
     argoRevision: input.application?.sync.revision ?? null,
     workflow,
@@ -716,16 +726,24 @@ function correlateNormalizedDeployment(
 
 export function correlateValidatedDeployment(
   input: DeploymentCorrelationInput,
+  definition: ApplicationCatalogEntry,
   invalidContainerTargets: readonly DeploymentTargetName[] = [],
 ): DeploymentState {
-  return correlateNormalizedDeployment(input, {
-    evidence: input.kubernetes,
-    invalid: false,
-    invalidContainerTargets: [...invalidContainerTargets],
-  });
+  return correlateNormalizedDeployment(
+    input,
+    {
+      evidence: input.kubernetes,
+      invalid: false,
+      invalidContainerTargets: [...invalidContainerTargets],
+    },
+    definition,
+  );
 }
 
-export function correlateDeployment(value: DeploymentCorrelationInput): DeploymentState {
-  const normalized = normalizeDeploymentCorrelationInput(value);
-  return correlateNormalizedDeployment(normalized.input, normalized.kubernetes);
+export function correlateDeployment(
+  value: DeploymentCorrelationInput,
+  definition: ApplicationCatalogEntry,
+): DeploymentState {
+  const normalized = normalizeDeploymentCorrelationInput(value, definition);
+  return correlateNormalizedDeployment(normalized.input, normalized.kubernetes, definition);
 }

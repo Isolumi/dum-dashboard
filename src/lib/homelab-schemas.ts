@@ -68,8 +68,8 @@ const DeploymentDataSchema = z
         .object({
           application: z.string(),
           namespace: z.string(),
-          repository: z.string(),
-          branch: z.string(),
+          repository: z.string().nullable(),
+          branch: z.string().nullable(),
           status: HealthStatusSchema,
           commit: z
             .object({
@@ -82,7 +82,7 @@ const DeploymentDataSchema = z
             .strict()
             .nullable(),
           argoRevision: z.string().nullable(),
-          workflow: WorkflowPipelineStageSchema,
+          workflow: WorkflowPipelineStageSchema.nullable(),
           argo: ArgoPipelineStageSchema,
           rollout: PipelineStageSchema,
           workloads: z.array(

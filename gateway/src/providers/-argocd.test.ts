@@ -2,12 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import fixture from "./fixtures/argocd.json";
 import { ArgoProvider, parseArgoApplicationState } from "./argocd";
 
+const TARGET = { applicationName: "yootoob-mp3-dumachine" } as const;
+
 describe("ArgoProvider", () => {
   it("reads and maps the Application custom resource from the argocd namespace", async () => {
     const customObjectsApi = {
       getNamespacedCustomObject: vi.fn(async () => structuredClone(fixture)),
     };
-    const provider = new ArgoProvider({ customObjectsApi });
+    const provider = new ArgoProvider({ ...TARGET, customObjectsApi });
 
     await expect(provider.getApplication("yootoob-mp3-dumachine")).resolves.toEqual({
       name: "yootoob-mp3-dumachine",
@@ -71,9 +73,11 @@ describe("ArgoProvider", () => {
 
   it("contains invalid or failed custom-object responses without exposing upstream details", async () => {
     const invalid = new ArgoProvider({
+      ...TARGET,
       customObjectsApi: { getNamespacedCustomObject: vi.fn(async () => ({ status: {} })) },
     });
     const failed = new ArgoProvider({
+      ...TARGET,
       customObjectsApi: {
         getNamespacedCustomObject: vi.fn(async () => {
           throw new Error("token=private stack=/secret/path");
@@ -104,6 +108,7 @@ describe("ArgoProvider", () => {
         );
       }
       const provider = new ArgoProvider({
+        ...TARGET,
         customObjectsApi: { getNamespacedCustomObject: vi.fn(async () => payload) },
       });
 
@@ -115,6 +120,7 @@ describe("ArgoProvider", () => {
 
   it("parses null-prototype Argo state into one fresh normalized copy", async () => {
     const provider = new ArgoProvider({
+      ...TARGET,
       customObjectsApi: {
         getNamespacedCustomObject: vi.fn(async () => structuredClone(fixture)),
       },
@@ -140,6 +146,7 @@ describe("ArgoProvider", () => {
 
   it("rejects blank required strings in normalized Argo application evidence", async () => {
     const provider = new ArgoProvider({
+      ...TARGET,
       customObjectsApi: {
         getNamespacedCustomObject: vi.fn(async () => structuredClone(fixture)),
       },
@@ -181,6 +188,7 @@ describe("ArgoProvider", () => {
 
   it.each(["", "   "] as const)("rejects a blank normalized Argo image entry", async (invalid) => {
     const provider = new ArgoProvider({
+      ...TARGET,
       customObjectsApi: {
         getNamespacedCustomObject: vi.fn(async () => structuredClone(fixture)),
       },
@@ -234,6 +242,7 @@ describe("ArgoProvider", () => {
       const payload = structuredClone(fixture);
       mutate(payload);
       const provider = new ArgoProvider({
+        ...TARGET,
         customObjectsApi: { getNamespacedCustomObject: vi.fn(async () => payload) },
       });
 
@@ -276,6 +285,7 @@ describe("ArgoProvider", () => {
     const payload = structuredClone(fixture);
     mutate(payload, invalid);
     const provider = new ArgoProvider({
+      ...TARGET,
       customObjectsApi: { getNamespacedCustomObject: vi.fn(async () => payload) },
     });
 
@@ -299,6 +309,7 @@ describe("ArgoProvider", () => {
     delete status.resources;
     delete status.summary;
     const provider = new ArgoProvider({
+      ...TARGET,
       customObjectsApi: { getNamespacedCustomObject: vi.fn(async () => payload) },
     });
 
@@ -330,6 +341,7 @@ describe("ArgoProvider", () => {
         payload.status.resources[0]!.health = new Proxy(payload.status.resources[0]!.health, {});
       }
       const provider = new ArgoProvider({
+        ...TARGET,
         customObjectsApi: { getNamespacedCustomObject: vi.fn(async () => payload) },
       });
 

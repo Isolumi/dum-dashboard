@@ -173,6 +173,7 @@ function workflowStageCard(stage: WorkflowPipelineStage): ReactNode {
 }
 
 export function DeploymentPipeline({ application }: { application: ApplicationPipelineSummary }) {
+  const hasGitHub = application.repository !== null && application.workflow !== null;
   const commitHref = safeHttpsUrl(application.commit?.url);
   const commitSummary = application.commit
     ? `${shortSha(application.commit.sha)} · ${application.commit.author}`
@@ -199,7 +200,9 @@ export function DeploymentPipeline({ application }: { application: ApplicationPi
       <header className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            {application.repository} · {application.branch}
+            {application.repository && application.branch
+              ? `${application.repository} · ${application.branch}`
+              : "Argo CD managed"}
           </p>
           <h2 className="mt-1 truncate text-lg font-semibold text-foreground">
             {application.application}
@@ -212,30 +215,34 @@ export function DeploymentPipeline({ application }: { application: ApplicationPi
       </header>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3 xl:grid-cols-6">
+        {hasGitHub ? (
+          <>
+            <PipelineStageCard
+              title="Commit"
+              icon={GitCommitHorizontal}
+              status={application.commit ? "healthy" : "unknown"}
+              summary={commitSummary}
+              url={commitHref}
+            >
+              {application.commit ? (
+                <div className="mt-2 min-w-0">
+                  <p className="font-mono text-xs text-foreground">
+                    {shortSha(application.commit.sha)}
+                  </p>
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                    {application.commit.message}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {formatTimestamp(application.commit.committedAt)}
+                  </p>
+                </div>
+              ) : null}
+            </PipelineStageCard>
+            {workflowStageCard(application.workflow)}
+          </>
+        ) : null}
         <PipelineStageCard
-          title="Commit"
-          icon={GitCommitHorizontal}
-          status={application.commit ? "healthy" : "unknown"}
-          summary={commitSummary}
-          url={commitHref}
-        >
-          {application.commit ? (
-            <div className="mt-2 min-w-0">
-              <p className="font-mono text-xs text-foreground">
-                {shortSha(application.commit.sha)}
-              </p>
-              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                {application.commit.message}
-              </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {formatTimestamp(application.commit.committedAt)}
-              </p>
-            </div>
-          ) : null}
-        </PipelineStageCard>
-        {workflowStageCard(application.workflow)}
-        <PipelineStageCard
-          title="GHCR image"
+          title="Container images"
           icon={PackageCheck}
           status={imageStatus(application)}
           summary={

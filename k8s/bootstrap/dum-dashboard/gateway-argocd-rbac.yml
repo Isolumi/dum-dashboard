@@ -11,8 +11,6 @@ rules:
       - argoproj.io
     resources:
       - applications
-    resourceNames:
-      - yootoob-mp3-dumachine
     verbs:
       - get
 ---

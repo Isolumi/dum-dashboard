@@ -1,12 +1,161 @@
-services:
+applications:
+  - id: dum-dashboard
+    name: Dum Dashboard
+    namespace: dum-dashboard
+    argoApplication: dum-dashboard-dumachine
+    github:
+      repository: Isolumi/dum-dashboard
+      branch: v1
+      workflow: build-images.yml
+    workloads:
+      - kind: Deployment
+        name: dum-dashboard
+        imageRepository: ghcr.io/isolumi/dum-dashboard
+        tracksSource: true
+      - kind: Deployment
+        name: homelab-gateway
+        imageRepository: ghcr.io/isolumi/homelab-gateway
+        tracksSource: true
+
   - id: yootoob-mp3
-    name: yootoob-mp3
-    description: Private YouTube MP3 downloader
-    url: https://yootoob.doh.lumilumi.xyz
+    name: Yootoob MP3
     namespace: yootoob-mp3
     argoApplication: yootoob-mp3-dumachine
+    github:
+      repository: Isolumi/youtube-mp3
+      branch: development
+      workflow: build-images.yml
     workloads:
       - kind: Deployment
         name: yootoob-mp3-api
+        imageRepository: ghcr.io/isolumi/yootoob-mp3-api
+        tracksSource: true
       - kind: Deployment
         name: yootoob-mp3-frontend
+        imageRepository: ghcr.io/isolumi/yootoob-mp3-frontend
+        tracksSource: true
+
+  - id: uwumi
+    name: Uwumi
+    namespace: uwumi
+    argoApplication: uwumi-dumachine
+    github:
+      repository: Isolumi/uwumi
+      branch: main
+      workflow: ci-cd.yml
+    workloads:
+      - kind: Deployment
+        name: uwumi-hermes
+        imageRepository: ghcr.io/isolumi/uwumi-hermes
+        tracksSource: true
+      - kind: Deployment
+        name: google-workspace-mcp
+        imageRepository: ghcr.io/isolumi/uwumi-google-workspace-mcp
+        tracksSource: true
+      - kind: Deployment
+        name: linear-mcp
+        imageRepository: ghcr.io/isolumi/uwumi-linear-mcp
+        tracksSource: true
+      - kind: Deployment
+        name: reminder-mcp
+        imageRepository: ghcr.io/isolumi/uwumi-reminder-mcp
+        tracksSource: true
+      - kind: Deployment
+        name: taxhacker-mcp
+        imageRepository: ghcr.io/isolumi/uwumi-taxhacker-mcp
+        tracksSource: true
+      - kind: Deployment
+        name: firecrawl-api
+        imageRepository: ghcr.io/firecrawl/firecrawl
+        tracksSource: false
+      - kind: Deployment
+        name: firecrawl-nuq-postgres
+        imageRepository: ghcr.io/firecrawl/nuq-postgres
+        tracksSource: false
+      - kind: Deployment
+        name: firecrawl-playwright
+        imageRepository: ghcr.io/firecrawl/playwright-service
+        tracksSource: false
+      - kind: Deployment
+        name: firecrawl-rabbitmq
+        imageRepository: rabbitmq
+        tracksSource: false
+      - kind: Deployment
+        name: firecrawl-redis
+        imageRepository: redis
+        tracksSource: false
+      - kind: Deployment
+        name: searxng
+        imageRepository: searxng/searxng
+        tracksSource: false
+
+  - id: taxhacker
+    name: TaxHacker
+    namespace: uwumi
+    argoApplication: uwumi-dumachine
+    github:
+      repository: Isolumi/uwumi-taxhacker
+      branch: main
+      workflow: docker-latest.yml
+    workloads:
+      - kind: Deployment
+        name: taxhacker
+        imageRepository: ghcr.io/isolumi/taxhacker
+        tracksSource: false
+      - kind: StatefulSet
+        name: taxhacker-postgres
+        imageRepository: postgres
+        tracksSource: false
+
+  - id: monitoring
+    name: Grafana and Monitoring
+    namespace: monitoring
+    argoApplication: kube-prometheus-stack
+    workloads:
+      - kind: Deployment
+        name: kube-prometheus-stack-grafana
+        imageRepository: docker.io/grafana/grafana
+        tracksSource: false
+      - kind: Deployment
+        name: kube-prometheus-stack-kube-state-metrics
+        imageRepository: registry.k8s.io/kube-state-metrics/kube-state-metrics
+        tracksSource: false
+      - kind: Deployment
+        name: kube-prometheus-stack-operator
+        imageRepository: quay.io/prometheus-operator/prometheus-operator
+        tracksSource: false
+      - kind: StatefulSet
+        name: prometheus-kube-prometheus-stack-prometheus
+        imageRepository: quay.io/prometheus/prometheus
+        tracksSource: false
+
+services:
+  - id: dum-dashboard
+    name: Dum Dashboard
+    description: Private dashboard for the Doh homelab
+    url: https://doh.lumilumi.xyz
+    application: dum-dashboard
+
+  - id: yootoob-mp3
+    name: Yootoob MP3
+    description: Private YouTube MP3 downloader
+    url: https://yootoob.doh.lumilumi.xyz
+    application: yootoob-mp3
+
+  - id: google-workspace
+    name: Google Workspace
+    description: Private Google Workspace MCP service
+    url: https://gws.doh.lumilumi.xyz
+    application: uwumi
+
+  - id: taxhacker
+    name: TaxHacker
+    description: Private finance and statement manager
+    url: https://monies.doh.lumilumi.xyz
+    application: taxhacker
+
+  - id: grafana
+    name: Grafana
+    description: Private homelab metrics and dashboards
+    url: https://grafana.doh.lumilumi.xyz
+    application: monitoring

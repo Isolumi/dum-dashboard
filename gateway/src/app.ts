@@ -5,6 +5,7 @@ import { normalizePodLogCursor, podLogCursorFromLine } from "../../shared/homela
 import { getGatewayConfig } from "./config";
 import type { KubernetesReader, PodLogStream } from "./providers/kubernetes";
 import { isWindowedProvider, type Provider } from "./providers/provider";
+import type { ApplicationCatalogEntry } from "./service-catalog";
 import {
   CertificateActivityTracker,
   collectClusterSnapshot,
@@ -48,6 +49,7 @@ function clusterProvidersForWindow(
 export interface GatewayDependencies {
   providers?: Partial<Record<SnapshotRoute, readonly Provider<unknown>[]>>;
   kubernetesProvider?: KubernetesReader;
+  applications?: readonly ApplicationCatalogEntry[];
   timeoutMs?: number;
   now?: Now;
 }
@@ -78,6 +80,7 @@ export function createGateway(dependencies: GatewayDependencies = {}): Hono {
         timeoutMs,
         now,
         certificateActivityTracker,
+        dependencies.applications,
       ),
     ),
   );
@@ -96,7 +99,14 @@ export function createGateway(dependencies: GatewayDependencies = {}): Hono {
     );
   });
   app.get("/deployments", async (context) =>
-    context.json(await collectDeploymentSnapshot(deploymentProviders, timeoutMs, now)),
+    context.json(
+      await collectDeploymentSnapshot(
+        deploymentProviders,
+        timeoutMs,
+        now,
+        dependencies.applications,
+      ),
+    ),
   );
   app.get("/services", async (context) =>
     context.json(await collectServiceSnapshot(serviceProviders, timeoutMs, now)),
