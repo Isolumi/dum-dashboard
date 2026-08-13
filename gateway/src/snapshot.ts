@@ -22,11 +22,11 @@ import {
   type HealthEvaluation,
 } from "../../shared/homelab/health-rules";
 import type { Provider } from "./providers/provider";
-import type { ServiceCatalogEntry } from "./service-catalog";
+import type { ApplicationCatalogEntry, ServiceCatalogEntry } from "./service-catalog";
 import type { ServiceProbeResult } from "./service-probe";
-import { correlateValidatedDeployment, type DeploymentTargetName } from "./deployment-correlation";
-import { parseArgoApplicationState } from "./providers/argocd";
-import { parseWorkflowRun } from "./providers/github";
+import { correlateValidatedDeployment } from "./deployment-correlation";
+import { parseArgoApplicationState, type ArgoApplicationState } from "./providers/argocd";
+import { parseWorkflowRun, type WorkflowRun } from "./providers/github";
 import {
   isNonNegativeInteger,
   readDenseArray,
@@ -36,12 +36,6 @@ import {
 } from "./runtime-validation";
 
 export type Now = () => Date;
-
-const DEPLOYMENT_NAMESPACE = "yootoob-mp3";
-const DEPLOYMENT_TARGETS: readonly DeploymentTargetName[] = [
-  "yootoob-mp3-api",
-  "yootoob-mp3-frontend",
-];
 
 export type SourceResult<T = unknown> =
   | {
@@ -138,6 +132,7 @@ function parseServiceCatalogEntry(value: unknown): ServiceCatalogEntry | null {
     "name",
     "description",
     "url",
+    "applicationId",
     "namespace",
     "argoApplication",
     "workloads",
@@ -148,6 +143,7 @@ function parseServiceCatalogEntry(value: unknown): ServiceCatalogEntry | null {
     !isNonEmptyString(properties.name) ||
     !isNonEmptyString(properties.description) ||
     !isPrivateHttpsUrl(properties.url) ||
+    !isNonEmptyString(properties.applicationId) ||
     !isNonEmptyString(properties.namespace) ||
     !isNonEmptyString(properties.argoApplication)
   ) {
@@ -155,9 +151,27 @@ function parseServiceCatalogEntry(value: unknown): ServiceCatalogEntry | null {
   }
 
   const workloads = parseDenseArray(properties.workloads, 32, (workload) => {
-    const fields = readOwnDataProperties(workload, ["kind", "name"]);
-    if (!fields || !isNonEmptyString(fields.kind) || !isNonEmptyString(fields.name)) return null;
-    return { kind: fields.kind, name: fields.name };
+    const fields = readOwnDataProperties(workload, [
+      "kind",
+      "name",
+      "imageRepository",
+      "tracksSource",
+    ]);
+    if (
+      !fields ||
+      !isNonEmptyString(fields.kind) ||
+      !isNonEmptyString(fields.name) ||
+      !isNonEmptyString(fields.imageRepository) ||
+      typeof fields.tracksSource !== "boolean"
+    ) {
+      return null;
+    }
+    return {
+      kind: fields.kind,
+      name: fields.name,
+      imageRepository: fields.imageRepository,
+      tracksSource: fields.tracksSource,
+    };
   });
   if (!workloads || workloads.length === 0) return null;
 
@@ -166,6 +180,7 @@ function parseServiceCatalogEntry(value: unknown): ServiceCatalogEntry | null {
     name: properties.name,
     description: properties.description,
     url: properties.url,
+    applicationId: properties.applicationId,
     namespace: properties.namespace,
     argoApplication: properties.argoApplication,
     workloads,
@@ -264,16 +279,26 @@ function parseResourceMetrics(value: unknown): ResourceMetrics | null {
   return current && history ? { current, history } : null;
 }
 
-function deploymentTargetForPod(name: unknown, namespace: unknown): DeploymentTargetName | null {
-  if (typeof name !== "string" || namespace !== DEPLOYMENT_NAMESPACE) return null;
-  return (
-    DEPLOYMENT_TARGETS.find((target) => name === target || name.startsWith(`${target}-`)) ?? null
-  );
+function deploymentTargetForPod(
+  name: unknown,
+  namespace: unknown,
+  applications: readonly ApplicationCatalogEntry[],
+): string | null {
+  if (typeof name !== "string" || typeof namespace !== "string") return null;
+  for (const application of applications) {
+    if (application.namespace !== namespace) continue;
+    const target = application.workloads.find(
+      (workload) => name === workload.name || name.startsWith(`${workload.name}-`),
+    );
+    if (target) return `${namespace}/${target.name}`;
+  }
+  return null;
 }
 
 function parseClusterData(
   value: unknown,
-  invalidContainerTargets?: Set<DeploymentTargetName>,
+  invalidContainerTargets?: Set<string>,
+  catalogApplications: readonly ApplicationCatalogEntry[] = [],
 ): ClusterData | null {
   const properties = readOwnDataProperties(value, [
     "nodes",
@@ -450,7 +475,7 @@ function parseClusterData(
           )
         : null;
       if (!containerImages) {
-        const target = deploymentTargetForPod(name, namespace);
+        const target = deploymentTargetForPod(name, namespace, catalogApplications);
         if (target) invalidContainerTargets?.add(target);
         return null;
       }
@@ -863,12 +888,13 @@ export async function collectDeploymentSnapshot(
   providers: readonly Provider<unknown>[],
   timeoutMs: number,
   now: Now = () => new Date(),
+  applications: readonly ApplicationCatalogEntry[] = [],
 ): Promise<DeploymentSnapshot> {
   const collected = await collectProviders(providers, timeoutMs, now);
-  let workflow: ReturnType<typeof parseWorkflowRun> = null;
-  let application: ReturnType<typeof parseArgoApplicationState> = null;
+  const workflows: WorkflowRun[] = [];
+  const argoApplications: ArgoApplicationState[] = [];
   let clusterData: ClusterData | null = null;
-  const invalidContainerTargets = new Set<DeploymentTargetName>();
+  const invalidContainerTargets = new Set<string>();
   const results: SourceResult<unknown>[] = [];
   for (const result of collected) {
     if (!result.ok) {
@@ -877,9 +903,10 @@ export async function collectDeploymentSnapshot(
     }
 
     if (result.source === "github") {
-      const parsed = parseWorkflowRun(result.data);
-      if (parsed) {
-        workflow ??= parsed;
+      const entries = Array.isArray(result.data) ? readDenseArray(result.data, 32) : [result.data];
+      const parsed = entries?.map(parseWorkflowRun) ?? null;
+      if (parsed && parsed.every((entry): entry is WorkflowRun => entry !== null)) {
+        workflows.push(...parsed);
         results.push({
           source: result.source,
           ok: true,
@@ -889,9 +916,10 @@ export async function collectDeploymentSnapshot(
         continue;
       }
     } else if (result.source === "argocd") {
-      const parsed = parseArgoApplicationState(result.data);
-      if (parsed) {
-        application ??= parsed;
+      const entries = Array.isArray(result.data) ? readDenseArray(result.data, 32) : [result.data];
+      const parsed = entries?.map(parseArgoApplicationState) ?? null;
+      if (parsed && parsed.every((entry): entry is ArgoApplicationState => entry !== null)) {
+        argoApplications.push(...parsed);
         results.push({
           source: result.source,
           ok: true,
@@ -901,7 +929,7 @@ export async function collectDeploymentSnapshot(
         continue;
       }
     } else if (result.source === "kubernetes") {
-      const parsed = parseClusterData(result.data, invalidContainerTargets);
+      const parsed = parseClusterData(result.data, invalidContainerTargets, applications);
       if (parsed) {
         clusterData ??= parsed;
         results.push({
@@ -928,7 +956,7 @@ export async function collectDeploymentSnapshot(
   const successful = results.some((result) => result.ok);
   const observedAt = timestamp(now);
 
-  if (!successful) {
+  if (!successful && applications.length === 0) {
     return {
       data: null,
       status: "unknown",
@@ -939,35 +967,49 @@ export async function collectDeploymentSnapshot(
     };
   }
 
-  const state = correlateValidatedDeployment(
-    {
-      workflow,
-      application,
-      kubernetes: clusterData
-        ? {
-            workloads: clusterData.workloads,
-            pods: clusterData.pods,
-          }
-        : null,
-      observedAt,
-    },
-    [...invalidContainerTargets],
+  const states = applications.map((definition) =>
+    correlateValidatedDeployment(
+      {
+        workflow: definition.github
+          ? (workflows.find(
+              (workflow) =>
+                workflow.repository === definition.github?.repository &&
+                workflow.branch === definition.github.branch,
+            ) ?? null)
+          : null,
+        application:
+          argoApplications.find((application) => application.name === definition.argoApplication) ??
+          null,
+        kubernetes: clusterData
+          ? {
+              workloads: clusterData.workloads,
+              pods: clusterData.pods,
+            }
+          : null,
+        observedAt,
+      },
+      definition,
+      definition.workloads
+        .filter((target) => invalidContainerTargets.has(`${definition.namespace}/${target.name}`))
+        .map(({ name }) => name),
+    ),
   );
   const hasFailures = results.some((result) => !result.ok);
   const hasStaleSources = results.some((result) => result.state.stale);
+  const stateStatus = highestPriorityStatus(states.map(({ status }) => status));
 
   return {
-    data: { applications: [state] },
+    data: { applications: states },
     status:
-      state.status === "critical" || state.status === "warning"
-        ? state.status
+      stateStatus === "critical" || stateStatus === "warning"
+        ? stateStatus
         : hasFailures || hasStaleSources
           ? "unknown"
-          : state.status,
+          : stateStatus,
     observedAt,
-    stale: hasFailures || hasStaleSources || state.status === "unknown",
-    issues: state.issues,
-    sources: results.map((result) => result.state),
+    stale: hasFailures || hasStaleSources || stateStatus === "unknown",
+    issues: states.flatMap(({ issues }) => issues),
+    sources: mergeSourceStatesInInputOrder(results.map((result) => result.state)),
   };
 }
 
@@ -980,7 +1022,7 @@ export async function collectServiceSnapshot(
   const results: SourceResult<unknown>[] = [];
   const probes: ServiceProbeResult[] = [];
   let cluster: ClusterData | null = null;
-  let application: ReturnType<typeof parseArgoApplicationState> = null;
+  const applications: ArgoApplicationState[] = [];
   for (const result of collected) {
     if (!result.ok) {
       results.push(result);
@@ -1012,9 +1054,10 @@ export async function collectServiceSnapshot(
         continue;
       }
     } else if (result.source === "argocd") {
-      const parsed = parseArgoApplicationState(result.data);
-      if (parsed) {
-        application = parsed;
+      const entries = Array.isArray(result.data) ? readDenseArray(result.data, 32) : [result.data];
+      const parsed = entries?.map(parseArgoApplicationState) ?? null;
+      if (parsed && parsed.every((entry): entry is ArgoApplicationState => entry !== null)) {
+        applications.push(...parsed);
         results.push({
           source: result.source,
           ok: true,
@@ -1038,7 +1081,8 @@ export async function collectServiceSnapshot(
   }
   const observedAt = timestamp(now);
   const argoHealthStatus = (probe: ServiceProbeResult): HealthStatus => {
-    if (!application || application.name !== probe.entry.argoApplication) return "unknown";
+    const application = applications.find(({ name }) => name === probe.entry.argoApplication);
+    if (!application) return "unknown";
     if (application.health.status === "Healthy" && application.sync.status === "Synced") {
       return "healthy";
     }
@@ -1135,7 +1179,7 @@ export async function collectServiceSnapshot(
     };
   });
   const hasFailures = results.some((result) => !result.ok);
-  const missingDeploymentEvidence = cluster === null || application === null;
+  const missingDeploymentEvidence = cluster === null || applications.length === 0;
   const status = rollUpStatus(
     services.map((service) => ({
       status: service.status,
@@ -1178,7 +1222,7 @@ export async function collectServiceSnapshot(
     observedAt,
     stale: hasFailures || missingDeploymentEvidence || services.length === 0,
     issues,
-    sources: results.map((result) => result.state),
+    sources: mergeSourceStatesInInputOrder(results.map((result) => result.state)),
   };
 }
 
@@ -1303,7 +1347,7 @@ function mergeSourceStates(sources: readonly SourceState[]): SourceState[] {
     merged.set(source.source, {
       source: source.source,
       status,
-      observedAt: source.observedAt > current.observedAt ? source.observedAt : current.observedAt,
+      observedAt: source.observedAt < current.observedAt ? source.observedAt : current.observedAt,
       stale: current.stale || source.stale,
       ...(current.error || source.error ? { error: current.error ?? source.error } : {}),
     });
@@ -1315,11 +1359,21 @@ function mergeSourceStates(sources: readonly SourceState[]): SourceState[] {
   });
 }
 
+function mergeSourceStatesInInputOrder(sources: readonly SourceState[]): SourceState[] {
+  const sourceOrder = [...new Set(sources.map(({ source }) => source))];
+  const merged = mergeSourceStates(sources);
+  return sourceOrder.flatMap((source) => {
+    const state = merged.find((candidate) => candidate.source === source);
+    return state ? [state] : [];
+  });
+}
+
 export async function collectOverviewSnapshot(
   providers: OverviewProviderGroups,
   timeoutMs: number,
   now: Now = () => new Date(),
   certificateActivityTracker = new CertificateActivityTracker(),
+  catalogApplications: readonly ApplicationCatalogEntry[] = [],
 ): Promise<OverviewSnapshot> {
   const collections = new Map<Provider<unknown>, Promise<unknown>>();
   const wrappers = new Map<Provider<unknown>, Provider<unknown>>();
@@ -1345,7 +1399,12 @@ export async function collectOverviewSnapshot(
   const shareGroup = (group: readonly Provider<unknown>[]) => group.map(shareProvider);
   const [cluster, deployments, services] = await Promise.all([
     collectClusterSnapshot(shareGroup(providers.cluster), timeoutMs, now),
-    collectDeploymentSnapshot(shareGroup(providers.deployments), timeoutMs, now),
+    collectDeploymentSnapshot(
+      shareGroup(providers.deployments),
+      timeoutMs,
+      now,
+      catalogApplications,
+    ),
     collectServiceSnapshot(shareGroup(providers.services), timeoutMs, now),
   ]);
   const observedAt = timestamp(now);
@@ -1401,7 +1460,10 @@ export async function collectOverviewSnapshot(
         url: application.argo.url,
       });
     }
-    if (application.workflow.status === "warning" || application.workflow.status === "critical") {
+    if (
+      application.workflow &&
+      (application.workflow.status === "warning" || application.workflow.status === "critical")
+    ) {
       activity.push({
         id: `github:${application.application}:${application.workflow.observedAt}`,
         resource: `Workflow/${application.repository}`,

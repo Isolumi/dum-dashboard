@@ -3,6 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import fixture from "./fixtures/github.json";
 import { GitHubProvider, parseWorkflowRun } from "./github";
 
+const TARGET = {
+  repository: "Isolumi/youtube-mp3",
+  branch: "development",
+  workflow: "build-images.yml",
+} as const;
+
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,
@@ -15,7 +21,7 @@ describe("GitHubProvider", () => {
     const fetchApi = vi.fn(async (url: string, _options: RequestInit) =>
       jsonResponse(url.includes("/actions/") ? fixture.workflowRuns : fixture.commit),
     );
-    const provider = new GitHubProvider({ fetchApi, environment: {} });
+    const provider = new GitHubProvider({ ...TARGET, fetchApi, environment: {} });
 
     const [first, concurrent] = await Promise.all([
       provider.collect(new AbortController().signal),
@@ -53,7 +59,7 @@ describe("GitHubProvider", () => {
         );
       });
     });
-    const provider = new GitHubProvider({ fetchApi, environment: {} });
+    const provider = new GitHubProvider({ ...TARGET, fetchApi, environment: {} });
     const firstController = new AbortController();
     const secondController = new AbortController();
 
@@ -80,7 +86,7 @@ describe("GitHubProvider", () => {
       const fetchApi = vi.fn(async (url: string, _options: RequestInit) =>
         jsonResponse(url.includes("/actions/") ? fixture.workflowRuns : fixture.commit),
       );
-      const provider = new GitHubProvider({ fetchApi, environment: {} });
+      const provider = new GitHubProvider({ ...TARGET, fetchApi, environment: {} });
       const initial = await provider.collect(new AbortController().signal);
 
       vi.advanceTimersByTime(31_000);
@@ -118,7 +124,7 @@ describe("GitHubProvider", () => {
       const fetchApi = vi.fn(async (url: string, _options: RequestInit) =>
         jsonResponse(url.includes("/actions/") ? fixture.workflowRuns : fixture.commit),
       );
-      const provider = new GitHubProvider({ fetchApi, environment: {} });
+      const provider = new GitHubProvider({ ...TARGET, fetchApi, environment: {} });
       const initial = await provider.collect(new AbortController().signal);
       const resetAt = Date.now() + 10 * 60_000;
 
@@ -149,7 +155,7 @@ describe("GitHubProvider", () => {
     const fetchApi = vi.fn(async (url: string, _options: RequestInit) =>
       jsonResponse(url.includes("/actions/") ? fixture.workflowRuns : fixture.commit),
     );
-    const provider = new GitHubProvider({ token: "read-only-secret", fetchApi });
+    const provider = new GitHubProvider({ ...TARGET, token: "read-only-secret", fetchApi });
 
     await expect(provider.collect(new AbortController().signal)).resolves.toEqual({
       repository: "Isolumi/youtube-mp3",
@@ -191,6 +197,31 @@ describe("GitHubProvider", () => {
     expect(fetchApi).toHaveBeenCalledTimes(4);
   });
 
+  it("refreshes authenticated workflow evidence on the dashboard polling interval", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-04T00:00:00.000Z"));
+    try {
+      const fetchApi = vi.fn(async (url: string) =>
+        jsonResponse(url.includes("/actions/") ? fixture.workflowRuns : fixture.commit),
+      );
+      const provider = new GitHubProvider({
+        ...TARGET,
+        token: "read-only-secret",
+        fetchApi,
+      });
+
+      await provider.collect(new AbortController().signal);
+      await provider.collect(new AbortController().signal);
+      expect(fetchApi).toHaveBeenCalledTimes(2);
+
+      vi.advanceTimersByTime(10_001);
+      await provider.collect(new AbortController().signal);
+      expect(fetchApi).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it.each([
     { id: "987/../../evil", sha: fixture.commit.sha },
     { id: 987654321, sha: "../../evil" },
@@ -209,7 +240,7 @@ describe("GitHubProvider", () => {
             : fixture.commit,
         ),
       );
-      const provider = new GitHubProvider({ token: "read-only-secret", fetchApi });
+      const provider = new GitHubProvider({ ...TARGET, token: "read-only-secret", fetchApi });
 
       await expect(
         provider.getLatestWorkflow("Isolumi/youtube-mp3", "development"),
@@ -227,7 +258,7 @@ describe("GitHubProvider", () => {
         ],
       }),
     );
-    const provider = new GitHubProvider({ token: "read-only-secret", fetchApi });
+    const provider = new GitHubProvider({ ...TARGET, token: "read-only-secret", fetchApi });
 
     await expect(provider.getLatestWorkflow("Isolumi/youtube-mp3", "development")).rejects.toThrow(
       /^GitHub response invalid$/,
@@ -240,6 +271,7 @@ describe("GitHubProvider", () => {
       jsonResponse(url.includes("/actions/") ? fixture.workflowRuns : fixture.commit),
     );
     const normalized = await new GitHubProvider({
+      ...TARGET,
       token: "read-only-secret",
       fetchApi,
     }).collect(new AbortController().signal);
@@ -264,7 +296,7 @@ describe("GitHubProvider", () => {
     const fetchApi = vi.fn(async (url: string) =>
       jsonResponse(url.includes("/actions/") ? workflowRuns : commit),
     );
-    const provider = new GitHubProvider({ token: "read-only-secret", fetchApi });
+    const provider = new GitHubProvider({ ...TARGET, token: "read-only-secret", fetchApi });
 
     await expect(provider.collect(new AbortController().signal)).resolves.toMatchObject({
       conclusion: null,
@@ -284,7 +316,7 @@ describe("GitHubProvider", () => {
           json: async () => (url.includes("/actions/") ? fixture.workflowRuns : commit),
         }) as unknown as Response,
     );
-    const provider = new GitHubProvider({ token: "read-only-secret", fetchApi });
+    const provider = new GitHubProvider({ ...TARGET, token: "read-only-secret", fetchApi });
 
     await expect(provider.collect(new AbortController().signal)).rejects.toThrow(
       /^GitHub response invalid$/,
@@ -293,6 +325,7 @@ describe("GitHubProvider", () => {
 
   it("uses the configured repository and contains upstream secrets", async () => {
     const failed = new GitHubProvider({
+      ...TARGET,
       token: "read-only-secret",
       fetchApi: vi.fn(async () => {
         throw new Error("authorization=Bearer read-only-secret stack=/private/path");

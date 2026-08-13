@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import argoFixture from "./providers/fixtures/argocd.json";
 import githubFixture from "./providers/fixtures/github.json";
 import { correlateDeployment } from "./deployment-correlation";
+import type { ApplicationCatalogEntry } from "./service-catalog";
 
 const SOURCE_SHA = githubFixture.commit.sha;
 const ARGO_REVISION = argoFixture.status.sync.revision;
@@ -9,6 +10,31 @@ const API_REPOSITORY = "ghcr.io/isolumi/yootoob-mp3-api";
 const FRONTEND_REPOSITORY = "ghcr.io/isolumi/yootoob-mp3-frontend";
 const API_DIGEST = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const FRONTEND_DIGEST = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const YOOTOOB_APPLICATION: ApplicationCatalogEntry = {
+  id: "yootoob-mp3",
+  name: "Yootoob MP3",
+  namespace: "yootoob-mp3",
+  argoApplication: "yootoob-mp3-dumachine",
+  github: {
+    repository: "Isolumi/youtube-mp3",
+    branch: "development",
+    workflow: "build-images.yml",
+  },
+  workloads: [
+    {
+      kind: "Deployment",
+      name: "yootoob-mp3-api",
+      imageRepository: API_REPOSITORY,
+      tracksSource: true,
+    },
+    {
+      kind: "Deployment",
+      name: "yootoob-mp3-frontend",
+      imageRepository: FRONTEND_REPOSITORY,
+      tracksSource: true,
+    },
+  ],
+};
 
 function workflow(conclusion: "success" | "failure" = "success") {
   return {
@@ -174,12 +200,15 @@ function correlate(overrides?: {
   application?: ReturnType<typeof application>;
   kubernetes?: ReturnType<typeof kubernetes>;
 }) {
-  return correlateDeployment({
-    workflow: overrides?.workflow ?? workflow(),
-    application: overrides?.application ?? application(),
-    kubernetes: overrides?.kubernetes ?? kubernetes(),
-    observedAt: "2026-08-04T12:02:00Z",
-  });
+  return correlateDeployment(
+    {
+      workflow: overrides?.workflow ?? workflow(),
+      application: overrides?.application ?? application(),
+      kubernetes: overrides?.kubernetes ?? kubernetes(),
+      observedAt: "2026-08-04T12:02:00Z",
+    },
+    YOOTOOB_APPLICATION,
+  );
 }
 
 type MutableKubernetesEvidence = { workloads: unknown; pods: unknown };
@@ -223,6 +252,151 @@ function expectInvalidKubernetesEvidence(
 }
 
 describe("correlateDeployment", () => {
+  it("does not invent a GitHub failure for an application without a GitHub pipeline", () => {
+    const imageRepository = "docker.io/grafana/grafana";
+    const definition: ApplicationCatalogEntry = {
+      id: "monitoring",
+      name: "Monitoring",
+      namespace: "monitoring",
+      argoApplication: "kube-prometheus-stack",
+      workloads: [
+        {
+          kind: "Deployment",
+          name: "kube-prometheus-stack-grafana",
+          imageRepository,
+          tracksSource: false,
+        },
+      ],
+    };
+    const digest = `sha256:${"d".repeat(64)}`;
+    const result = correlateDeployment(
+      {
+        workflow: null,
+        application: {
+          ...application(),
+          name: definition.argoApplication,
+          images: [`${imageRepository}:13.0.1@${digest}`],
+        },
+        kubernetes: {
+          workloads: [
+            {
+              kind: "Deployment",
+              name: "kube-prometheus-stack-grafana",
+              namespace: "monitoring",
+              status: "healthy",
+              createdAt: "2026-08-13T00:00:00Z",
+              revision: "4",
+              desiredReplicas: 1,
+              availableReplicas: 1,
+            },
+          ],
+          pods: [
+            {
+              name: "kube-prometheus-stack-grafana-abc",
+              namespace: "monitoring",
+              status: "healthy",
+              ready: true,
+              containerImages: [imageEvidence("grafana", imageRepository, "13.0.1", digest)],
+            },
+          ],
+        },
+        observedAt: "2026-08-13T00:02:00Z",
+      },
+      definition,
+    );
+
+    expect(result).toMatchObject({
+      repository: null,
+      branch: null,
+      commit: null,
+      workflow: null,
+      status: "healthy",
+      rollout: { summary: "1 workload is available and running the expected images." },
+    });
+    expect(result.issues).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ source: "github" })]),
+    );
+  });
+
+  it("correlates a catalog application without leaking Yootoob defaults", () => {
+    const repository = "ghcr.io/isolumi/uwumi-hermes";
+    const definition: ApplicationCatalogEntry = {
+      id: "uwumi",
+      name: "Uwumi",
+      namespace: "uwumi",
+      argoApplication: "uwumi-dumachine",
+      github: {
+        repository: "Isolumi/uwumi",
+        branch: "main",
+        workflow: "ci-cd.yml",
+      },
+      workloads: [
+        {
+          kind: "Deployment",
+          name: "uwumi-hermes",
+          imageRepository: repository,
+          tracksSource: true,
+        },
+      ],
+    };
+    const uwumiWorkflow = {
+      ...workflow(),
+      repository: definition.github.repository,
+      branch: definition.github.branch,
+      commit: {
+        ...workflow().commit,
+        url: `https://github.com/Isolumi/uwumi/commit/${SOURCE_SHA}`,
+      },
+      url: "https://github.com/Isolumi/uwumi/actions/runs/987654321",
+    };
+    const uwumiApplication = {
+      ...application(),
+      name: definition.argoApplication,
+      images: [`${repository}:${SOURCE_SHA}`],
+    };
+    const result = correlateDeployment(
+      {
+        workflow: uwumiWorkflow,
+        application: uwumiApplication,
+        kubernetes: {
+          workloads: [
+            {
+              kind: "Deployment",
+              name: "uwumi-hermes",
+              namespace: "uwumi",
+              status: "healthy",
+              createdAt: "2026-08-13T00:00:00Z",
+              revision: "3",
+              desiredReplicas: 1,
+              availableReplicas: 1,
+            },
+          ],
+          pods: [
+            {
+              name: "uwumi-hermes-abc",
+              namespace: "uwumi",
+              status: "healthy",
+              ready: true,
+              containerImages: [imageEvidence("uwumi-hermes", repository, SOURCE_SHA, API_DIGEST)],
+            },
+          ],
+        },
+        observedAt: "2026-08-13T00:02:00Z",
+      },
+      definition,
+    );
+
+    expect(result).toMatchObject({
+      application: "uwumi-dumachine",
+      namespace: "uwumi",
+      repository: "Isolumi/uwumi",
+      branch: "main",
+      status: "healthy",
+      workloads: [{ name: "uwumi-hermes", namespace: "uwumi", status: "healthy" }],
+    });
+    expect(JSON.stringify(result)).not.toContain("yootoob");
+  });
+
   it("normalizes workflow, Argo, commit, and Kubernetes deployment evidence", () => {
     const result = correlate();
 
@@ -253,12 +427,15 @@ describe("correlateDeployment", () => {
   });
 
   it("uses null, never fabricated zeroes, when Kubernetes evidence is unavailable", () => {
-    const result = correlateDeployment({
-      workflow: workflow(),
-      application: application(),
-      kubernetes: null,
-      observedAt: "2026-08-04T12:02:00Z",
-    });
+    const result = correlateDeployment(
+      {
+        workflow: workflow(),
+        application: application(),
+        kubernetes: null,
+        observedAt: "2026-08-04T12:02:00Z",
+      },
+      YOOTOOB_APPLICATION,
+    );
 
     expect(result.workloads).toEqual([
       expect.objectContaining({
@@ -664,12 +841,15 @@ describe("correlateDeployment", () => {
     let result: ReturnType<typeof correlateDeployment> | undefined;
 
     expect(() => {
-      result = correlateDeployment({
-        workflow: workflow(),
-        application: application(),
-        kubernetes: kubernetesEvidence as unknown as ReturnType<typeof kubernetes>,
-        observedAt: "2026-08-04T12:02:00Z",
-      });
+      result = correlateDeployment(
+        {
+          workflow: workflow(),
+          application: application(),
+          kubernetes: kubernetesEvidence as unknown as ReturnType<typeof kubernetes>,
+          observedAt: "2026-08-04T12:02:00Z",
+        },
+        YOOTOOB_APPLICATION,
+      );
     }).not.toThrow();
 
     expect(result?.status).toBe(expectedStatus);
@@ -717,12 +897,15 @@ describe("correlateDeployment", () => {
     let result: ReturnType<typeof correlateDeployment> | undefined;
 
     expect(() => {
-      result = correlateDeployment({
-        workflow: workflow(),
-        application: application(),
-        kubernetes: hostile as unknown as ReturnType<typeof kubernetes>,
-        observedAt: "2026-08-04T12:02:00Z",
-      });
+      result = correlateDeployment(
+        {
+          workflow: workflow(),
+          application: application(),
+          kubernetes: hostile as unknown as ReturnType<typeof kubernetes>,
+          observedAt: "2026-08-04T12:02:00Z",
+        },
+        YOOTOOB_APPLICATION,
+      );
     }).not.toThrow();
 
     expect(getterCalls).toBe(0);
@@ -767,7 +950,10 @@ describe("correlateDeployment", () => {
     let result: ReturnType<typeof correlateDeployment> | undefined;
 
     expect(() => {
-      result = correlateDeployment(hostile as Parameters<typeof correlateDeployment>[0]);
+      result = correlateDeployment(
+        hostile as Parameters<typeof correlateDeployment>[0],
+        YOOTOOB_APPLICATION,
+      );
     }).not.toThrow();
 
     expect(getterCalls).toBe(0);
@@ -812,12 +998,15 @@ describe("correlateDeployment", () => {
     let result: ReturnType<typeof correlateDeployment> | undefined;
 
     expect(() => {
-      result = correlateDeployment({
-        workflow: hostile.workflow,
-        application: hostile.application,
-        kubernetes: kubernetes(),
-        observedAt: "2026-08-04T12:02:00Z",
-      });
+      result = correlateDeployment(
+        {
+          workflow: hostile.workflow,
+          application: hostile.application,
+          kubernetes: kubernetes(),
+          observedAt: "2026-08-04T12:02:00Z",
+        },
+        YOOTOOB_APPLICATION,
+      );
     }).not.toThrow();
 
     expect(hostile.getterCalls()).toBe(0);
@@ -886,12 +1075,15 @@ describe("correlateDeployment", () => {
     let result: ReturnType<typeof correlateDeployment> | undefined;
 
     expect(() => {
-      result = correlateDeployment({
-        workflow: workflow(),
-        application: application(),
-        kubernetes: evidence() as ReturnType<typeof kubernetes>,
-        observedAt: "2026-08-04T12:02:00Z",
-      });
+      result = correlateDeployment(
+        {
+          workflow: workflow(),
+          application: application(),
+          kubernetes: evidence() as ReturnType<typeof kubernetes>,
+          observedAt: "2026-08-04T12:02:00Z",
+        },
+        YOOTOOB_APPLICATION,
+      );
     }).not.toThrow();
 
     expectInvalidKubernetesEvidence(result!, "proxy-introspection-secret");

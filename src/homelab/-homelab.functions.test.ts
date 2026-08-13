@@ -279,11 +279,22 @@ function gatewayServiceProbeData() {
         name: "yootoob-mp3",
         description: "Private YouTube MP3 downloader",
         url: "https://yootoob.doh.lumilumi.xyz",
+        applicationId: "yootoob-mp3",
         namespace: "yootoob-mp3",
         argoApplication: "yootoob-mp3-dumachine",
         workloads: [
-          { kind: "Deployment", name: "yootoob-mp3-api" },
-          { kind: "Deployment", name: "yootoob-mp3-frontend" },
+          {
+            kind: "Deployment",
+            name: "yootoob-mp3-api",
+            imageRepository: "ghcr.io/isolumi/yootoob-mp3-api",
+            tracksSource: true,
+          },
+          {
+            kind: "Deployment",
+            name: "yootoob-mp3-frontend",
+            imageRepository: "ghcr.io/isolumi/yootoob-mp3-frontend",
+            tracksSource: true,
+          },
         ],
       },
       id: "yootoob-mp3",
@@ -325,13 +336,29 @@ describe("homelab server functions", () => {
   it("catches the production break where the real gateway overview cannot cross the Task 9 schema boundary", async () => {
     const clusterData = gatewayClusterData();
     const serviceProbe = gatewayServiceProbeData()[0]!;
-    const dependencies = createProductionGatewayDependencies(
+    const dependencies = await createProductionGatewayDependencies(
       {
         NODE_ENV: "production",
         PROMETHEUS_URL: "http://prometheus.monitoring.svc.cluster.local:9090",
       },
       {
-        loadServiceCatalog: async () => [serviceProbe.entry],
+        loadServiceCatalog: async () => ({
+          applications: [
+            {
+              id: serviceProbe.entry.applicationId,
+              name: serviceProbe.entry.name,
+              namespace: serviceProbe.entry.namespace,
+              argoApplication: serviceProbe.entry.argoApplication,
+              github: {
+                repository: "Isolumi/youtube-mp3",
+                branch: "development",
+                workflow: "build-images.yml",
+              },
+              workloads: serviceProbe.entry.workloads,
+            },
+          ],
+          services: [serviceProbe.entry],
+        }),
         probeService: async () => serviceProbe,
       },
     );

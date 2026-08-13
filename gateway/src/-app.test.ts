@@ -1,12 +1,38 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ClusterData } from "../../shared/homelab/contracts";
 import { createGateway } from "./app";
+import type { ApplicationCatalogEntry } from "./service-catalog";
 
 const SOURCE_SHA = "1829d6ba3b55e66a2134ae64161b9e48ad39a197";
 const API_REPOSITORY = "ghcr.io/isolumi/yootoob-mp3-api";
 const FRONTEND_REPOSITORY = "ghcr.io/isolumi/yootoob-mp3-frontend";
 const invalidReplicaValues = [-1, -0.5, 0.5, 1.5, Number.NaN, Infinity, "1", null];
 const SECRET_REPLICA_MARKER = "SECRET_REPLICA_MARKER";
+const YOOTOOB_APPLICATION: ApplicationCatalogEntry = {
+  id: "yootoob-mp3",
+  name: "Yootoob MP3",
+  namespace: "yootoob-mp3",
+  argoApplication: "yootoob-mp3-dumachine",
+  github: {
+    repository: "Isolumi/youtube-mp3",
+    branch: "development",
+    workflow: "build-images.yml",
+  },
+  workloads: [
+    {
+      kind: "Deployment",
+      name: "yootoob-mp3-api",
+      imageRepository: API_REPOSITORY,
+      tracksSource: true,
+    },
+    {
+      kind: "Deployment",
+      name: "yootoob-mp3-frontend",
+      imageRepository: FRONTEND_REPOSITORY,
+      tracksSource: true,
+    },
+  ],
+};
 
 function validWorkflowSource() {
   return {
@@ -124,12 +150,10 @@ function validServiceProbeSource() {
         name: "yootoob-mp3",
         description: "Private YouTube MP3 downloader",
         url: "https://yootoob.doh.lumilumi.xyz",
+        applicationId: "yootoob-mp3",
         namespace: "yootoob-mp3",
         argoApplication: "yootoob-mp3-dumachine",
-        workloads: [
-          { kind: "Deployment", name: "yootoob-mp3-api" },
-          { kind: "Deployment", name: "yootoob-mp3-frontend" },
-        ],
+        workloads: [YOOTOOB_APPLICATION.workloads[0], YOOTOOB_APPLICATION.workloads[1]],
       },
       id: "yootoob-mp3",
       reachable: true,
@@ -153,6 +177,7 @@ function hostileDeploymentApp(source: DeploymentSource, value: unknown) {
 
   return createGateway({
     now: () => new Date("2026-08-04T12:02:00.000Z"),
+    applications: [YOOTOOB_APPLICATION],
     providers: {
       deployments: (["github", "argocd", "kubernetes"] as const).map((providerSource) => ({
         source: providerSource,
@@ -189,6 +214,7 @@ describe("gateway routes", () => {
   it("catches the production break where /overview does not compose structured partial contracts", async () => {
     const app = createGateway({
       now: () => new Date("2026-08-04T00:00:00.000Z"),
+      applications: [YOOTOOB_APPLICATION],
       providers: {
         cluster: [{ source: "kubernetes", collect: async () => validClusterSource() }],
         deployments: [
@@ -296,6 +322,7 @@ describe("gateway routes", () => {
     const sourceSha = "1829d6ba3b55e66a2134ae64161b9e48ad39a197";
     const app = createGateway({
       now: () => new Date("2026-08-04T12:02:00.000Z"),
+      applications: [YOOTOOB_APPLICATION],
       providers: {
         deployments: [
           {

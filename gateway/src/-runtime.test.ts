@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ClusterData, Snapshot } from "../../shared/homelab/contracts";
 import { createGateway } from "./app";
 import { createProductionGatewayDependencies } from "./runtime";
+import type { ApplicationCatalogEntry, HomelabCatalog } from "./service-catalog";
 import type { ServiceCatalogEntry, ServiceProbeResult } from "./service-probe";
 
 const emptyCluster: ClusterData = {
@@ -15,14 +16,34 @@ const emptyCluster: ClusterData = {
 
 describe("production gateway dependencies", () => {
   it("catches the production break where catalog-backed service probes are not wired", async () => {
+    const application: ApplicationCatalogEntry = {
+      id: "yootoob-mp3",
+      name: "Yootoob MP3",
+      namespace: "yootoob-mp3",
+      argoApplication: "yootoob-mp3-dumachine",
+      github: {
+        repository: "Isolumi/youtube-mp3",
+        branch: "development",
+        workflow: "build-images.yml",
+      },
+      workloads: [
+        {
+          kind: "Deployment",
+          name: "yootoob-mp3-api",
+          imageRepository: "ghcr.io/isolumi/yootoob-mp3-api",
+          tracksSource: true,
+        },
+      ],
+    };
     const entry: ServiceCatalogEntry = {
       id: "yootoob-mp3",
       name: "yootoob-mp3",
       description: "Private YouTube MP3 downloader",
       url: "https://yootoob.doh.lumilumi.xyz",
+      applicationId: application.id,
       namespace: "yootoob-mp3",
       argoApplication: "yootoob-mp3-dumachine",
-      workloads: [{ kind: "Deployment", name: "yootoob-mp3-api" }],
+      workloads: application.workloads,
     };
     const probeResult: ServiceProbeResult = {
       entry,
@@ -33,10 +54,11 @@ describe("production gateway dependencies", () => {
       certificateExpiresAt: "2026-09-01T00:00:00.000Z",
       consecutiveFailures: 0,
     };
-    const dependencies = createProductionGatewayDependencies(
+    const catalog: HomelabCatalog = { applications: [application], services: [entry] };
+    const dependencies = await createProductionGatewayDependencies(
       { NODE_ENV: "production" },
       {
-        loadServiceCatalog: async () => [entry],
+        loadServiceCatalog: async () => catalog,
         probeService: async () => probeResult,
       },
     );
@@ -53,8 +75,8 @@ describe("production gateway dependencies", () => {
     expect(serviceProviders[2]).toBe(dependencies.kubernetesProvider);
   });
 
-  it("uses Kubernetes for pod routes and both Kubernetes and Prometheus for cluster snapshots", () => {
-    const dependencies = createProductionGatewayDependencies({
+  it("uses Kubernetes for pod routes and both Kubernetes and Prometheus for cluster snapshots", async () => {
+    const dependencies = await createProductionGatewayDependencies({
       NODE_ENV: "production",
       PROMETHEUS_URL: "http://prometheus.monitoring.svc.cluster.local:9090",
     });
@@ -67,13 +89,26 @@ describe("production gateway dependencies", () => {
     expect(dependencies.providers.cluster[0]).toBe(dependencies.kubernetesProvider);
     expect(dependencies.providers.deployments.map(({ source }) => source)).toEqual([
       "github",
+      "github",
+      "github",
+      "github",
+      "argocd",
+      "argocd",
+      "argocd",
       "argocd",
       "kubernetes",
+    ]);
+    expect(dependencies.applications.map(({ id }) => id)).toEqual([
+      "dum-dashboard",
+      "yootoob-mp3",
+      "uwumi",
+      "taxhacker",
+      "monitoring",
     ]);
   });
 
   it("wires a selected history window through the production Prometheus provider", async () => {
-    const dependencies = createProductionGatewayDependencies({
+    const dependencies = await createProductionGatewayDependencies({
       NODE_ENV: "production",
       PROMETHEUS_URL: "http://prometheus.monitoring.svc.cluster.local:9090",
     });
@@ -97,7 +132,7 @@ describe("production gateway dependencies", () => {
   });
 
   it("starts with Kubernetes only when PROMETHEUS_URL is absent", async () => {
-    const dependencies = createProductionGatewayDependencies({ NODE_ENV: "production" });
+    const dependencies = await createProductionGatewayDependencies({ NODE_ENV: "production" });
     vi.spyOn(dependencies.kubernetesProvider, "collect").mockResolvedValue(
       structuredClone(emptyCluster),
     );
@@ -106,6 +141,12 @@ describe("production gateway dependencies", () => {
     expect(dependencies.providers.cluster[0]).toBe(dependencies.kubernetesProvider);
     expect(dependencies.providers.deployments.map(({ source }) => source)).toEqual([
       "github",
+      "github",
+      "github",
+      "github",
+      "argocd",
+      "argocd",
+      "argocd",
       "argocd",
       "kubernetes",
     ]);

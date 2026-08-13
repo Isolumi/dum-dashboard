@@ -134,7 +134,7 @@ describe("DeploymentsView", () => {
     expect(stages).toEqual([
       "Commit",
       "GitHub Actions",
-      "GHCR image",
+      "Container images",
       "Argo CD",
       "K3s rollout",
       "Live pods",
