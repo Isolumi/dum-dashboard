@@ -71,6 +71,37 @@ describe("ArgoProvider", () => {
     expect(provider.source).toBe("argocd");
   });
 
+  it("maps multi-source revisions and operation resource images when summary images are absent", async () => {
+    const payload = structuredClone(fixture);
+    const status = payload.status as unknown as {
+      sync: Record<string, unknown>;
+      summary?: unknown;
+      operationState: { syncResult: Record<string, unknown> };
+    };
+    delete status.sync.revision;
+    status.sync.revisions = ["source-one", "source-two"];
+    delete status.summary;
+    status.operationState.syncResult.revision = "";
+    status.operationState.syncResult.revisions = ["source-one", "source-two"];
+    status.operationState.syncResult.resources = [
+      {
+        kind: "Deployment",
+        name: "grafana",
+        images: ["docker.io/grafana/grafana:13.0.1"],
+      },
+    ];
+    const provider = new ArgoProvider({
+      applicationName: "kube-prometheus-stack",
+      customObjectsApi: { getNamespacedCustomObject: vi.fn(async () => payload) },
+    });
+
+    await expect(provider.getApplication("kube-prometheus-stack")).resolves.toMatchObject({
+      sync: { revision: "source-one,source-two" },
+      operation: { revision: "source-one,source-two" },
+      images: ["docker.io/grafana/grafana:13.0.1"],
+    });
+  });
+
   it("contains invalid or failed custom-object responses without exposing upstream details", async () => {
     const invalid = new ArgoProvider({
       ...TARGET,
