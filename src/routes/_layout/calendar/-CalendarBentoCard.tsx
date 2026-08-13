@@ -5,15 +5,12 @@ import { Skeleton } from "#/components/ui/skeleton";
 import type { ToolEntry } from "#/tools/registry";
 import type { CalendarEvent } from "./-calendar.api";
 import { getCalendarEvents } from "./-calendar.functions";
-import { formatEventTime, getUpcomingEvents, groupEventsByDay } from "./-calendarUtils";
-
-function formatChipDate(isoDate: string): string {
-  const [y, m, d] = isoDate.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
+import {
+  formatCalendarDateLabel,
+  formatEventTime,
+  getUpcomingEvents,
+  groupEventsByDay,
+} from "./-calendarUtils";
 
 type BentoStatus = "loading" | "ready" | "auth_expired";
 
@@ -87,16 +84,16 @@ export function CalendarBentoCard({
               group.events.map((event) => (
                 <div
                   key={event.id}
-                  className="flex items-center gap-2 border-b border-border/40 py-1 last:border-0"
+                  className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 border-b border-border/40 py-1.5 last:border-0"
                 >
-                  <span className="w-12 shrink-0 text-xs text-muted-foreground">
-                    {formatChipDate(group.isoDate)}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                    {event.summary}
+                  <span className="min-w-0 truncate text-xs text-muted-foreground">
+                    {formatCalendarDateLabel(group.isoDate)}
                   </span>
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {formatEventTime(event)}
+                  </span>
+                  <span className="col-span-2 min-w-0 truncate text-sm text-foreground">
+                    {event.summary}
                   </span>
                 </div>
               )),
