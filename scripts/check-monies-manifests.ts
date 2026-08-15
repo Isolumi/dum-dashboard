@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
 
+import * as ts from "typescript";
 import { parseAllDocuments } from "yaml";
 
 const expectedUrl = "http://monies.monies.svc.cluster.local:3333";
@@ -10,6 +11,8 @@ const tokenName = "MONIES_API_TOKEN";
 const expectedProjectId = "1617f220-140c-4a04-a8e7-468a71e4ff50";
 const credentialSecretName = "dum-dashboard-monies-infisical-auth-credentials";
 const targetSecretName = "dum-dashboard-monies-secrets";
+const tokenBytes = Buffer.from(tokenName, "ascii");
+const privateHostBytes = Buffer.from(privateHost, "ascii");
 const viteMoniesPattern = /\bVITE_[A-Z0-9_]*MONIES[A-Z0-9_]*\b/i;
 const tokenAssignmentPattern = /^\s*(?:export\s+)?MONIES_API_TOKEN\s*=/m;
 const expectedDashboardLabels = {
@@ -97,6 +100,38 @@ const isEnvironmentFile = (path: string): boolean => {
 const isKubernetesYaml = (path: string): boolean =>
   path.startsWith("k8s/") && /\.ya?ml$/i.test(path);
 
+const isJavaScriptOrTypeScript = (path: string): boolean => /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(path);
+
+const hasDirectTokenIdentifierAssignment = (path: string, contents: string): boolean => {
+  const sourceFile = ts.createSourceFile(path, contents, ts.ScriptTarget.Latest, true);
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === tokenName &&
+      node.initializer
+    ) {
+      found = true;
+      return;
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      ts.isIdentifier(node.left) &&
+      node.left.text === tokenName &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
+};
+
 const inspectKubernetesFile = (
   relativePath: string,
   contents: string,
@@ -146,6 +181,14 @@ const inspectTrackedFiles = (repoRoot: string): string[] => {
       violations.push(`${relativePath}: Monies API token assignment must not be committed.`);
     }
     if (
+      isJavaScriptOrTypeScript(relativePath) &&
+      hasDirectTokenIdentifierAssignment(relativePath, contents)
+    ) {
+      violations.push(
+        `${relativePath}: Monies API token identifier must not be assigned directly.`,
+      );
+    }
+    if (
       (relativePath === ".github/workflows/build-images.yml" ||
         basename(relativePath).startsWith("Dockerfile")) &&
       contents.includes(tokenName)
@@ -178,16 +221,16 @@ const inspectBuiltPublicFiles = (repoRoot: string, publicDir: string): string[] 
 
   const violations: string[] = [];
   for (const path of allFiles(publicDir)) {
-    const contents = readText(path);
-    if (contents === undefined) continue;
+    const contents = readFileSync(path);
+    const bytePreservingText = contents.toString("latin1");
     const relativePath = normalizedRelativePath(repoRoot, path);
-    if (contents.includes(tokenName)) {
+    if (contents.includes(tokenBytes)) {
       violations.push(`${relativePath}: built public artifact contains the Monies API token name.`);
     }
-    if (viteMoniesPattern.test(contents)) {
+    if (viteMoniesPattern.test(bytePreservingText)) {
       violations.push(`${relativePath}: built public artifact contains a Monies VITE token name.`);
     }
-    if (contents.includes(privateHost)) {
+    if (contents.includes(privateHostBytes)) {
       violations.push(`${relativePath}: built public artifact contains the private Monies host.`);
     }
   }
