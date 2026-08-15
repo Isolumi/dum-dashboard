@@ -14,6 +14,7 @@ import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutDevColoursRouteImport } from './routes/_layout/dev-colours'
 import { Route as LayoutHomelabRouteRouteImport } from './routes/_layout/homelab/route'
 import { Route as LayoutTodosIndexRouteImport } from './routes/_layout/todos/index'
+import { Route as LayoutMoniesIndexRouteImport } from './routes/_layout/monies/index'
 import { Route as LayoutHomelabIndexRouteImport } from './routes/_layout/homelab/index'
 import { Route as LayoutCalendarIndexRouteImport } from './routes/_layout/calendar/index'
 import { Route as CalendarOauthCallbackRouteImport } from './routes/calendar/oauth/callback'
@@ -44,6 +45,11 @@ const LayoutHomelabRouteRoute = LayoutHomelabRouteRouteImport.update({
 const LayoutTodosIndexRoute = LayoutTodosIndexRouteImport.update({
   id: '/todos/',
   path: '/todos/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutMoniesIndexRoute = LayoutMoniesIndexRouteImport.update({
+  id: '/monies/',
+  path: '/monies/',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutHomelabIndexRoute = LayoutHomelabIndexRouteImport.update({
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/calendar/': typeof LayoutCalendarIndexRoute
   '/homelab/': typeof LayoutHomelabIndexRoute
+  '/monies/': typeof LayoutMoniesIndexRoute
   '/todos/': typeof LayoutTodosIndexRoute
   '/api/homelab/logs/$namespace/$pod': typeof ApiHomelabLogsNamespacePodRoute
 }
@@ -106,6 +113,7 @@ export interface FileRoutesByTo {
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/calendar': typeof LayoutCalendarIndexRoute
   '/homelab': typeof LayoutHomelabIndexRoute
+  '/monies': typeof LayoutMoniesIndexRoute
   '/todos': typeof LayoutTodosIndexRoute
   '/api/homelab/logs/$namespace/$pod': typeof ApiHomelabLogsNamespacePodRoute
 }
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/_layout/calendar/': typeof LayoutCalendarIndexRoute
   '/_layout/homelab/': typeof LayoutHomelabIndexRoute
+  '/_layout/monies/': typeof LayoutMoniesIndexRoute
   '/_layout/todos/': typeof LayoutTodosIndexRoute
   '/api/homelab/logs/$namespace/$pod': typeof ApiHomelabLogsNamespacePodRoute
 }
@@ -136,6 +145,7 @@ export interface FileRouteTypes {
     | '/calendar/oauth/callback'
     | '/calendar/'
     | '/homelab/'
+    | '/monies/'
     | '/todos/'
     | '/api/homelab/logs/$namespace/$pod'
   fileRoutesByTo: FileRoutesByTo
@@ -148,6 +158,7 @@ export interface FileRouteTypes {
     | '/calendar/oauth/callback'
     | '/calendar'
     | '/homelab'
+    | '/monies'
     | '/todos'
     | '/api/homelab/logs/$namespace/$pod'
   id:
@@ -162,6 +173,7 @@ export interface FileRouteTypes {
     | '/calendar/oauth/callback'
     | '/_layout/calendar/'
     | '/_layout/homelab/'
+    | '/_layout/monies/'
     | '/_layout/todos/'
     | '/api/homelab/logs/$namespace/$pod'
   fileRoutesById: FileRoutesById
@@ -207,6 +219,13 @@ declare module '@tanstack/react-router' {
       path: '/todos'
       fullPath: '/todos/'
       preLoaderRoute: typeof LayoutTodosIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/monies/': {
+      id: '/_layout/monies/'
+      path: '/monies'
+      fullPath: '/monies/'
+      preLoaderRoute: typeof LayoutMoniesIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/homelab/': {
@@ -283,6 +302,7 @@ interface LayoutRouteChildren {
   LayoutDevColoursRoute: typeof LayoutDevColoursRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
   LayoutCalendarIndexRoute: typeof LayoutCalendarIndexRoute
+  LayoutMoniesIndexRoute: typeof LayoutMoniesIndexRoute
   LayoutTodosIndexRoute: typeof LayoutTodosIndexRoute
 }
 
@@ -291,6 +311,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutDevColoursRoute: LayoutDevColoursRoute,
   LayoutIndexRoute: LayoutIndexRoute,
   LayoutCalendarIndexRoute: LayoutCalendarIndexRoute,
+  LayoutMoniesIndexRoute: LayoutMoniesIndexRoute,
   LayoutTodosIndexRoute: LayoutTodosIndexRoute,
 }
 
