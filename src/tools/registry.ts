@@ -1,9 +1,10 @@
 import type { ComponentType } from "react";
 import type { LucideIcon } from "lucide-react";
-import { CalendarDays, CheckSquare, Clock, Server } from "lucide-react";
+import { CalendarDays, CheckSquare, Clock, Server, WalletCards } from "lucide-react";
 import { TodoBentoCard } from "#/routes/_layout/todos/-TodoBentoCard";
 import { ClockBentoCard } from "#/tools/ClockBentoCard";
 import { CalendarBentoCard } from "#/routes/_layout/calendar/-CalendarBentoCard";
+import { MoniesBentoCard } from "#/routes/_layout/monies/-MoniesBentoCard";
 import { HomelabBentoCard } from "#/routes/_layout/homelab/-HomelabBentoCard";
 import { getHomelabOverview } from "#/homelab/homelab.functions";
 
@@ -40,6 +41,13 @@ export const tools: ToolEntry[] = [
     route: "/calendar",
     icon: CalendarDays,
     BentoCard: CalendarBentoCard,
+  },
+  {
+    id: "monies",
+    label: "Monies",
+    route: "/monies",
+    icon: WalletCards,
+    BentoCard: MoniesBentoCard,
   },
   {
     id: "homelab",
