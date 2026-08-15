@@ -56,6 +56,16 @@ function makePage(items: MoniesExpense[]): MoniesExpensePage {
   return { items, page: 1, pageSize: 3, total: items.length };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
+
 beforeEach(() => {
   vi.mocked(getMoniesExpenses).mockResolvedValue(makePage([]));
 });
@@ -89,6 +99,30 @@ describe("MoniesBentoCard", () => {
     expect(screen.getByText("Owed $21.00")).toBeTruthy();
     expect(screen.getByText(longItem).className).toContain("break-words");
     expect(screen.queryByText(/balance|chart/i)).toBeNull();
+  });
+
+  it("keeps maximum valid amounts on a narrow-safe row below the item", async () => {
+    const item = "Maximum amount expense with a long item name";
+    vi.mocked(getMoniesExpenses).mockResolvedValue(
+      makePage([
+        makeExpense(1, {
+          item,
+          amount: "9999999999.99",
+          owedAmount: "9999999999.99",
+        }),
+      ]),
+    );
+
+    render(<MoniesBentoCard tool={mockTool} data={null} />);
+
+    const itemElement = await screen.findByText(item);
+    const row = itemElement.closest("li");
+    const amounts = screen.getByText("Total $9,999,999,999.99").parentElement;
+
+    expect(row?.className).toContain("flex-col");
+    expect(amounts?.className).toContain("flex-wrap");
+    expect(amounts?.className).not.toContain("shrink-0");
+    expect(screen.getByText("Owed $9,999,999,999.99")).toBeTruthy();
   });
 
   it("shows a loading state while the first request is pending", () => {
@@ -137,6 +171,79 @@ describe("MoniesBentoCard", () => {
     expect(getMoniesExpenses).toHaveBeenCalledTimes(2);
     await act(async () => vi.advanceTimersByTimeAsync(1));
     expect(getMoniesExpenses).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps the newest expenses when overlapping requests finish out of order", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const olderRequest = deferred<MoniesExpensePage>();
+    const newerRequest = deferred<MoniesExpensePage>();
+    vi.mocked(getMoniesExpenses)
+      .mockReturnValueOnce(olderRequest.promise)
+      .mockReturnValueOnce(newerRequest.promise);
+
+    render(<MoniesBentoCard tool={mockTool} data={null} />);
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    expect(getMoniesExpenses).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      newerRequest.resolve(makePage([makeExpense(2, { item: "Newest expense" })]));
+      await newerRequest.promise;
+    });
+    expect(screen.getByText("Newest expense")).toBeTruthy();
+
+    await act(async () => {
+      olderRequest.resolve(makePage([makeExpense(1, { item: "Stale expense" })]));
+      await olderRequest.promise;
+    });
+
+    expect(screen.getByText("Newest expense")).toBeTruthy();
+    expect(screen.queryByText("Stale expense")).toBeNull();
+  });
+
+  it("keeps the newest success when an older overlapping request fails later", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const olderRequest = deferred<MoniesExpensePage>();
+    const newerRequest = deferred<MoniesExpensePage>();
+    vi.mocked(getMoniesExpenses)
+      .mockReturnValueOnce(olderRequest.promise)
+      .mockReturnValueOnce(newerRequest.promise);
+
+    render(<MoniesBentoCard tool={mockTool} data={null} />);
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+
+    await act(async () => {
+      newerRequest.resolve(makePage([makeExpense(2, { item: "Current expense" })]));
+      await newerRequest.promise;
+    });
+    expect(screen.getByText("Current expense")).toBeTruthy();
+
+    await act(async () => {
+      olderRequest.reject(new Error("stale failure"));
+      await olderRequest.promise.catch(() => undefined);
+    });
+
+    expect(screen.getByText("Current expense")).toBeTruthy();
+    expect(screen.queryByText("Could not load expenses.")).toBeNull();
+  });
+
+  it("stops polling and ignores a pending request after cleanup", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const pendingRequest = deferred<MoniesExpensePage>();
+    vi.mocked(getMoniesExpenses).mockReturnValueOnce(pendingRequest.promise);
+    const view = render(<MoniesBentoCard tool={mockTool} data={null} />);
+
+    expect(getMoniesExpenses).toHaveBeenCalledTimes(1);
+    view.unmount();
+    await act(async () => vi.advanceTimersByTimeAsync(20_000));
+    await act(async () => {
+      pendingRequest.resolve(makePage([makeExpense(1)]));
+      await pendingRequest.promise;
+    });
+
+    expect(getMoniesExpenses).toHaveBeenCalledTimes(1);
   });
 
   it("links the whole card to the Monies page", async () => {

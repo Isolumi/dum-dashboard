@@ -27,15 +27,17 @@ export function MoniesBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry;
   useEffect(() => {
     let cancelled = false;
     let intervalId: ReturnType<typeof setInterval> | undefined;
+    let latestRequestId = 0;
 
     async function loadExpenses() {
+      const requestId = ++latestRequestId;
       try {
         const page = await getMoniesExpenses({ data: { page: 1, pageSize: MAX_EXPENSES } });
-        if (cancelled) return;
+        if (cancelled || requestId !== latestRequestId) return;
         setExpenses(page.items.slice(0, MAX_EXPENSES));
         setStatus("ready");
       } catch {
-        if (!cancelled) setStatus("error");
+        if (!cancelled && requestId === latestRequestId) setStatus("error");
       }
     }
 
@@ -61,6 +63,7 @@ export function MoniesBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry;
 
     return () => {
       cancelled = true;
+      latestRequestId += 1;
       stopRefresh();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
@@ -98,16 +101,18 @@ export function MoniesBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry;
             {expenses.map((expense) => (
               <li
                 key={expense.id}
-                className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5 border-b border-border/40 py-1.5 last:border-0"
+                className="flex min-w-0 flex-col gap-0.5 border-b border-border/40 py-1.5 last:border-0"
               >
                 <p className="min-w-0 break-words text-sm leading-5 font-medium text-foreground">
                   {expense.item}
                 </p>
-                <div className="flex shrink-0 gap-2 text-xs whitespace-nowrap tabular-nums text-muted-foreground">
-                  <span>Total {formatCurrency(expense.amount)}</span>
-                  <span>Owed {formatCurrency(expense.owedAmount)}</span>
+                <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-xs tabular-nums text-muted-foreground">
+                  <span className="whitespace-nowrap">Total {formatCurrency(expense.amount)}</span>
+                  <span className="whitespace-nowrap">
+                    Owed {formatCurrency(expense.owedAmount)}
+                  </span>
                 </div>
-                <span className="col-span-2 min-w-0 text-xs text-muted-foreground">
+                <span className="min-w-0 break-words text-xs text-muted-foreground">
                   {expense.payer.name} → {expense.debtor?.name ?? "—"}
                 </span>
               </li>
