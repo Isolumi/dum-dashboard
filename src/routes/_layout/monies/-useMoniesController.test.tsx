@@ -295,6 +295,145 @@ describe("useMoniesController", () => {
     });
   });
 
+  it("keeps a failed restore from mutating Active rows after returning to its Trash context", async () => {
+    const bootstrapActive = makeExpense({
+      id: "99999999-9999-4999-8999-999999999999",
+      item: "Bootstrap active",
+    });
+    const otherActive = makeExpense({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      item: "Other active context",
+    });
+    const deletedExpense = makeExpense({
+      item: "Deleted dinner",
+      deletedAt: "2026-08-16T00:05:00.000Z",
+    });
+    const restoreRequest = deferred<MoniesExpense>();
+    const discardedTrashLoad = deferred<MoniesExpensePage>();
+    const settledTrashLoad = deferred<MoniesExpensePage>();
+    vi.mocked(getMoniesExpenses)
+      .mockResolvedValueOnce(makePage([bootstrapActive]))
+      .mockResolvedValueOnce(makePage([otherActive]));
+    vi.mocked(getDeletedMoniesExpenses)
+      .mockResolvedValueOnce(makePage([deletedExpense]))
+      .mockReturnValueOnce(discardedTrashLoad.promise)
+      .mockReturnValueOnce(settledTrashLoad.promise);
+    vi.mocked(restoreMoniesExpense).mockReturnValueOnce(restoreRequest.promise);
+    const { result } = renderHook(() => useMoniesController());
+    await waitFor(() => expect(result.current.expenses).toEqual([bootstrapActive]));
+    act(() => result.current.setView("trash"));
+    await waitFor(() => expect(result.current.expenses).toEqual([deletedExpense]));
+
+    let restoration!: Promise<boolean>;
+    act(() => {
+      restoration = result.current.restore(deletedExpense.id);
+    });
+    act(() => result.current.setView("active"));
+    await waitFor(() => {
+      expect(result.current.status).toBe("ready");
+      expect(result.current.expenses).toEqual([otherActive]);
+    });
+    act(() => result.current.setView("trash"));
+    await act(async () => {
+      discardedTrashLoad.resolve(makePage([deletedExpense]));
+      await discardedTrashLoad.promise;
+    });
+
+    expect(result.current.view).toBe("trash");
+    expect(result.current.page).toBe(1);
+    expect(result.current.status).toBe("loading");
+    expect(result.current.expenses).toEqual([]);
+
+    act(() => restoreRequest.reject(new Error("offline")));
+    await waitFor(() => expect(getDeletedMoniesExpenses).toHaveBeenCalledTimes(3));
+    expect(result.current.status).toBe("loading");
+    expect(result.current.expenses).toEqual([]);
+    expect(result.current.expenses).not.toContainEqual(otherActive);
+    expect(result.current.expenses).not.toContainEqual(deletedExpense);
+
+    let restored = true;
+    await act(async () => {
+      settledTrashLoad.resolve(makePage([deletedExpense]));
+      restored = await restoration;
+    });
+
+    expect(restored).toBe(false);
+    expect(result.current.view).toBe("trash");
+    expect(result.current.page).toBe(1);
+    expect(result.current.status).toBe("ready");
+    expect(result.current.expenses).toEqual([deletedExpense]);
+  });
+
+  it("loads the returned Trash context after the same restore sequence succeeds", async () => {
+    const bootstrapActive = makeExpense({
+      id: "99999999-9999-4999-8999-999999999999",
+      item: "Bootstrap active",
+    });
+    const otherActive = makeExpense({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      item: "Other active context",
+    });
+    const deletedExpense = makeExpense({
+      item: "Deleted dinner",
+      deletedAt: "2026-08-16T00:05:00.000Z",
+    });
+    const remainingTrash = makeExpense({
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      item: "Remaining Trash row",
+      deletedAt: "2026-08-16T00:06:00.000Z",
+    });
+    const restoreRequest = deferred<MoniesExpense>();
+    const discardedTrashLoad = deferred<MoniesExpensePage>();
+    const settledTrashLoad = deferred<MoniesExpensePage>();
+    vi.mocked(getMoniesExpenses)
+      .mockResolvedValueOnce(makePage([bootstrapActive]))
+      .mockResolvedValueOnce(makePage([otherActive]));
+    vi.mocked(getDeletedMoniesExpenses)
+      .mockResolvedValueOnce(makePage([deletedExpense]))
+      .mockReturnValueOnce(discardedTrashLoad.promise)
+      .mockReturnValueOnce(settledTrashLoad.promise);
+    vi.mocked(restoreMoniesExpense).mockReturnValueOnce(restoreRequest.promise);
+    const { result } = renderHook(() => useMoniesController());
+    await waitFor(() => expect(result.current.expenses).toEqual([bootstrapActive]));
+    act(() => result.current.setView("trash"));
+    await waitFor(() => expect(result.current.expenses).toEqual([deletedExpense]));
+
+    let restoration!: Promise<boolean>;
+    act(() => {
+      restoration = result.current.restore(deletedExpense.id);
+    });
+    act(() => result.current.setView("active"));
+    await waitFor(() => {
+      expect(result.current.status).toBe("ready");
+      expect(result.current.expenses).toEqual([otherActive]);
+    });
+    act(() => result.current.setView("trash"));
+    await act(async () => {
+      discardedTrashLoad.resolve(makePage([deletedExpense]));
+      await discardedTrashLoad.promise;
+    });
+
+    expect(result.current.status).toBe("loading");
+    expect(result.current.expenses).toEqual([]);
+
+    act(() => restoreRequest.resolve({ ...deletedExpense, deletedAt: null }));
+    await waitFor(() => expect(getDeletedMoniesExpenses).toHaveBeenCalledTimes(3));
+    expect(result.current.status).toBe("loading");
+    expect(result.current.expenses).toEqual([]);
+
+    let restored = false;
+    await act(async () => {
+      settledTrashLoad.resolve(makePage([remainingTrash]));
+      restored = await restoration;
+    });
+
+    expect(restored).toBe(true);
+    expect(result.current.view).toBe("trash");
+    expect(result.current.page).toBe(1);
+    expect(result.current.status).toBe("ready");
+    expect(result.current.expenses).toEqual([remainingTrash]);
+  });
+
   it("reloads the selected rows after a stale refresh overlaps a mutation", async () => {
     vi.useFakeTimers();
     const targetExpense = makeExpense({ item: "Delete this" });

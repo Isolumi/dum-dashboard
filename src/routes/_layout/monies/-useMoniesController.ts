@@ -32,6 +32,12 @@ interface MoniesListContext {
   page: number;
 }
 
+interface MoniesListBuffer {
+  context: MoniesListContext | null;
+  expenses: MoniesExpense[];
+  total: number;
+}
+
 function contextKey(context: MoniesListContext): string {
   return `${context.view}:${context.page}`;
 }
@@ -64,15 +70,18 @@ export interface MoniesController {
 
 export function useMoniesController(): MoniesController {
   const [users, setUsers] = useState<MoniesUser[]>([]);
-  const [expenses, setExpenses] = useState<MoniesExpense[]>([]);
+  const [listBuffer, setListBuffer] = useState<MoniesListBuffer>({
+    context: null,
+    expenses: [],
+    total: 0,
+  });
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(() => new Set());
   const [status, setStatus] = useState<MoniesController["status"]>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [view, setViewState] = useState<MoniesView>("active");
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const expensesRef = useRef<MoniesExpense[]>([]);
+  const listBufferRef = useRef<MoniesListBuffer>({ context: null, expenses: [], total: 0 });
   const usersRef = useRef<MoniesUser[]>([]);
   const usersLoadedRef = useRef(false);
   const pendingIdsRef = useRef(new Set<string>());
@@ -82,11 +91,29 @@ export function useMoniesController(): MoniesController {
   const activeMutationContextsRef = useRef(new Map<string, number>());
   const mutationContextRevisionsRef = useRef(new Map<string, number>());
 
-  const replaceExpenses = useCallback((replace: (current: MoniesExpense[]) => MoniesExpense[]) => {
-    const next = replace(expensesRef.current);
-    expensesRef.current = next;
-    setExpenses(next);
-  }, []);
+  const setLoadedBuffer = useCallback(
+    (context: MoniesListContext, expenses: MoniesExpense[], total: number) => {
+      const next = { context, expenses, total };
+      listBufferRef.current = next;
+      setListBuffer(next);
+    },
+    [],
+  );
+
+  const updateOwnedBuffer = useCallback(
+    (
+      context: MoniesListContext,
+      update: (current: MoniesListBuffer) => MoniesListBuffer,
+    ): boolean => {
+      const current = listBufferRef.current;
+      if (current.context === null || !isSameContext(current.context, context)) return false;
+      const next = update(current);
+      listBufferRef.current = next;
+      setListBuffer(next);
+      return true;
+    },
+    [],
+  );
 
   const markPending = useCallback((id: string) => {
     pendingIdsRef.current.add(id);
@@ -101,6 +128,7 @@ export function useMoniesController(): MoniesController {
   const selectContext = useCallback((next: MoniesListContext) => {
     if (isSameContext(selectedContextRef.current, next)) return;
     selectedContextRef.current = next;
+    setStatus("loading");
     setViewState(next.view);
     setPage(next.page);
   }, []);
@@ -171,11 +199,10 @@ export function useMoniesController(): MoniesController {
           usersRef.current = freshUsers;
           usersLoadedRef.current = true;
           setUsers(freshUsers);
-          replaceExpenses(() => freshPage.items);
-          setTotal(freshPage.total);
+          setLoadedBuffer(context, freshPage.items, freshPage.total);
           setLoadError(null);
+          setStatus("ready");
         }
-        setStatus("ready");
       } catch {
         if (requestId !== loadRequestRef.current) return;
         if (!isSameContext(selectedContextRef.current, context)) return;
@@ -190,7 +217,7 @@ export function useMoniesController(): MoniesController {
         setStatus((current) => (showLoading || current === "loading" ? "error" : current));
       }
     },
-    [replaceExpenses, selectContext],
+    [selectContext, setLoadedBuffer],
   );
 
   useEffect(() => {
@@ -209,6 +236,10 @@ export function useMoniesController(): MoniesController {
     [selectContext],
   );
 
+  const ownsSelectedView = listBuffer.context?.view === view;
+  const ownsSelectedContext = ownsSelectedView && listBuffer.context?.page === page;
+  const expenses = ownsSelectedContext ? listBuffer.expenses : [];
+  const total = ownsSelectedView ? listBuffer.total : 0;
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / PAGE_SIZE)), [total]);
 
   const finishMutation = useCallback(
@@ -241,8 +272,11 @@ export function useMoniesController(): MoniesController {
           sourceContext.view === "active" &&
           sourceContext.page === 1
         ) {
-          replaceExpenses((current) => [created, ...current].slice(0, PAGE_SIZE));
-          setTotal((current) => current + 1);
+          updateOwnedBuffer(sourceContext, (current) => ({
+            ...current,
+            expenses: [created, ...current.expenses].slice(0, PAGE_SIZE),
+            total: current.total + 1,
+          }));
         }
         return true;
       } catch {
@@ -252,7 +286,7 @@ export function useMoniesController(): MoniesController {
         await finishMutation(sourceContext);
       }
     },
-    [beginMutation, finishMutation, replaceExpenses],
+    [beginMutation, finishMutation, updateOwnedBuffer],
   );
 
   const update = useCallback(
@@ -263,9 +297,12 @@ export function useMoniesController(): MoniesController {
       try {
         const updated = await updateMoniesExpense({ data: input });
         if (isSameContext(selectedContextRef.current, sourceContext)) {
-          replaceExpenses((current) =>
-            current.map((expense) => (expense.id === updated.id ? updated : expense)),
-          );
+          updateOwnedBuffer(sourceContext, (current) => ({
+            ...current,
+            expenses: current.expenses.map((expense) =>
+              expense.id === updated.id ? updated : expense,
+            ),
+          }));
         }
         return true;
       } catch {
@@ -276,39 +313,48 @@ export function useMoniesController(): MoniesController {
         await finishMutation(sourceContext);
       }
     },
-    [beginMutation, clearPending, finishMutation, markPending, replaceExpenses],
+    [beginMutation, clearPending, finishMutation, markPending, updateOwnedBuffer],
   );
 
   const remove = useCallback(
     async (id: string): Promise<boolean> => {
       if (pendingIdsRef.current.has(id)) return false;
-      const previousIndex = expensesRef.current.findIndex((expense) => expense.id === id);
-      const previous = expensesRef.current[previousIndex];
+      const sourceContext = selectedContextRef.current;
+      const sourceBuffer = listBufferRef.current;
+      if (sourceBuffer.context === null || !isSameContext(sourceBuffer.context, sourceContext)) {
+        return false;
+      }
+      const previousIndex = sourceBuffer.expenses.findIndex((expense) => expense.id === id);
+      const previous = sourceBuffer.expenses[previousIndex];
       if (!previous) return false;
 
-      const sourceContext = selectedContextRef.current;
       beginMutation(sourceContext);
       markPending(id);
-      replaceExpenses((current) => current.filter((expense) => expense.id !== id));
-      setTotal((current) => Math.max(0, current - 1));
+      updateOwnedBuffer(sourceContext, (current) => ({
+        ...current,
+        expenses: current.expenses.filter((expense) => expense.id !== id),
+        total: Math.max(0, current.total - 1),
+      }));
       try {
         await deleteMoniesExpense({ data: { id } });
+        const currentBuffer = listBufferRef.current;
         if (
           isSameContext(selectedContextRef.current, sourceContext) &&
-          expensesRef.current.length === 0
+          currentBuffer.context !== null &&
+          isSameContext(currentBuffer.context, sourceContext) &&
+          currentBuffer.expenses.length === 0
         ) {
           selectContext({ ...sourceContext, page: Math.max(1, sourceContext.page - 1) });
         }
         return true;
       } catch {
         if (isSameContext(selectedContextRef.current, sourceContext)) {
-          replaceExpenses((current) => {
-            if (current.some((expense) => expense.id === id)) return current;
-            const restored = [...current];
+          updateOwnedBuffer(sourceContext, (current) => {
+            if (current.expenses.some((expense) => expense.id === id)) return current;
+            const restored = [...current.expenses];
             restored.splice(Math.min(previousIndex, restored.length), 0, previous);
-            return restored;
+            return { ...current, expenses: restored, total: current.total + 1 };
           });
-          setTotal((current) => current + 1);
         }
         setMutationError(DELETE_ERROR);
         return false;
@@ -317,39 +363,48 @@ export function useMoniesController(): MoniesController {
         await finishMutation(sourceContext);
       }
     },
-    [beginMutation, clearPending, finishMutation, markPending, replaceExpenses, selectContext],
+    [beginMutation, clearPending, finishMutation, markPending, selectContext, updateOwnedBuffer],
   );
 
   const restore = useCallback(
     async (id: string): Promise<boolean> => {
       if (pendingIdsRef.current.has(id)) return false;
-      const previousIndex = expensesRef.current.findIndex((expense) => expense.id === id);
-      const previous = expensesRef.current[previousIndex];
+      const sourceContext = selectedContextRef.current;
+      const sourceBuffer = listBufferRef.current;
+      if (sourceBuffer.context === null || !isSameContext(sourceBuffer.context, sourceContext)) {
+        return false;
+      }
+      const previousIndex = sourceBuffer.expenses.findIndex((expense) => expense.id === id);
+      const previous = sourceBuffer.expenses[previousIndex];
       if (!previous) return false;
 
-      const sourceContext = selectedContextRef.current;
       beginMutation(sourceContext);
       markPending(id);
-      replaceExpenses((current) => current.filter((expense) => expense.id !== id));
-      setTotal((current) => Math.max(0, current - 1));
+      updateOwnedBuffer(sourceContext, (current) => ({
+        ...current,
+        expenses: current.expenses.filter((expense) => expense.id !== id),
+        total: Math.max(0, current.total - 1),
+      }));
       try {
         await restoreMoniesExpense({ data: { id } });
+        const currentBuffer = listBufferRef.current;
         if (
           isSameContext(selectedContextRef.current, sourceContext) &&
-          expensesRef.current.length === 0
+          currentBuffer.context !== null &&
+          isSameContext(currentBuffer.context, sourceContext) &&
+          currentBuffer.expenses.length === 0
         ) {
           selectContext({ ...sourceContext, page: Math.max(1, sourceContext.page - 1) });
         }
         return true;
       } catch {
         if (isSameContext(selectedContextRef.current, sourceContext)) {
-          replaceExpenses((current) => {
-            if (current.some((expense) => expense.id === id)) return current;
-            const restored = [...current];
+          updateOwnedBuffer(sourceContext, (current) => {
+            if (current.expenses.some((expense) => expense.id === id)) return current;
+            const restored = [...current.expenses];
             restored.splice(Math.min(previousIndex, restored.length), 0, previous);
-            return restored;
+            return { ...current, expenses: restored, total: current.total + 1 };
           });
-          setTotal((current) => current + 1);
         }
         setMutationError(RESTORE_ERROR);
         return false;
@@ -358,7 +413,7 @@ export function useMoniesController(): MoniesController {
         await finishMutation(sourceContext);
       }
     },
-    [beginMutation, clearPending, finishMutation, markPending, replaceExpenses, selectContext],
+    [beginMutation, clearPending, finishMutation, markPending, selectContext, updateOwnedBuffer],
   );
 
   const retry = useCallback(
