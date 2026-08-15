@@ -57,6 +57,27 @@ describe("ExpenseList", () => {
     }
   });
 
+  it("reserves enough desktop width for two 44px action controls", () => {
+    render(
+      <ExpenseList
+        expenses={[makeExpense()]}
+        view="active"
+        pendingIds={new Set()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn(async () => true)}
+        onRestore={vi.fn(async () => true)}
+      />,
+    );
+
+    const desktop = within(screen.getByTestId("expense-desktop-list"));
+    const actions = desktop.getByRole("columnheader", { name: "Actions" });
+    expect(actions.className).toContain("w-32");
+    expect(actions.className).not.toContain("w-[10%]");
+    expect(desktop.getByText(/Dinner with a long item description/).className).toContain(
+      "break-words",
+    );
+  });
+
   it("uses one explicit confirmation before it deletes an expense", async () => {
     const onDelete = vi.fn(async () => true);
     const expense = makeExpense({ item: "Dinner" });
@@ -85,6 +106,28 @@ describe("ExpenseList", () => {
     await waitFor(() => expect(onDelete).toHaveBeenCalledOnce());
     expect(onDelete).toHaveBeenCalledWith(expense.id);
     expect(screen.queryByRole("dialog", { name: "Delete expense?" })).toBeNull();
+  });
+
+  it("uses a 44px close target for delete confirmation", () => {
+    render(
+      <ExpenseList
+        expenses={[makeExpense({ item: "Dinner" })]}
+        view="active"
+        pendingIds={new Set()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn(async () => true)}
+        onRestore={vi.fn(async () => true)}
+      />,
+    );
+    fireEvent.click(
+      within(screen.getByTestId("expense-desktop-list")).getByRole("button", {
+        name: "Delete Dinner",
+      }),
+    );
+
+    expect(screen.getByRole("button", { name: "Close delete confirmation" }).className).toContain(
+      "size-11",
+    );
   });
 
   it("shows deleted time and Restore in Trash", () => {

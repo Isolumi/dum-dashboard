@@ -79,7 +79,7 @@ function DesktopExpenseList({
             <th scope="col" className="w-[18%] px-3 py-3 font-medium">
               {view === "trash" ? "Deleted" : "Purchased"}
             </th>
-            <th scope="col" className="w-[10%] px-3 py-3 text-right font-medium">
+            <th scope="col" className="w-32 px-3 py-3 text-right font-medium">
               Actions
             </th>
           </tr>
@@ -106,7 +106,7 @@ function DesktopExpenseList({
                     ? `Deleted ${formatTorontoDate(expense.deletedAt)}`
                     : formatTorontoDate(expense.purchaseDate)}
                 </td>
-                <td className="px-3 py-2">
+                <td className="w-32 px-3 py-2">
                   <div className="flex justify-end gap-1">
                     {view === "active" ? (
                       <>
@@ -305,7 +305,7 @@ export function ExpenseList({
           if (!open && !deleting) setDeleteTarget(null);
         }}
       >
-        <DialogContent closeLabel="Close delete confirmation">
+        <DialogContent closeLabel="Close delete confirmation" closeButtonSize="touch">
           <div className="space-y-2 px-5 py-5 pr-12">
             <DialogTitle>Delete expense?</DialogTitle>
             <p className="break-words text-sm text-muted-foreground">

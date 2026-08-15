@@ -107,6 +107,66 @@ describe("ExpenseFormDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it("reuses the first idempotency key when a failed add is retried", async () => {
+    const onSave = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const randomUUID = vi
+      .spyOn(globalThis.crypto, "randomUUID")
+      .mockReturnValue("44444444-4444-4444-8444-444444444444");
+    renderDialog({ onSave });
+    fillAddForm();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
+
+    expect(randomUUID).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0]?.[0]).toMatchObject({
+      idempotencyKey: "44444444-4444-4444-8444-444444444444",
+    });
+    expect(onSave.mock.calls[1]?.[0]).toMatchObject({
+      idempotencyKey: "44444444-4444-4444-8444-444444444444",
+    });
+  });
+
+  it("rejects a Toronto local time in the spring DST gap", async () => {
+    const onSave = vi.fn(async () => true);
+    renderDialog({ onSave });
+    fillAddForm();
+    fireEvent.change(screen.getByLabelText("Purchase date and time (Toronto)"), {
+      target: { value: "2026-03-08T02:30" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
+
+    expect(await screen.findByText("Enter a Toronto purchase date and time.")).toBeTruthy();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("uses the earlier Toronto offset for a valid fall-back local time", async () => {
+    const onSave = vi.fn(async () => true);
+    renderDialog({ onSave });
+    fillAddForm();
+    fireEvent.change(screen.getByLabelText("Purchase date and time (Toronto)"), {
+      target: { value: "2026-11-01T01:30" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ purchaseDate: "2026-11-01T01:30:00-04:00" }),
+    );
+  });
+
+  it("uses a 44px close target for the expense dialog", () => {
+    renderDialog();
+
+    expect(screen.getByRole("button", { name: "Close expense form" }).className).toContain(
+      "size-11",
+    );
+  });
+
   it("blocks submit when the owed amount exceeds the full amount", async () => {
     const onSave = vi.fn(async () => true);
     renderDialog({ onSave });

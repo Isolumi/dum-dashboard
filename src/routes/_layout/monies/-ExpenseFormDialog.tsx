@@ -86,7 +86,9 @@ function fromTorontoInputValue(value: string): string | null {
   const absoluteOffset = Math.abs(offsetMinutes);
   const offsetHour = String(Math.floor(absoluteOffset / 60)).padStart(2, "0");
   const offsetMinute = String(absoluteOffset % 60).padStart(2, "0");
-  return `${year}-${month}-${day}T${hour}:${minute}:00${sign}${offsetHour}:${offsetMinute}`;
+  const zonedValue = `${year}-${month}-${day}T${hour}:${minute}:00${sign}${offsetHour}:${offsetMinute}`;
+  if (toTorontoInputValue(zonedValue) !== value) return null;
+  return zonedValue;
 }
 
 function normalizeMoney(value: string): string | null {
@@ -201,7 +203,7 @@ export function ExpenseFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" closeLabel="Close expense form">
+      <DialogContent className="max-w-md" closeLabel="Close expense form" closeButtonSize="touch">
         <div className="border-b border-border px-5 py-4 pr-12">
           <DialogTitle>{title}</DialogTitle>
           <p className="mt-1 text-sm text-muted-foreground">Amounts are in Canadian dollars.</p>
