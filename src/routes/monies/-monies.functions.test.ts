@@ -73,7 +73,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 beforeEach(() => {
   vi.stubEnv("NODE_ENV", "test");
-  vi.stubEnv("MONIES_API_URL", "http://monies.monies.svc.cluster.local:3333");
+  vi.stubEnv("MONIES_API_URL", "http://localhost:3333");
   vi.stubEnv("MONIES_API_TOKEN", "test-token");
   vi.stubGlobal(
     "fetch",
@@ -109,7 +109,7 @@ describe("Monies read server functions", () => {
     );
   });
 
-  it("validates and forwards active and deleted pagination", async () => {
+  it("uses uncached GET requests with validated active and deleted pagination", async () => {
     await expect(getMoniesExpenses({ data: { page: 2, pageSize: 25 } })).resolves.toEqual(
       expensePage,
     );
@@ -118,9 +118,13 @@ describe("Monies read server functions", () => {
     );
 
     expect(vi.mocked(fetch).mock.calls.map(([url]) => String(url))).toEqual([
-      "http://monies.monies.svc.cluster.local:3333/api/expenses?page=2&pageSize=25",
-      "http://monies.monies.svc.cluster.local:3333/api/expenses/deleted?page=3&pageSize=10",
+      "http://localhost:3333/api/expenses?page=2&pageSize=25",
+      "http://localhost:3333/api/expenses/deleted?page=3&pageSize=10",
     ]);
+    for (const [, options] of vi.mocked(fetch).mock.calls) {
+      expect(options).toMatchObject({ method: "GET", cache: "no-store" });
+      expect(new Headers(options?.headers).get("Cache-Control")).toBe("no-store");
+    }
     expect(noStore).toHaveBeenCalledTimes(2);
     expect(getOwnerUser).toHaveBeenCalledTimes(2);
   });

@@ -12,6 +12,7 @@ import { requireServerEnv } from "./runtime-env";
 
 const REQUEST_TIMEOUT_MS = 5_000;
 const PRODUCTION_ORIGIN = "http://monies.monies.svc.cluster.local:3333";
+const LOCAL_ORIGIN_PATTERN = /^http:\/\/(?:localhost|127\.0\.0\.1):\d{1,5}\/?$/;
 const MONEY_PATTERN = /^(?:0|[1-9]\d{0,9})\.\d{2}$/;
 
 const UuidSchema = z.string().uuid();
@@ -68,36 +69,17 @@ export class MoniesApiError extends Error {
 
 function privateBaseUrl(): URL {
   const rawBaseUrl = requireServerEnv("MONIES_API_URL");
-  if (rawBaseUrl !== rawBaseUrl.trim()) throw new MoniesApiError();
+  const isAllowedText =
+    process.env.NODE_ENV === "production"
+      ? rawBaseUrl === PRODUCTION_ORIGIN
+      : LOCAL_ORIGIN_PATTERN.test(rawBaseUrl);
+  if (!isAllowedText) throw new MoniesApiError();
 
-  let configured: URL;
   try {
-    configured = new URL(rawBaseUrl);
+    return new URL(rawBaseUrl);
   } catch {
     throw new MoniesApiError();
   }
-
-  const hasCleanOriginShape =
-    !configured.username &&
-    !configured.password &&
-    !configured.search &&
-    !configured.hash &&
-    configured.pathname === "/";
-  if (!hasCleanOriginShape) throw new MoniesApiError();
-
-  const isProductionOrigin = configured.origin === PRODUCTION_ORIGIN;
-  const isExplicitLocalOrigin =
-    process.env.NODE_ENV !== "production" &&
-    configured.protocol === "http:" &&
-    (configured.hostname === "localhost" || configured.hostname === "127.0.0.1") &&
-    configured.port !== "";
-  if (!isProductionOrigin && !isExplicitLocalOrigin) throw new MoniesApiError();
-
-  if (process.env.NODE_ENV === "production" && !isProductionOrigin) {
-    throw new MoniesApiError();
-  }
-
-  return new URL(`${configured.origin}/`);
 }
 
 interface MoniesRequestOptions<T> {

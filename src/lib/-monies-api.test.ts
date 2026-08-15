@@ -47,7 +47,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 beforeEach(() => {
   vi.stubEnv("NODE_ENV", "test");
-  vi.stubEnv("MONIES_API_URL", "http://monies.monies.svc.cluster.local:3333");
+  vi.stubEnv("MONIES_API_URL", "http://localhost:3333");
   vi.stubEnv("MONIES_API_TOKEN", "test-token");
   vi.stubGlobal("fetch", vi.fn());
 });
@@ -65,7 +65,7 @@ describe("Monies private API client", () => {
     await expect(listMoniesUsers()).resolves.toEqual([payer, debtor]);
 
     const [url, options] = vi.mocked(fetch).mock.calls[0]!;
-    expect(String(url)).toBe("http://monies.monies.svc.cluster.local:3333/api/users");
+    expect(String(url)).toBe("http://localhost:3333/api/users");
     expect(options).toMatchObject({ method: "GET", cache: "no-store" });
     const headers = new Headers(options?.headers);
     expect(headers.get("Authorization")).toBe("Bearer test-token");
@@ -152,25 +152,25 @@ describe("Monies private API client", () => {
     }));
     expect(requests).toEqual([
       {
-        url: "http://monies.monies.svc.cluster.local:3333/api/expenses",
+        url: "http://localhost:3333/api/expenses",
         method: "POST",
         body: JSON.stringify(createInput),
         authorization: "Bearer test-token",
       },
       {
-        url: `http://monies.monies.svc.cluster.local:3333/api/expenses/${EXPENSE_ID}`,
+        url: `http://localhost:3333/api/expenses/${EXPENSE_ID}`,
         method: "PATCH",
         body: JSON.stringify({ item: "Updated dinner" }),
         authorization: "Bearer test-token",
       },
       {
-        url: `http://monies.monies.svc.cluster.local:3333/api/expenses/${EXPENSE_ID}`,
+        url: `http://localhost:3333/api/expenses/${EXPENSE_ID}`,
         method: "DELETE",
         body: undefined,
         authorization: "Bearer test-token",
       },
       {
-        url: `http://monies.monies.svc.cluster.local:3333/api/expenses/${EXPENSE_ID}/restore`,
+        url: `http://localhost:3333/api/expenses/${EXPENSE_ID}/restore`,
         method: "POST",
         body: undefined,
         authorization: "Bearer test-token",
@@ -181,11 +181,16 @@ describe("Monies private API client", () => {
   it.each([
     "http://user:password@localhost:3333",
     "http://localhost:3333?token=private",
+    "http://localhost:3333?",
     "http://localhost:3333#private",
+    "http://localhost:3333#",
     "http://localhost:3333/base-path",
+    "http://localhost:3333/.",
+    "http://localhost:3333/allowed/..",
     "http://localhost",
     "http://remote.example:3333",
     "https://localhost:3333",
+    "http://monies.monies.svc.cluster.local:3333",
   ])("rejects an unsafe non-production base URL: %s", async (baseUrl) => {
     vi.stubEnv("MONIES_API_URL", baseUrl);
 
@@ -193,7 +198,7 @@ describe("Monies private API client", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it.each(["http://localhost:3333", "http://127.0.0.1:3333"])(
+  it.each(["http://localhost:3333", "http://127.0.0.1:3333", "http://localhost:80"])(
     "allows an explicit local HTTP origin outside production: %s",
     async (baseUrl) => {
       vi.stubEnv("MONIES_API_URL", baseUrl);
@@ -209,5 +214,16 @@ describe("Monies private API client", () => {
 
     await expect(listMoniesUsers()).rejects.toBeInstanceOf(MoniesApiError);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("allows the exact cluster service origin in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("MONIES_API_URL", "http://monies.monies.svc.cluster.local:3333");
+    vi.mocked(fetch).mockResolvedValue(jsonResponse([payer, debtor]));
+
+    await expect(listMoniesUsers()).resolves.toEqual([payer, debtor]);
+    expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toBe(
+      "http://monies.monies.svc.cluster.local:3333/api/users",
+    );
   });
 });
