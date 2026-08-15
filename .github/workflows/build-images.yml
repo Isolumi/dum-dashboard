@@ -55,6 +55,7 @@ jobs:
       - name: Verify deployment security boundaries
         run: |
           bash scripts/check-readonly-rbac.sh
+          bash scripts/check-monies-manifests.sh
           bash -n scripts/check-tailnet-boundary.sh
 
       - name: Build applications

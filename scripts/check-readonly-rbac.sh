@@ -150,6 +150,9 @@ bun --eval '
     "cert-manager.io/Certificate",
     "networking.k8s.io/Ingress",
     "networking.k8s.io/NetworkPolicy",
+    "secrets.infisical.com/InfisicalAuth",
+    "secrets.infisical.com/InfisicalConnection",
+    "secrets.infisical.com/InfisicalStaticSecret",
   ]);
   for (const document of normal) {
     const apiVersion = document?.apiVersion ?? "";
@@ -538,9 +541,10 @@ bun --eval '
     .join("\n");
   if (
     !verifyCommands.includes("scripts/check-readonly-rbac.sh") ||
+    !verifyCommands.includes("scripts/check-monies-manifests.sh") ||
     !verifyCommands.includes("bash -n scripts/check-tailnet-boundary.sh")
   ) {
-    fail("CI verify must enforce the deployment and tailnet boundary guards.");
+    fail("CI verify must enforce the deployment, Monies, and tailnet boundary guards.");
   }
   const updateCommands = (workflow?.jobs?.["update-tags"]?.steps ?? [])
     .map((step) => step?.run ?? "")

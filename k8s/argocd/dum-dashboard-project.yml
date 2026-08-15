@@ -31,6 +31,12 @@ spec:
       kind: NetworkPolicy
     - group: cert-manager.io
       kind: Certificate
+    - group: secrets.infisical.com
+      kind: InfisicalAuth
+    - group: secrets.infisical.com
+      kind: InfisicalConnection
+    - group: secrets.infisical.com
+      kind: InfisicalStaticSecret
   namespaceResourceBlacklist:
     - group: rbac.authorization.k8s.io
       kind: Role
