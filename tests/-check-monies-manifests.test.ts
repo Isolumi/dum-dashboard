@@ -267,6 +267,20 @@ describe("Monies client-secret guard mutations", () => {
     expectRejected(fixture, relativePath);
   });
 
+  test.each([
+    ["one parenthesis layer", `(${tokenName})`],
+    ["multiple parenthesis layers", `(((${tokenName})))`],
+  ])("rejects a direct Monies token assignment with %s", async (_label, target) => {
+    const relativePath = "src/components/AppSidebar.tsx";
+    await appendFixtureFile(
+      fixture,
+      relativePath,
+      [`let ${tokenName};`, `${target} = "committed-secret";`].join("\n"),
+    );
+
+    expectRejected(fixture, relativePath);
+  });
+
   test("rejects a tracked unrendered Kubernetes Secret with the Monies API token", async () => {
     const relativePath = "k8s/argocd/dum-dashboard.yml";
     await appendFixtureFile(

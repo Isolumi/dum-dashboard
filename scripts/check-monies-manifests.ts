@@ -116,15 +116,20 @@ const hasDirectTokenIdentifierAssignment = (path: string, contents: string): boo
       found = true;
       return;
     }
-    if (
-      ts.isBinaryExpression(node) &&
-      ts.isIdentifier(node.left) &&
-      node.left.text === tokenName &&
-      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
-    ) {
-      found = true;
-      return;
+    if (ts.isBinaryExpression(node)) {
+      let assignmentTarget = node.left;
+      while (ts.isParenthesizedExpression(assignmentTarget)) {
+        assignmentTarget = assignmentTarget.expression;
+      }
+      if (
+        ts.isIdentifier(assignmentTarget) &&
+        assignmentTarget.text === tokenName &&
+        node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+      ) {
+        found = true;
+        return;
+      }
     }
     ts.forEachChild(node, visit);
   };
