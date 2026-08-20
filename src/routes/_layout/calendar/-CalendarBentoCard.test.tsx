@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ToolEntry } from "#/tools/registry";
@@ -90,5 +90,30 @@ describe("CalendarBentoCard", () => {
       const link = screen.getByRole("link");
       expect(link.getAttribute("href")).toBe("/calendar");
     });
+  });
+
+  it("shows new events after the ten-second refresh without a page reload", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 20, 12));
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    vi.mocked(getCalendarEvents)
+      .mockResolvedValueOnce({
+        status: "ready",
+        events: [makeEvent("1", "Old event", "2026-08-21T09:00:00-04:00")],
+      })
+      .mockResolvedValueOnce({
+        status: "ready",
+        events: [makeEvent("2", "New event", "2026-08-21T10:00:00-04:00")],
+      });
+
+    render(React.createElement(CalendarBentoCard, { tool: mockTool, data: null }));
+    await act(async () => Promise.resolve());
+    expect(screen.getByText("Old event")).toBeTruthy();
+
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+
+    expect(getCalendarEvents).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("New event")).toBeTruthy();
+    expect(screen.queryByText("Old event")).toBeNull();
   });
 });

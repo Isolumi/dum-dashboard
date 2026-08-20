@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
 import { Skeleton } from "#/components/ui/skeleton";
+import { usePollingRefresh } from "#/hooks/usePollingRefresh";
 import type { CalendarEvent } from "./-calendar.api";
 import { getCalendarEvents, startCalendarOAuth } from "./-calendar.functions";
 import {
@@ -20,6 +21,8 @@ export const Route = createFileRoute("/_layout/calendar/")({
 
 type PageStatus = "loading" | "ready" | "disconnected" | "auth_expired" | "error";
 
+const REFRESH_INTERVAL_MS = 10_000;
+
 function CalendarPage() {
   const today = useMemo(() => new Date(), []);
 
@@ -28,27 +31,34 @@ function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [status, setStatus] = useState<PageStatus>("loading");
   const [connecting, setConnecting] = useState(false);
+  const loadRequestRef = useRef(0);
 
-  const load = useCallback(async () => {
-    setStatus("loading");
+  const load = useCallback(
+    async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
+      const requestId = ++loadRequestRef.current;
+      if (showLoading) setStatus("loading");
 
-    const timeMin = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-    const timeMax = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+      const timeMin = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+      const timeMax = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
 
-    try {
-      const result = await getCalendarEvents({
-        data: {
-          time_min: timeMin.toISOString(),
-          time_max: timeMax.toISOString(),
-        },
-      });
-      setEvents(result.events);
-      setStatus(result.status === "ready" ? "ready" : result.status);
-    } catch (err: unknown) {
-      const e = err as { type?: string };
-      setStatus(e?.type === "auth_expired" ? "auth_expired" : "error");
-    }
-  }, [currentMonth]);
+      try {
+        const result = await getCalendarEvents({
+          data: {
+            time_min: timeMin.toISOString(),
+            time_max: timeMax.toISOString(),
+          },
+        });
+        if (requestId !== loadRequestRef.current) return;
+        setEvents(result.events);
+        setStatus(result.status === "ready" ? "ready" : result.status);
+      } catch (err: unknown) {
+        if (requestId !== loadRequestRef.current) return;
+        const e = err as { type?: string };
+        setStatus(e?.type === "auth_expired" ? "auth_expired" : "error");
+      }
+    },
+    [currentMonth],
+  );
 
   async function handleConnectCalendar() {
     setConnecting(true);
@@ -64,13 +74,12 @@ function CalendarPage() {
   // Initial load + reload when month changes
   useEffect(() => {
     void load();
+    return () => {
+      loadRequestRef.current += 1;
+    };
   }, [load]);
 
-  // Poll every 5 minutes so the calendar stays fresh without manual refresh
-  useEffect(() => {
-    const id = setInterval(() => void load(), 5 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [load]);
+  usePollingRefresh(() => load({ showLoading: false }), REFRESH_INTERVAL_MS);
 
   const eventDates = useMemo(
     () =>
