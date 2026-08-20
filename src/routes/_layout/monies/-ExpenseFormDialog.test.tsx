@@ -72,6 +72,17 @@ afterEach(() => {
 });
 
 describe("ExpenseFormDialog", () => {
+  it("matches required note validation to the visible field label", async () => {
+    const onSave = vi.fn(async () => true);
+    renderDialog({ onSave });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add entry" }));
+
+    expect(await screen.findByText("Enter a note.")).toBeTruthy();
+    expect(screen.queryByText("Enter an item.")).toBeNull();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("offers both registered people as owed-to choices", () => {
     renderDialog();
 

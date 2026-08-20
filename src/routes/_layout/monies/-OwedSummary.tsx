@@ -1,9 +1,11 @@
 import type { MoniesSummary } from "./-monies.types";
 
-const currencyFormatter = new Intl.NumberFormat("en-CA", {
-  style: "currency",
-  currency: "CAD",
-});
+function formatSummaryCad(value: string): string {
+  const decimalIndex = value.length - 3;
+  const dollars = value.slice(0, decimalIndex);
+  const cents = value.slice(decimalIndex + 1);
+  return `$${dollars.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${cents}`;
+}
 
 export function OwedSummary({
   summary,
@@ -21,7 +23,7 @@ export function OwedSummary({
     <div className={`flex min-w-0 items-baseline justify-between gap-4 ${className}`}>
       <p className="min-w-0 truncate text-sm text-muted-foreground">{description}</p>
       <p className="shrink-0 text-sm font-medium tabular-nums">
-        {currencyFormatter.format(Number(summary.amount))}
+        {formatSummaryCad(summary.amount)}
       </p>
     </div>
   );

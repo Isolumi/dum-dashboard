@@ -135,6 +135,17 @@ describe("MoniesBentoCard", () => {
     expect(screen.queryByText(/owed \$/i)).toBeNull();
   });
 
+  it("shows unavailable direction for a legacy entry without a debtor", async () => {
+    vi.mocked(getMoniesExpenses).mockResolvedValue(
+      makePage([makeExpense(1, { debtor: null, owedAmount: null })]),
+    );
+
+    render(<MoniesBentoCard tool={mockTool} data={null} />);
+
+    expect(await screen.findByText("Direction unavailable")).toBeTruthy();
+    expect(screen.queryByText(/— owes Lumi/)).toBeNull();
+  });
+
   it("shows a loading state while the first request is pending", () => {
     vi.mocked(getMoniesExpenses).mockReturnValue(new Promise(() => undefined));
 

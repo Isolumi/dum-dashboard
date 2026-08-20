@@ -137,6 +137,21 @@ describe("Monies private API client", () => {
     ).rejects.toBeInstanceOf(MoniesApiError);
   });
 
+  it.each([
+    ["an empty note", { item: "" }],
+    ["a note over 200 characters", { item: "x".repeat(201) }],
+    ["zero stored money", { amount: "0.00", owedAmount: "0.00" }],
+    ["negative stored money", { amount: "-42.50", owedAmount: "-20.00" }],
+  ])("accepts a legacy expense response with %s", async (_name, overrides) => {
+    const legacyExpense = { ...expense, ...overrides };
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ ...expensePage, items: [legacyExpense] }));
+
+    await expect(listMoniesExpenses({ page: 1, pageSize: 50, deleted: false })).resolves.toEqual({
+      ...expensePage,
+      items: [legacyExpense],
+    });
+  });
+
   it("gets the strict private owed summary without caching", async () => {
     vi.mocked(fetch).mockResolvedValue(jsonResponse(summary));
 
@@ -146,6 +161,13 @@ describe("Monies private API client", () => {
     expect(String(url)).toBe("http://localhost:3333/api/summary");
     expect(options).toMatchObject({ method: "GET", cache: "no-store" });
     expect(new Headers(options?.headers).get("Cache-Control")).toBe("no-store");
+  });
+
+  it("accepts an aggregate summary above the per-entry money limit", async () => {
+    const aggregateSummary = { ...summary, amount: "19999999999.98" };
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(aggregateSummary));
+
+    await expect(getMoniesSummary()).resolves.toEqual(aggregateSummary);
   });
 
   it.each([

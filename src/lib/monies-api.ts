@@ -14,14 +14,12 @@ import { requireServerEnv } from "./runtime-env";
 const REQUEST_TIMEOUT_MS = 5_000;
 const PRODUCTION_ORIGIN = "http://monies.monies.svc.cluster.local:3333";
 const LOCAL_ORIGIN_PATTERN = /^http:\/\/(?:localhost|127\.0\.0\.1):\d{1,5}\/?$/;
-const MONEY_PATTERN = /^(?:0|[1-9]\d{0,9})\.\d{2}$/;
+const STORED_MONEY_PATTERN = /^-?(?:0|[1-9]\d{0,9})\.\d{2}$/;
+const AGGREGATE_MONEY_PATTERN = /^(?:0|[1-9]\d*)\.\d{2}$/;
 
 const UuidSchema = z.string().uuid();
-const PositiveMoneySchema = z
-  .string()
-  .regex(MONEY_PATTERN)
-  .refine((value) => value !== "0.00", "must be greater than zero");
-const NonNegativeMoneySchema = z.string().regex(MONEY_PATTERN);
+const StoredMoneySchema = z.string().regex(STORED_MONEY_PATTERN);
+const AggregateMoneySchema = z.string().regex(AGGREGATE_MONEY_PATTERN);
 const TimestampSchema = z.string().datetime({ offset: true });
 const PurchaseDateSchema = TimestampSchema.refine(
   (value) => /[+-]\d{2}:\d{2}$/.test(value),
@@ -38,9 +36,9 @@ const MoniesUserSchema: z.ZodType<MoniesUser> = z
 const MoniesExpenseSchema: z.ZodType<MoniesExpense> = z
   .object({
     id: UuidSchema,
-    item: z.string().min(1).max(200),
-    amount: PositiveMoneySchema,
-    owedAmount: PositiveMoneySchema.nullable(),
+    item: z.string(),
+    amount: StoredMoneySchema,
+    owedAmount: StoredMoneySchema.nullable(),
     payer: MoniesUserSchema,
     debtor: MoniesUserSchema.nullable(),
     purchaseDate: PurchaseDateSchema,
@@ -63,7 +61,7 @@ const MoniesUserListSchema = z.array(MoniesUserSchema);
 
 const MoniesSummarySchema: z.ZodType<MoniesSummary> = z
   .object({
-    amount: NonNegativeMoneySchema,
+    amount: AggregateMoneySchema,
     debtor: MoniesUserSchema.nullable(),
     creditor: MoniesUserSchema.nullable(),
   })

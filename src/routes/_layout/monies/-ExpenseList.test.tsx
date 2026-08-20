@@ -172,7 +172,7 @@ describe("ExpenseList", () => {
     expect(desktop.queryByRole("button", { name: /edit/i })).toBeNull();
   });
 
-  it("uses em dashes for a legacy entry without debtor or owed data", () => {
+  it("shows unavailable direction for a legacy entry without debtor data", () => {
     render(
       <ExpenseList
         expenses={[makeExpense({ debtor: null, owedAmount: null })]}
@@ -187,7 +187,8 @@ describe("ExpenseList", () => {
     const row = within(screen.getByTestId("expense-desktop-list")).getByRole("row", {
       name: /Dinner with a long item description/i,
     });
-    expect(within(row).getByText("— owes Lumi")).toBeTruthy();
+    expect(within(row).getByText("Direction unavailable")).toBeTruthy();
+    expect(within(row).queryByText(/owes Lumi/)).toBeNull();
     expect(within(row).getAllByText("—")).toHaveLength(1);
     expect(
       within(row).getByRole("button", { name: /Edit Dinner with a long item description/i }),

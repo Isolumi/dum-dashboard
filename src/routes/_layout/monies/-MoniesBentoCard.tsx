@@ -118,7 +118,9 @@ export function MoniesBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry;
                   {formatCurrency(expense.owedAmount)}
                 </span>
                 <span className="min-w-0 break-words text-xs text-muted-foreground">
-                  {expense.debtor?.name ?? "—"} owes {expense.payer.name}
+                  {expense.debtor
+                    ? `${expense.debtor.name} owes ${expense.payer.name}`
+                    : "Direction unavailable"}
                 </span>
               </li>
             ))}

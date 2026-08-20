@@ -41,7 +41,9 @@ function formatTorontoDate(value: string): string {
 function Relationship({ expense }: { expense: MoniesExpense }) {
   return (
     <span className="block min-w-0 break-words">
-      {expense.debtor?.name ?? "—"} owes {expense.payer.name}
+      {expense.debtor
+        ? `${expense.debtor.name} owes ${expense.payer.name}`
+        : "Direction unavailable"}
     </span>
   );
 }

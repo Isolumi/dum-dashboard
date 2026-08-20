@@ -141,7 +141,7 @@ export function ExpenseFormDialog({
     const normalizedOwedAmount = normalizeMoney(owedAmount);
     const normalizedPurchaseDate = fromTorontoInputValue(purchaseDate);
 
-    if (!normalizedItem) nextErrors.item = "Enter an item.";
+    if (!normalizedItem) nextErrors.item = "Enter a note.";
     else if (normalizedItem.length > 200) nextErrors.item = "Use 200 characters or fewer.";
     if (!normalizedOwedAmount) nextErrors.owedAmount = "Enter the amount owed.";
     if (!users.some((user) => user.id === payerId)) nextErrors.payerId = "Select who is owed.";
