@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Skeleton } from "#/components/ui/skeleton";
+import { usePollingRefresh } from "#/hooks/usePollingRefresh";
 import type { ToolEntry } from "#/tools/registry";
 import type { CalendarEvent } from "./-calendar.api";
 import { getCalendarEvents } from "./-calendar.functions";
@@ -12,7 +13,9 @@ import {
   groupEventsByDay,
 } from "./-calendarUtils";
 
-type BentoStatus = "loading" | "ready" | "auth_expired";
+type BentoStatus = "loading" | "ready" | "auth_expired" | "error";
+
+const REFRESH_INTERVAL_MS = 10_000;
 
 export function CalendarBentoCard({
   tool: _tool,
@@ -23,31 +26,46 @@ export function CalendarBentoCard({
 }) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [status, setStatus] = useState<BentoStatus>("loading");
+  const mountedRef = useRef(false);
+  const loadRequestRef = useRef(0);
 
-  useEffect(() => {
-    async function load() {
-      const now = new Date();
-      const thirtyDaysOut = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const load = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
+    const now = new Date();
+    const thirtyDaysOut = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-      try {
-        const result = await getCalendarEvents({
-          data: {
-            time_min: now.toISOString(),
-            time_max: thirtyDaysOut.toISOString(),
-          },
-        });
-        if (result.status !== "ready") {
-          setStatus("auth_expired");
-          return;
-        }
-        setEvents(getUpcomingEvents(result.events, now, 5));
-        setStatus("ready");
-      } catch {
+    try {
+      const result = await getCalendarEvents({
+        data: {
+          time_min: now.toISOString(),
+          time_max: thirtyDaysOut.toISOString(),
+        },
+      });
+      if (!mountedRef.current || requestId !== loadRequestRef.current) return;
+      if (result.status !== "ready") {
         setStatus("auth_expired");
+        return;
+      }
+      setEvents(getUpcomingEvents(result.events, now, 5));
+      setStatus("ready");
+    } catch {
+      if (mountedRef.current && requestId === loadRequestRef.current) {
+        setStatus((current) => (current === "loading" ? "error" : current));
       }
     }
-    void load();
   }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    void load();
+
+    return () => {
+      mountedRef.current = false;
+      loadRequestRef.current += 1;
+    };
+  }, [load]);
+
+  usePollingRefresh(load, REFRESH_INTERVAL_MS, { skipWhilePending: true });
 
   return (
     <Link
@@ -72,6 +90,10 @@ export function CalendarBentoCard({
           <p className="text-xs text-muted-foreground">
             Calendar disconnected — connect in Calendar.
           </p>
+        )}
+
+        {status === "error" && (
+          <p className="text-xs text-muted-foreground">Could not load Calendar.</p>
         )}
 
         {status === "ready" && events.length === 0 && (

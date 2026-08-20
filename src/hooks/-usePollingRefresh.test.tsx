@@ -21,4 +21,23 @@ describe("usePollingRefresh", () => {
 
     expect(refresh).toHaveBeenCalledTimes(1);
   });
+
+  it("can skip a refresh while the previous refresh is pending", async () => {
+    vi.useFakeTimers();
+    let resolveRefresh!: () => void;
+    const pendingRefresh = new Promise<void>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    const refresh = vi.fn(() => pendingRefresh);
+
+    renderHook(() => usePollingRefresh(refresh, 3000, { skipWhilePending: true }));
+    await vi.advanceTimersByTimeAsync(9000);
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    resolveRefresh();
+    await pendingRefresh;
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
 });

@@ -1,6 +1,14 @@
 import { useEffect, useRef } from "react";
 
-export function usePollingRefresh(callback: () => void | Promise<void>, intervalMs: number): void {
+type PollingRefreshOptions = {
+  skipWhilePending?: boolean;
+};
+
+export function usePollingRefresh(
+  callback: () => void | Promise<void>,
+  intervalMs: number,
+  { skipWhilePending = false }: PollingRefreshOptions = {},
+): void {
   const callbackRef = useRef(callback);
 
   useEffect(() => {
@@ -8,10 +16,20 @@ export function usePollingRefresh(callback: () => void | Promise<void>, interval
   }, [callback]);
 
   useEffect(() => {
+    let refreshPending = false;
+
     const interval = setInterval(() => {
-      void callbackRef.current();
+      if (skipWhilePending && refreshPending) return;
+
+      const refresh = callbackRef.current();
+      if (skipWhilePending) {
+        refreshPending = true;
+        void Promise.resolve(refresh).finally(() => {
+          refreshPending = false;
+        });
+      }
     }, intervalMs);
 
     return () => clearInterval(interval);
-  }, [intervalMs]);
+  }, [intervalMs, skipWhilePending]);
 }
