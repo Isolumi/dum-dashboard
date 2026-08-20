@@ -2,9 +2,10 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { Skeleton } from "#/components/ui/skeleton";
-import { getMoniesExpenses } from "#/routes/monies/monies.functions";
+import { getMoniesExpenses, getMoniesSummary } from "#/routes/monies/monies.functions";
 import type { ToolEntry } from "#/tools/registry";
-import type { MoniesExpense } from "./-monies.types";
+import { OwedSummary } from "./-OwedSummary";
+import type { MoniesExpense, MoniesSummary } from "./-monies.types";
 
 const REFRESH_INTERVAL_MS = 10_000;
 const MAX_EXPENSES = 3;
@@ -22,6 +23,7 @@ function formatCurrency(value: string | null): string {
 
 export function MoniesBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry; data: unknown }) {
   const [expenses, setExpenses] = useState<MoniesExpense[]>([]);
+  const [summary, setSummary] = useState<MoniesSummary | null>(null);
   const [status, setStatus] = useState<BentoStatus>("loading");
 
   useEffect(() => {
@@ -29,12 +31,16 @@ export function MoniesBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry;
     let intervalId: ReturnType<typeof setInterval> | undefined;
     let latestRequestId = 0;
 
-    async function loadExpenses() {
+    async function loadEntries() {
       const requestId = ++latestRequestId;
       try {
-        const page = await getMoniesExpenses({ data: { page: 1, pageSize: MAX_EXPENSES } });
+        const [page, freshSummary] = await Promise.all([
+          getMoniesExpenses({ data: { page: 1, pageSize: MAX_EXPENSES } }),
+          getMoniesSummary(),
+        ]);
         if (cancelled || requestId !== latestRequestId) return;
         setExpenses(page.items.slice(0, MAX_EXPENSES));
+        setSummary(freshSummary);
         setStatus("ready");
       } catch {
         if (!cancelled && requestId === latestRequestId) setStatus("error");
@@ -49,7 +55,7 @@ export function MoniesBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry;
 
     function startRefresh() {
       if (document.visibilityState !== "visible" || intervalId !== undefined) return;
-      intervalId = setInterval(() => void loadExpenses(), REFRESH_INTERVAL_MS);
+      intervalId = setInterval(() => void loadEntries(), REFRESH_INTERVAL_MS);
     }
 
     function handleVisibilityChange() {
@@ -57,7 +63,7 @@ export function MoniesBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry;
       else stopRefresh();
     }
 
-    void loadExpenses();
+    void loadEntries();
     startRefresh();
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
@@ -77,8 +83,8 @@ export function MoniesBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry;
     >
       <div className="p-4">
         {status === "loading" ? (
-          <div role="status" aria-label="Loading Monies expenses" className="flex flex-col gap-2">
-            <span className="sr-only">Loading Monies expenses</span>
+          <div role="status" aria-label="Loading Monies entries" className="flex flex-col gap-2">
+            <span className="sr-only">Loading Monies entries</span>
             {Array.from({ length: MAX_EXPENSES }).map((_, index) => (
               <div key={index} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
                 <Skeleton className="h-4 min-w-0 motion-reduce:animate-none" />
@@ -89,11 +95,13 @@ export function MoniesBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry;
         ) : null}
 
         {status === "error" ? (
-          <p className="text-xs text-muted-foreground">Could not load expenses.</p>
+          <p className="text-xs text-muted-foreground">Could not load entries.</p>
         ) : null}
 
+        {status === "ready" && summary ? <OwedSummary summary={summary} className="mb-3" /> : null}
+
         {status === "ready" && expenses.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No active expenses.</p>
+          <p className="text-xs text-muted-foreground">No active entries.</p>
         ) : null}
 
         {status === "ready" && expenses.length > 0 ? (
@@ -106,14 +114,13 @@ export function MoniesBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry;
                 <p className="min-w-0 break-words text-sm leading-5 font-medium text-foreground">
                   {expense.item}
                 </p>
-                <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-xs tabular-nums text-muted-foreground">
-                  <span className="whitespace-nowrap">Total {formatCurrency(expense.amount)}</span>
-                  <span className="whitespace-nowrap">
-                    Owed {formatCurrency(expense.owedAmount)}
-                  </span>
-                </div>
+                <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                  {formatCurrency(expense.owedAmount)}
+                </span>
                 <span className="min-w-0 break-words text-xs text-muted-foreground">
-                  {expense.payer.name} → {expense.debtor?.name ?? "—"}
+                  {expense.debtor
+                    ? `${expense.debtor.name} owes ${expense.payer.name}`
+                    : "Direction unavailable"}
                 </span>
               </li>
             ))}

@@ -23,6 +23,12 @@ export interface MoniesExpensePage {
   total: number;
 }
 
+export interface MoniesSummary {
+  amount: string;
+  debtor: MoniesUser | null;
+  creditor: MoniesUser | null;
+}
+
 export interface ListMoniesExpensesInput {
   page?: number;
   pageSize?: number;
@@ -30,7 +36,6 @@ export interface ListMoniesExpensesInput {
 
 export interface CreateMoniesExpenseInput {
   item: string;
-  amount: string;
   owedAmount: string;
   payerId: string;
   purchaseDate: string;
@@ -39,7 +44,6 @@ export interface CreateMoniesExpenseInput {
 
 export interface UpdateMoniesExpenseFields {
   item?: string;
-  amount?: string;
   owedAmount?: string;
   payerId?: string;
   purchaseDate?: string;

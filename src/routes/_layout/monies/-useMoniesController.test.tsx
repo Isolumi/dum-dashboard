@@ -9,6 +9,7 @@ import {
   deleteMoniesExpense,
   getDeletedMoniesExpenses,
   getMoniesExpenses,
+  getMoniesSummary,
   getMoniesUsers,
   restoreMoniesExpense,
   updateMoniesExpense,
@@ -17,6 +18,7 @@ import type {
   CreateMoniesExpenseInput,
   MoniesExpense,
   MoniesExpensePage,
+  MoniesSummary,
   MoniesUser,
 } from "./-monies.types";
 import { useMoniesController } from "./-useMoniesController";
@@ -26,6 +28,7 @@ vi.mock("#/routes/monies/monies.functions", () => ({
   deleteMoniesExpense: vi.fn(),
   getDeletedMoniesExpenses: vi.fn(),
   getMoniesExpenses: vi.fn(),
+  getMoniesSummary: vi.fn(),
   getMoniesUsers: vi.fn(),
   restoreMoniesExpense: vi.fn(),
   updateMoniesExpense: vi.fn(),
@@ -35,6 +38,9 @@ const users: MoniesUser[] = [
   { id: "11111111-1111-4111-8111-111111111111", name: "Lumi" },
   { id: "22222222-2222-4222-8222-222222222222", name: "Dum" },
 ];
+
+const settledSummary: MoniesSummary = { amount: "0.00", debtor: null, creditor: null };
+const owedSummary: MoniesSummary = { amount: "20.00", debtor: users[1]!, creditor: users[0]! };
 
 function makeExpense(overrides: Partial<MoniesExpense> = {}): MoniesExpense {
   return {
@@ -72,6 +78,7 @@ function deferred<T>() {
 beforeEach(() => {
   vi.mocked(getMoniesUsers).mockResolvedValue(users);
   vi.mocked(getMoniesExpenses).mockResolvedValue(makePage([makeExpense()]));
+  vi.mocked(getMoniesSummary).mockResolvedValue(settledSummary);
   vi.mocked(getDeletedMoniesExpenses).mockResolvedValue(makePage([]));
   vi.mocked(createMoniesExpense).mockResolvedValue(makeExpense());
   vi.mocked(updateMoniesExpense).mockResolvedValue(makeExpense());
@@ -88,15 +95,17 @@ afterEach(() => {
 });
 
 describe("useMoniesController", () => {
-  it("loads both users and the first active expense page", async () => {
+  it("loads users, the summary, and the first active entry page", async () => {
     const { result } = renderHook(() => useMoniesController());
 
     expect(result.current.status).toBe("loading");
     await waitFor(() => expect(result.current.status).toBe("ready"));
 
     expect(result.current.users).toEqual(users);
+    expect(result.current.summary).toEqual(settledSummary);
     expect(result.current.expenses).toEqual([makeExpense()]);
     expect(getMoniesExpenses).toHaveBeenCalledWith({ data: { page: 1, pageSize: 20 } });
+    expect(getMoniesSummary).toHaveBeenCalledOnce();
   });
 
   it("refreshes the visible page every ten seconds without returning to loading", async () => {
@@ -122,6 +131,7 @@ describe("useMoniesController", () => {
     });
 
     expect(getMoniesExpenses).toHaveBeenCalledTimes(2);
+    expect(getMoniesSummary).toHaveBeenCalledTimes(2);
     expect(result.current.status).toBe("ready");
   });
 
@@ -291,7 +301,7 @@ describe("useMoniesController", () => {
       expect(result.current.view).toBe("active");
       expect(result.current.page).toBe(1);
       expect(result.current.expenses).toEqual([activeExpense]);
-      expect(result.current.mutationError).toMatch(/could not restore expense/i);
+      expect(result.current.mutationError).toMatch(/could not restore entry/i);
     });
   });
 
@@ -486,7 +496,6 @@ describe("useMoniesController", () => {
     await waitFor(() => expect(result.current.status).toBe("ready"));
     const input: CreateMoniesExpenseInput = {
       item: "Groceries",
-      amount: "30.00",
       owedAmount: "15.00",
       payerId: users[0]!.id,
       purchaseDate: "2026-08-15T18:30:00-04:00",
@@ -499,7 +508,28 @@ describe("useMoniesController", () => {
     });
 
     expect(saved).toBe(false);
-    expect(result.current.mutationError).toMatch(/could not save expense/i);
+    expect(result.current.mutationError).toMatch(/could not save entry/i);
+  });
+
+  it("refreshes the summary after a successful entry mutation", async () => {
+    vi.mocked(getMoniesSummary)
+      .mockResolvedValueOnce(settledSummary)
+      .mockResolvedValueOnce(owedSummary);
+    const { result } = renderHook(() => useMoniesController());
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+
+    await act(async () =>
+      result.current.create({
+        item: "Groceries",
+        owedAmount: "15.00",
+        payerId: users[0]!.id,
+        purchaseDate: "2026-08-15T18:30:00-04:00",
+        idempotencyKey: "one-request",
+      }),
+    );
+
+    await waitFor(() => expect(result.current.summary).toEqual(owedSummary));
+    expect(getMoniesSummary).toHaveBeenCalledTimes(2);
   });
 
   it("removes an expense optimistically and restores its position when delete fails", async () => {
@@ -520,7 +550,7 @@ describe("useMoniesController", () => {
     });
 
     expect(result.current.expenses).toEqual([makeExpense()]);
-    expect(result.current.mutationError).toMatch(/could not move expense to Trash/i);
+    expect(result.current.mutationError).toMatch(/could not move entry to Trash/i);
   });
 
   it("returns to the previous page after deleting the only item on the last page", async () => {

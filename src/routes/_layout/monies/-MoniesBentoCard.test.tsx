@@ -6,7 +6,7 @@ import React from "react";
 import { WalletCards } from "lucide-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { MoniesExpense, MoniesExpensePage } from "./-monies.types";
+import type { MoniesExpense, MoniesExpensePage, MoniesSummary } from "./-monies.types";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -22,9 +22,10 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("#/routes/monies/monies.functions", () => ({
   getMoniesExpenses: vi.fn(),
+  getMoniesSummary: vi.fn(),
 }));
 
-const { getMoniesExpenses } = await import("#/routes/monies/monies.functions");
+const { getMoniesExpenses, getMoniesSummary } = await import("#/routes/monies/monies.functions");
 const { MoniesBentoCard } = await import("./-MoniesBentoCard");
 const { tools } = await import("#/tools/registry");
 
@@ -56,6 +57,14 @@ function makePage(items: MoniesExpense[]): MoniesExpensePage {
   return { items, page: 1, pageSize: 3, total: items.length };
 }
 
+const owedSummary: MoniesSummary = {
+  amount: "21.00",
+  debtor: { id: "22222222-2222-4222-8222-222222222222", name: "Dum" },
+  creditor: { id: "11111111-1111-4111-8111-111111111111", name: "Lumi" },
+};
+
+const settledSummary: MoniesSummary = { amount: "0.00", debtor: null, creditor: null };
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -68,6 +77,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.mocked(getMoniesExpenses).mockResolvedValue(makePage([]));
+  vi.mocked(getMoniesSummary).mockResolvedValue(settledSummary);
 });
 
 afterEach(() => {
@@ -77,7 +87,7 @@ afterEach(() => {
 });
 
 describe("MoniesBentoCard", () => {
-  it("shows no more than three active expenses with payer direction and amounts", async () => {
+  it("shows a compact balance and no more than three owed-only active entries", async () => {
     const longItem = "A long grocery item that must wrap cleanly inside the compact card";
     vi.mocked(getMoniesExpenses).mockResolvedValue(
       makePage([
@@ -87,6 +97,7 @@ describe("MoniesBentoCard", () => {
         makeExpense(4),
       ]),
     );
+    vi.mocked(getMoniesSummary).mockResolvedValue(owedSummary);
 
     render(<MoniesBentoCard tool={mockTool} data={null} />);
 
@@ -94,20 +105,19 @@ describe("MoniesBentoCard", () => {
     expect(getMoniesExpenses).toHaveBeenCalledWith({ data: { page: 1, pageSize: 3 } });
     expect(screen.getAllByRole("listitem")).toHaveLength(3);
     expect(screen.queryByText("Expense 4")).toBeNull();
-    expect(screen.getAllByText("Lumi → Dum")).toHaveLength(3);
-    expect(screen.getByText("Total $41.50")).toBeTruthy();
-    expect(screen.getByText("Owed $21.00")).toBeTruthy();
+    expect(screen.getAllByText("Dum owes Lumi")).toHaveLength(4);
+    expect(screen.getAllByText("$21.00")).toHaveLength(2);
+    expect(screen.queryByText(/total/i)).toBeNull();
     expect(screen.getByText(longItem).className).toContain("break-words");
     expect(screen.queryByText(/balance|chart/i)).toBeNull();
   });
 
-  it("keeps maximum valid amounts on a narrow-safe row below the item", async () => {
+  it("keeps maximum owed amounts on a narrow-safe row below the note", async () => {
     const item = "Maximum amount expense with a long item name";
     vi.mocked(getMoniesExpenses).mockResolvedValue(
       makePage([
         makeExpense(1, {
           item,
-          amount: "9999999999.99",
           owedAmount: "9999999999.99",
         }),
       ]),
@@ -117,12 +127,23 @@ describe("MoniesBentoCard", () => {
 
     const itemElement = await screen.findByText(item);
     const row = itemElement.closest("li");
-    const amounts = screen.getByText("Total $9,999,999,999.99").parentElement;
+    const amount = screen.getByText("$9,999,999,999.99");
 
     expect(row?.className).toContain("flex-col");
-    expect(amounts?.className).toContain("flex-wrap");
-    expect(amounts?.className).not.toContain("shrink-0");
-    expect(screen.getByText("Owed $9,999,999,999.99")).toBeTruthy();
+    expect(amount.className).toContain("whitespace-nowrap");
+    expect(amount.className).not.toContain("shrink-0");
+    expect(screen.queryByText(/owed \$/i)).toBeNull();
+  });
+
+  it("shows unavailable direction for a legacy entry without a debtor", async () => {
+    vi.mocked(getMoniesExpenses).mockResolvedValue(
+      makePage([makeExpense(1, { debtor: null, owedAmount: null })]),
+    );
+
+    render(<MoniesBentoCard tool={mockTool} data={null} />);
+
+    expect(await screen.findByText("Direction unavailable")).toBeTruthy();
+    expect(screen.queryByText(/— owes Lumi/)).toBeNull();
   });
 
   it("shows a loading state while the first request is pending", () => {
@@ -130,13 +151,15 @@ describe("MoniesBentoCard", () => {
 
     render(<MoniesBentoCard tool={mockTool} data={null} />);
 
-    expect(screen.getByRole("status", { name: "Loading Monies expenses" })).toBeTruthy();
+    expect(screen.getByRole("status", { name: "Loading Monies entries" })).toBeTruthy();
   });
 
-  it("shows an empty state when there are no active expenses", async () => {
+  it("shows settled-up balance and an empty state when there are no active entries", async () => {
     render(<MoniesBentoCard tool={mockTool} data={null} />);
 
-    await waitFor(() => expect(screen.getByText("No active expenses.")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("No active entries.")).toBeTruthy());
+    expect(screen.getByText("Settled up")).toBeTruthy();
+    expect(screen.getByText("$0.00")).toBeTruthy();
   });
 
   it("shows a safe error state when loading fails", async () => {
@@ -144,7 +167,7 @@ describe("MoniesBentoCard", () => {
 
     render(<MoniesBentoCard tool={mockTool} data={null} />);
 
-    await waitFor(() => expect(screen.getByText("Could not load expenses.")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Could not load entries.")).toBeTruthy());
     expect(screen.queryByText(/private service detail/i)).toBeNull();
   });
 
@@ -156,14 +179,17 @@ describe("MoniesBentoCard", () => {
     render(<MoniesBentoCard tool={mockTool} data={null} />);
     await act(async () => Promise.resolve());
     expect(getMoniesExpenses).toHaveBeenCalledTimes(1);
+    expect(getMoniesSummary).toHaveBeenCalledTimes(1);
 
     await act(async () => vi.advanceTimersByTimeAsync(10_000));
     expect(getMoniesExpenses).toHaveBeenCalledTimes(2);
+    expect(getMoniesSummary).toHaveBeenCalledTimes(2);
 
     visibility.mockReturnValue("hidden");
     act(() => document.dispatchEvent(new Event("visibilitychange")));
     await act(async () => vi.advanceTimersByTimeAsync(30_000));
     expect(getMoniesExpenses).toHaveBeenCalledTimes(2);
+    expect(getMoniesSummary).toHaveBeenCalledTimes(2);
 
     visibility.mockReturnValue("visible");
     act(() => document.dispatchEvent(new Event("visibilitychange")));
@@ -171,6 +197,7 @@ describe("MoniesBentoCard", () => {
     expect(getMoniesExpenses).toHaveBeenCalledTimes(2);
     await act(async () => vi.advanceTimersByTimeAsync(1));
     expect(getMoniesExpenses).toHaveBeenCalledTimes(3);
+    expect(getMoniesSummary).toHaveBeenCalledTimes(3);
   });
 
   it("keeps the newest expenses when overlapping requests finish out of order", async () => {
