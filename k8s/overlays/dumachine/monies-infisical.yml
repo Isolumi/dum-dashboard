@@ -1,0 +1,49 @@
+apiVersion: secrets.infisical.com/v1beta1
+kind: InfisicalConnection
+metadata:
+  name: infisical-cloud
+  namespace: dum-dashboard
+spec:
+  address: https://app.infisical.com
+---
+apiVersion: secrets.infisical.com/v1beta1
+kind: InfisicalAuth
+metadata:
+  name: dum-dashboard-monies-infisical-auth
+  namespace: dum-dashboard
+spec:
+  infisicalConnectionRef:
+    name: infisical-cloud
+    namespace: dum-dashboard
+  method: universal
+  universal:
+    clientIdRef:
+      name: dum-dashboard-monies-infisical-auth-credentials
+      namespace: dum-dashboard
+      key: clientId
+    clientSecretRef:
+      name: dum-dashboard-monies-infisical-auth-credentials
+      namespace: dum-dashboard
+      key: clientSecret
+---
+apiVersion: secrets.infisical.com/v1beta1
+kind: InfisicalStaticSecret
+metadata:
+  name: dum-dashboard-monies-secrets
+  namespace: dum-dashboard
+spec:
+  infisicalAuthRef:
+    name: dum-dashboard-monies-infisical-auth
+    namespace: dum-dashboard
+  syncOptions:
+    refreshInterval: 60s
+    instantUpdates: false
+  sources:
+    - projectId: 1617f220-140c-4a04-a8e7-468a71e4ff50
+      environmentSlug: prod
+      secretPath: /dashboard
+  targets:
+    - name: dum-dashboard-monies-secrets
+      namespace: dum-dashboard
+      kind: Secret
+      creationPolicy: Owner

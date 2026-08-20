@@ -62,6 +62,9 @@ jobs:
           bun run build
           bun run build:gateway
 
+      - name: Verify Monies client-secret boundary
+        run: bash scripts/check-monies-manifests.sh
+
   build-and-push:
     if: github.event_name == 'push'
     needs: verify

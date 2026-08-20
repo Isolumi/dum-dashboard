@@ -25,8 +25,12 @@ function DialogContent({
   className,
   children,
   closeLabel = "Close",
+  closeButtonSize = "default",
   ...props
-}: DialogPrimitive.Popup.Props & { closeLabel?: string }) {
+}: DialogPrimitive.Popup.Props & {
+  closeLabel?: string;
+  closeButtonSize?: "default" | "touch";
+}) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0 motion-reduce:transition-none" />
@@ -45,7 +49,7 @@ function DialogContent({
               type="button"
               variant="ghost"
               size="icon-sm"
-              className="absolute right-2 top-2"
+              className={cn("absolute right-2 top-2", closeButtonSize === "touch" && "size-11")}
             />
           }
           aria-label={closeLabel}

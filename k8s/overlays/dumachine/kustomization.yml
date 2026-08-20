@@ -6,6 +6,7 @@ resources:
   - config.yml
   - certificate.yml
   - ingress.yml
+  - monies-infisical.yml
   - network-policy.yml
 images:
   - name: ghcr.io/isolumi/dum-dashboard

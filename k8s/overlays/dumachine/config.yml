@@ -5,6 +5,7 @@ metadata:
   namespace: dum-dashboard
 data:
   GATEWAY_URL: http://homelab-gateway.dum-dashboard.svc.cluster.local:8080
+  MONIES_API_URL: http://monies.monies.svc.cluster.local:3333
 ---
 apiVersion: v1
 kind: ConfigMap

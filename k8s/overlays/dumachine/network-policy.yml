@@ -23,6 +23,9 @@ spec:
         - port: 8080
           protocol: TCP
 ---
+# Monies egress stays open in this namespace. The destination-side
+# monies/monies-dum-dashboard-only policy is the enforcing boundary. It accepts only pods with
+# app.kubernetes.io/name=dum-dashboard and app.kubernetes.io/component=dashboard on TCP 3333.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
