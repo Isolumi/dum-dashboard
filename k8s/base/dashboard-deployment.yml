@@ -48,6 +48,8 @@ spec:
                 name: dum-dashboard-config
             - secretRef:
                 name: dum-dashboard-secrets
+            - secretRef:
+                name: dum-dashboard-monies-secrets
           readinessProbe:
             httpGet:
               path: /

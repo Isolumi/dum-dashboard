@@ -37,6 +37,7 @@ export default mergeConfig(
               ],
               exclude: [
                 "src/homelab/-homelab.functions.test.ts",
+                "src/routes/monies/-monies.functions.test.ts",
                 "src/routes/todos/-todos.functions.test.ts",
               ],
               environment: "node",
@@ -60,6 +61,7 @@ export default mergeConfig(
             name: "server-unit",
             include: [
               "src/homelab/-homelab.functions.test.ts",
+              "src/routes/monies/-monies.functions.test.ts",
               "src/routes/todos/-todos.functions.test.ts",
             ],
             environment: "node",

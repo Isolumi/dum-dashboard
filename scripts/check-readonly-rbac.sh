@@ -150,6 +150,9 @@ bun --eval '
     "cert-manager.io/Certificate",
     "networking.k8s.io/Ingress",
     "networking.k8s.io/NetworkPolicy",
+    "secrets.infisical.com/InfisicalAuth",
+    "secrets.infisical.com/InfisicalConnection",
+    "secrets.infisical.com/InfisicalStaticSecret",
   ]);
   for (const document of normal) {
     const apiVersion = document?.apiVersion ?? "";
@@ -533,14 +536,31 @@ bun --eval '
       fail(`Job ${name} permissions differ from the least-privilege contract.`);
     }
   }
-  const verifyCommands = (workflow?.jobs?.verify?.steps ?? [])
-    .map((step) => step?.run ?? "")
-    .join("\n");
+  const verifySteps = workflow?.jobs?.verify?.steps ?? [];
+  const boundaryIndex = verifySteps.findIndex(
+    (step) => step?.name === "Verify deployment security boundaries",
+  );
+  const buildIndex = verifySteps.findIndex((step) => step?.name === "Build applications");
+  const moniesIndex = verifySteps.findIndex(
+    (step) => step?.name === "Verify Monies client-secret boundary",
+  );
+  const boundaryCommands = verifySteps[boundaryIndex]?.run ?? "";
+  const moniesCommands = verifySteps[moniesIndex]?.run?.trim() ?? "";
   if (
-    !verifyCommands.includes("scripts/check-readonly-rbac.sh") ||
-    !verifyCommands.includes("bash -n scripts/check-tailnet-boundary.sh")
+    boundaryIndex < 0 ||
+    boundaryIndex >= buildIndex ||
+    !boundaryCommands.includes("scripts/check-readonly-rbac.sh") ||
+    !boundaryCommands.includes("bash -n scripts/check-tailnet-boundary.sh") ||
+    boundaryCommands.includes("scripts/check-monies-manifests.sh")
   ) {
-    fail("CI verify must enforce the deployment and tailnet boundary guards.");
+    fail("CI must keep deployment and tailnet guards in the pre-build boundary step.");
+  }
+  if (
+    buildIndex < 0 ||
+    moniesIndex <= buildIndex ||
+    moniesCommands !== "bash scripts/check-monies-manifests.sh"
+  ) {
+    fail("CI must run the dedicated Monies client-secret guard after application builds.");
   }
   const updateCommands = (workflow?.jobs?.["update-tags"]?.steps ?? [])
     .map((step) => step?.run ?? "")
