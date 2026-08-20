@@ -91,6 +91,7 @@ function peerCertificateExpiry(url: URL, signal: AbortSignal): Promise<string> {
 export async function probeService(
   entry: ServiceCatalogEntry,
   signal: AbortSignal,
+  now: () => number = Date.now,
 ): Promise<ServiceProbeResult> {
   if (signal.aborted) throw cancellationError();
 
@@ -132,7 +133,7 @@ export async function probeService(
     consecutiveFailures.delete(entry.id);
     const certificateStatus = evaluateCertificate(
       { name: entry.name, expiresAt: certificate.value },
-      Date.now(),
+      now(),
     ).status;
     const status = rollUpStatus([
       {

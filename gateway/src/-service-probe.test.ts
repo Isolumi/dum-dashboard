@@ -7,7 +7,11 @@ vi.mock("node:tls", () => ({ connect }));
 
 import { probeService, type ServiceCatalogEntry } from "./service-probe";
 
-const now = new Date("2026-08-04T00:00:00.000Z");
+const now = () => Date.parse("2026-08-04T00:00:00.000Z");
+
+function probeAtFixedTime(entry: ServiceCatalogEntry, signal: AbortSignal) {
+  return probeService(entry, signal, now);
+}
 
 function service(id: string): ServiceCatalogEntry {
   return {
@@ -77,7 +81,7 @@ describe("probeService", () => {
     vi.spyOn(performance, "now").mockReturnValueOnce(100).mockReturnValueOnce(143);
 
     await expect(
-      probeService(service("latency"), new AbortController().signal),
+      probeAtFixedTime(service("latency"), new AbortController().signal),
     ).resolves.toMatchObject({
       id: "latency",
       reachable: true,
@@ -100,7 +104,7 @@ describe("probeService", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
 
     await expect(
-      probeService(service("route-specific-api"), new AbortController().signal),
+      probeAtFixedTime(service("route-specific-api"), new AbortController().signal),
     ).resolves.toMatchObject({
       reachable: true,
       status: "healthy",
@@ -113,12 +117,12 @@ describe("probeService", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
     const entry = service("consecutive-failures");
 
-    await expect(probeService(entry, new AbortController().signal)).resolves.toMatchObject({
+    await expect(probeAtFixedTime(entry, new AbortController().signal)).resolves.toMatchObject({
       reachable: false,
       status: "warning",
       consecutiveFailures: 1,
     });
-    await expect(probeService(entry, new AbortController().signal)).resolves.toMatchObject({
+    await expect(probeAtFixedTime(entry, new AbortController().signal)).resolves.toMatchObject({
       reachable: false,
       status: "critical",
       consecutiveFailures: 2,
@@ -130,18 +134,18 @@ describe("probeService", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
     const entry = service("already-cancelled");
 
-    await expect(probeService(entry, new AbortController().signal)).resolves.toMatchObject({
+    await expect(probeAtFixedTime(entry, new AbortController().signal)).resolves.toMatchObject({
       status: "warning",
       consecutiveFailures: 1,
     });
 
     const controller = new AbortController();
     controller.abort(new Error("credential=private cancellation"));
-    await expect(probeService(entry, controller.signal)).rejects.toThrow(
+    await expect(probeAtFixedTime(entry, controller.signal)).rejects.toThrow(
       /^Service probe cancelled$/,
     );
 
-    await expect(probeService(entry, new AbortController().signal)).resolves.toMatchObject({
+    await expect(probeAtFixedTime(entry, new AbortController().signal)).resolves.toMatchObject({
       status: "critical",
       consecutiveFailures: 2,
     });
@@ -152,13 +156,13 @@ describe("probeService", () => {
     vi.stubGlobal("fetch", rejectsWhenAborted());
     const entry = service("midflight-cancelled");
     const controller = new AbortController();
-    const probe = probeService(entry, controller.signal);
+    const probe = probeAtFixedTime(entry, controller.signal);
 
     controller.abort(new Error("credential=private cancellation"));
     await expect(probe).rejects.toThrow(/^Service probe cancelled$/);
 
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
-    await expect(probeService(entry, new AbortController().signal)).resolves.toMatchObject({
+    await expect(probeAtFixedTime(entry, new AbortController().signal)).resolves.toMatchObject({
       status: "warning",
       consecutiveFailures: 1,
     });
@@ -177,12 +181,12 @@ describe("probeService", () => {
     );
 
     await expect(
-      probeService(service("response-cleanup-success"), new AbortController().signal),
+      probeAtFixedTime(service("response-cleanup-success"), new AbortController().signal),
     ).resolves.toMatchObject({
       reachable: true,
     });
     await expect(
-      probeService(service("response-cleanup-failure"), new AbortController().signal),
+      probeAtFixedTime(service("response-cleanup-failure"), new AbortController().signal),
     ).resolves.toMatchObject({
       reachable: false,
     });
@@ -197,27 +201,27 @@ describe("probeService", () => {
     const second = service("separate-service");
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
 
-    await expect(probeService(first, new AbortController().signal)).resolves.toMatchObject({
+    await expect(probeAtFixedTime(first, new AbortController().signal)).resolves.toMatchObject({
       status: "warning",
       consecutiveFailures: 1,
     });
-    await expect(probeService(second, new AbortController().signal)).resolves.toMatchObject({
+    await expect(probeAtFixedTime(second, new AbortController().signal)).resolves.toMatchObject({
       status: "warning",
       consecutiveFailures: 1,
     });
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
-    await expect(probeService(first, new AbortController().signal)).resolves.toMatchObject({
+    await expect(probeAtFixedTime(first, new AbortController().signal)).resolves.toMatchObject({
       status: "healthy",
       consecutiveFailures: 0,
     });
 
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
-    await expect(probeService(first, new AbortController().signal)).resolves.toMatchObject({
+    await expect(probeAtFixedTime(first, new AbortController().signal)).resolves.toMatchObject({
       status: "warning",
       consecutiveFailures: 1,
     });
-    await expect(probeService(second, new AbortController().signal)).resolves.toMatchObject({
+    await expect(probeAtFixedTime(second, new AbortController().signal)).resolves.toMatchObject({
       status: "critical",
       consecutiveFailures: 2,
     });
@@ -238,7 +242,7 @@ describe("probeService", () => {
       ),
     );
 
-    const probe = probeService(service("timeout"), new AbortController().signal);
+    const probe = probeAtFixedTime(service("timeout"), new AbortController().signal);
     await vi.advanceTimersByTimeAsync(5_000);
 
     await expect(probe).resolves.toMatchObject({
@@ -250,12 +254,11 @@ describe("probeService", () => {
   });
 
   it("reports a certificate expiring within fourteen days as warning", async () => {
-    vi.setSystemTime(now);
     completeTlsHandshake("Aug 17 2026 00:00:00 GMT");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
 
     await expect(
-      probeService(service("expiring-certificate"), new AbortController().signal),
+      probeAtFixedTime(service("expiring-certificate"), new AbortController().signal),
     ).resolves.toMatchObject({
       reachable: true,
       status: "warning",
