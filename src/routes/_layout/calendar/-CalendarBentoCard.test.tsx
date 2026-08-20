@@ -43,6 +43,14 @@ function makeEvent(id: string, summary: string, dateTime: string) {
   return { id, summary, start: { dateTime }, end: { dateTime } };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
+
 describe("CalendarBentoCard", () => {
   it("shows upcoming events once loaded", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
@@ -113,6 +121,66 @@ describe("CalendarBentoCard", () => {
     await act(async () => vi.advanceTimersByTimeAsync(10_000));
 
     expect(getCalendarEvents).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("New event")).toBeTruthy();
+    expect(screen.queryByText("Old event")).toBeNull();
+  });
+
+  it("keeps current events visible when a background refresh fails", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 20, 12));
+    vi.mocked(getCalendarEvents)
+      .mockResolvedValueOnce({
+        status: "ready",
+        events: [makeEvent("1", "Current event", "2026-08-21T09:00:00-04:00")],
+      })
+      .mockRejectedValueOnce(new Error("temporary network failure"));
+
+    render(React.createElement(CalendarBentoCard, { tool: mockTool, data: null }));
+    await act(async () => Promise.resolve());
+    expect(screen.getByText("Current event")).toBeTruthy();
+
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+
+    expect(screen.getByText("Current event")).toBeTruthy();
+    expect(screen.queryByText(/calendar disconnected/i)).toBeNull();
+  });
+
+  it("does not let an older request overwrite newer events", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 20, 12));
+    const olderInitial = deferred<{
+      status: "ready";
+      events: ReturnType<typeof makeEvent>[];
+    }>();
+    const newerPoll = deferred<{
+      status: "ready";
+      events: ReturnType<typeof makeEvent>[];
+    }>();
+    vi.mocked(getCalendarEvents)
+      .mockReturnValueOnce(olderInitial.promise)
+      .mockReturnValueOnce(newerPoll.promise);
+
+    render(React.createElement(CalendarBentoCard, { tool: mockTool, data: null }));
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    expect(getCalendarEvents).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      newerPoll.resolve({
+        status: "ready",
+        events: [makeEvent("2", "New event", "2026-08-21T10:00:00-04:00")],
+      });
+      await newerPoll.promise;
+    });
+    expect(screen.getByText("New event")).toBeTruthy();
+
+    await act(async () => {
+      olderInitial.resolve({
+        status: "ready",
+        events: [makeEvent("1", "Old event", "2026-08-21T09:00:00-04:00")],
+      });
+      await olderInitial.promise;
+    });
+
     expect(screen.getByText("New event")).toBeTruthy();
     expect(screen.queryByText("Old event")).toBeNull();
   });

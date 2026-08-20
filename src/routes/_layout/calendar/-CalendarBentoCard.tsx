@@ -13,7 +13,7 @@ import {
   groupEventsByDay,
 } from "./-calendarUtils";
 
-type BentoStatus = "loading" | "ready" | "auth_expired";
+type BentoStatus = "loading" | "ready" | "auth_expired" | "error";
 
 const REFRESH_INTERVAL_MS = 10_000;
 
@@ -50,7 +50,7 @@ export function CalendarBentoCard({
       setStatus("ready");
     } catch {
       if (mountedRef.current && requestId === loadRequestRef.current) {
-        setStatus("auth_expired");
+        setStatus((current) => (current === "loading" ? "error" : current));
       }
     }
   }, []);
@@ -65,7 +65,7 @@ export function CalendarBentoCard({
     };
   }, [load]);
 
-  usePollingRefresh(load, REFRESH_INTERVAL_MS);
+  usePollingRefresh(load, REFRESH_INTERVAL_MS, { skipWhilePending: true });
 
   return (
     <Link
@@ -90,6 +90,10 @@ export function CalendarBentoCard({
           <p className="text-xs text-muted-foreground">
             Calendar disconnected — connect in Calendar.
           </p>
+        )}
+
+        {status === "error" && (
+          <p className="text-xs text-muted-foreground">Could not load Calendar.</p>
         )}
 
         {status === "ready" && events.length === 0 && (

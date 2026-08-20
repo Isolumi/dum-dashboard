@@ -54,7 +54,11 @@ function CalendarPage() {
       } catch (err: unknown) {
         if (requestId !== loadRequestRef.current) return;
         const e = err as { type?: string };
-        setStatus(e?.type === "auth_expired" ? "auth_expired" : "error");
+        if (e?.type === "auth_expired") {
+          setStatus("auth_expired");
+        } else {
+          setStatus((current) => (showLoading || current === "loading" ? "error" : current));
+        }
       }
     },
     [currentMonth],
@@ -79,7 +83,9 @@ function CalendarPage() {
     };
   }, [load]);
 
-  usePollingRefresh(() => load({ showLoading: false }), REFRESH_INTERVAL_MS);
+  usePollingRefresh(() => load({ showLoading: false }), REFRESH_INTERVAL_MS, {
+    skipWhilePending: true,
+  });
 
   const eventDates = useMemo(
     () =>
