@@ -136,7 +136,7 @@ describe("ExpenseFormDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add entry" }));
 
-    expect(await screen.findByText("Enter a Toronto purchase date and time.")).toBeTruthy();
+    expect(await screen.findByText("Enter a valid Toronto date and time.")).toBeTruthy();
     expect(onSave).not.toHaveBeenCalled();
   });
 

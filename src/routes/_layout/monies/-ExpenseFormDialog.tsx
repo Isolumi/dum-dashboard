@@ -146,7 +146,7 @@ export function ExpenseFormDialog({
     if (!normalizedOwedAmount) nextErrors.owedAmount = "Enter the amount owed.";
     if (!users.some((user) => user.id === payerId)) nextErrors.payerId = "Select who is owed.";
     if (!normalizedPurchaseDate) {
-      nextErrors.purchaseDate = "Enter a Toronto purchase date and time.";
+      nextErrors.purchaseDate = "Enter a valid Toronto date and time.";
     }
 
     setErrors(nextErrors);
