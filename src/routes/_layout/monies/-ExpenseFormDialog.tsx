@@ -12,7 +12,7 @@ import type {
 
 const TORONTO_TIME_ZONE = "America/Toronto";
 const MONEY_PATTERN = /^\d{1,10}(?:\.\d{0,2})?$/;
-const SAVE_ERROR = "Could not save expense. Check your connection and try again.";
+const SAVE_ERROR = "Could not save entry. Check your connection and try again.";
 
 type ExpenseSaveInput = CreateMoniesExpenseInput | UpdateMoniesExpenseInput;
 
@@ -26,7 +26,6 @@ interface ExpenseFormDialogProps {
 
 interface FormErrors {
   item?: string;
-  amount?: string;
   owedAmount?: string;
   payerId?: string;
   purchaseDate?: string;
@@ -100,11 +99,6 @@ function normalizeMoney(value: string): string | null {
   return normalized === "0.00" ? null : normalized;
 }
 
-function moneyToCents(value: string): bigint {
-  const [whole = "0", fraction = "00"] = value.split(".");
-  return BigInt(whole) * 100n + BigInt(fraction);
-}
-
 function initialDateValue(expense: MoniesExpense | null): string {
   return toTorontoInputValue(expense?.purchaseDate ?? new Date().toISOString());
 }
@@ -117,7 +111,6 @@ export function ExpenseFormDialog({
   onSave,
 }: ExpenseFormDialogProps) {
   const [item, setItem] = useState("");
-  const [amount, setAmount] = useState("");
   const [owedAmount, setOwedAmount] = useState("");
   const [payerId, setPayerId] = useState("");
   const [purchaseDate, setPurchaseDate] = useState("");
@@ -130,7 +123,6 @@ export function ExpenseFormDialog({
   useEffect(() => {
     if (!open) return;
     setItem(expense?.item ?? "");
-    setAmount(expense?.amount ?? "");
     setOwedAmount(expense?.owedAmount ?? "");
     setPayerId(expense?.payer.id ?? users[0]?.id ?? "");
     setPurchaseDate(initialDateValue(expense));
@@ -146,22 +138,13 @@ export function ExpenseFormDialog({
 
     const nextErrors: FormErrors = {};
     const normalizedItem = item.trim();
-    const normalizedAmount = normalizeMoney(amount);
     const normalizedOwedAmount = normalizeMoney(owedAmount);
     const normalizedPurchaseDate = fromTorontoInputValue(purchaseDate);
 
     if (!normalizedItem) nextErrors.item = "Enter an item.";
     else if (normalizedItem.length > 200) nextErrors.item = "Use 200 characters or fewer.";
-    if (!normalizedAmount) nextErrors.amount = "Enter a valid full amount greater than zero.";
     if (!normalizedOwedAmount) nextErrors.owedAmount = "Enter the amount owed.";
-    if (
-      normalizedAmount &&
-      normalizedOwedAmount &&
-      moneyToCents(normalizedOwedAmount) > moneyToCents(normalizedAmount)
-    ) {
-      nextErrors.owedAmount = "Owed amount cannot exceed the full amount.";
-    }
-    if (!users.some((user) => user.id === payerId)) nextErrors.payerId = "Select a payer.";
+    if (!users.some((user) => user.id === payerId)) nextErrors.payerId = "Select who is owed.";
     if (!normalizedPurchaseDate) {
       nextErrors.purchaseDate = "Enter a Toronto purchase date and time.";
     }
@@ -172,7 +155,6 @@ export function ExpenseFormDialog({
 
     const sharedInput = {
       item: normalizedItem,
-      amount: normalizedAmount!,
       owedAmount: normalizedOwedAmount!,
       payerId,
       purchaseDate: normalizedPurchaseDate!,
@@ -199,11 +181,11 @@ export function ExpenseFormDialog({
     else setSubmitError(SAVE_ERROR);
   }
 
-  const title = expense ? "Edit expense" : "Add expense";
+  const title = expense ? "Edit entry" : "Add entry";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" closeLabel="Close expense form" closeButtonSize="touch">
+      <DialogContent className="max-w-md" closeLabel="Close entry form" closeButtonSize="touch">
         <div className="border-b border-border px-5 py-4 pr-12">
           <DialogTitle>{title}</DialogTitle>
           <p className="mt-1 text-sm text-muted-foreground">Amounts are in Canadian dollars.</p>
@@ -222,7 +204,7 @@ export function ExpenseFormDialog({
 
           <div className="space-y-1.5">
             <label htmlFor="expense-item" className="text-sm font-medium">
-              Item
+              Note
             </label>
             <Input
               id="expense-item"
@@ -241,53 +223,30 @@ export function ExpenseFormDialog({
             ) : null}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label htmlFor="expense-amount" className="text-sm font-medium">
-                Full amount (CAD)
-              </label>
-              <Input
-                id="expense-amount"
-                className="h-11 tabular-nums"
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
-                inputMode="decimal"
-                autoComplete="off"
-                aria-invalid={Boolean(errors.amount)}
-                aria-describedby={errors.amount ? "expense-amount-error" : undefined}
-              />
-              {errors.amount ? (
-                <p id="expense-amount-error" className="text-sm text-destructive">
-                  {errors.amount}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="space-y-1.5">
-              <label htmlFor="expense-owed" className="text-sm font-medium">
-                Amount owed (CAD)
-              </label>
-              <Input
-                id="expense-owed"
-                className="h-11 tabular-nums"
-                value={owedAmount}
-                onChange={(event) => setOwedAmount(event.target.value)}
-                inputMode="decimal"
-                autoComplete="off"
-                aria-invalid={Boolean(errors.owedAmount)}
-                aria-describedby={errors.owedAmount ? "expense-owed-error" : undefined}
-              />
-              {errors.owedAmount ? (
-                <p id="expense-owed-error" className="text-sm text-destructive">
-                  {errors.owedAmount}
-                </p>
-              ) : null}
-            </div>
+          <div className="space-y-1.5">
+            <label htmlFor="expense-owed" className="text-sm font-medium">
+              Amount owed (CAD)
+            </label>
+            <Input
+              id="expense-owed"
+              className="h-11 tabular-nums"
+              value={owedAmount}
+              onChange={(event) => setOwedAmount(event.target.value)}
+              inputMode="decimal"
+              autoComplete="off"
+              aria-invalid={Boolean(errors.owedAmount)}
+              aria-describedby={errors.owedAmount ? "expense-owed-error" : undefined}
+            />
+            {errors.owedAmount ? (
+              <p id="expense-owed-error" className="text-sm text-destructive">
+                {errors.owedAmount}
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1.5">
             <label htmlFor="expense-payer" className="text-sm font-medium">
-              Payer
+              Owed to
             </label>
             <select
               id="expense-payer"
@@ -312,7 +271,7 @@ export function ExpenseFormDialog({
 
           <div className="space-y-1.5">
             <label htmlFor="expense-purchase-date" className="text-sm font-medium">
-              Purchase date and time (Toronto)
+              Date and time (Toronto)
             </label>
             <Input
               id="expense-purchase-date"
@@ -341,7 +300,7 @@ export function ExpenseFormDialog({
               Cancel
             </Button>
             <Button type="submit" className="min-h-11 px-4" disabled={saving}>
-              {saving ? "Saving…" : expense ? "Save changes" : "Add expense"}
+              {saving ? "Saving…" : expense ? "Save changes" : "Add entry"}
             </Button>
           </div>
         </form>

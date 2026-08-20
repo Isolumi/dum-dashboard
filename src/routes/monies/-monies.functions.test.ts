@@ -30,6 +30,7 @@ const {
   deleteMoniesExpense,
   getDeletedMoniesExpenses,
   getMoniesExpenses,
+  getMoniesSummary,
   getMoniesUsers,
   restoreMoniesExpense,
   updateMoniesExpense,
@@ -55,9 +56,9 @@ const expense = {
   deletedAt: null,
 };
 const expensePage = { items: [expense], page: 1, pageSize: 50, total: 1 };
+const summary = { amount: "20.00", debtor, creditor: payer };
 const createInput = {
   item: "Dinner",
-  amount: "42.50",
   owedAmount: "20.00",
   payerId: PAYER_ID,
   purchaseDate: "2026-08-15T20:00:00.000-04:00",
@@ -80,6 +81,7 @@ beforeEach(() => {
     vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input));
       if (url.pathname === "/api/users") return jsonResponse([payer, debtor]);
+      if (url.pathname === "/api/summary") return jsonResponse(summary);
       if (url.pathname === "/api/expenses" && url.searchParams.has("page")) {
         return jsonResponse(expensePage);
       }
@@ -129,6 +131,15 @@ describe("Monies read server functions", () => {
     expect(getOwnerUser).toHaveBeenCalledTimes(2);
   });
 
+  it("owner-gates the no-store summary before private access", async () => {
+    await expect(getMoniesSummary()).resolves.toEqual(summary);
+
+    expect(noStore).toHaveBeenCalledOnce();
+    expect(getOwnerUser).toHaveBeenCalledOnce();
+    expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toBe("http://localhost:3333/api/summary");
+    expect(vi.mocked(fetch).mock.calls[0]?.[1]).toMatchObject({ method: "GET", cache: "no-store" });
+  });
+
   it("rejects unsupported list input before private access", async () => {
     await expect(
       Promise.resolve().then(() =>
@@ -138,14 +149,15 @@ describe("Monies read server functions", () => {
       ),
     ).rejects.toThrow();
 
+    expect(getOwnerUser).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
 });
 
 describe("Monies mutation server functions", () => {
-  it("returns a failed Zod result for malformed decimal text", () => {
+  it("returns a failed Zod result for malformed owed decimal text", () => {
     const parse = () =>
-      CreateMoniesExpenseInputSchema.safeParse({ ...createInput, amount: "invalid" });
+      CreateMoniesExpenseInputSchema.safeParse({ ...createInput, owedAmount: "invalid" });
 
     expect(parse).not.toThrow();
     expect(parse().success).toBe(false);
@@ -217,9 +229,9 @@ describe("Monies mutation server functions", () => {
   });
 
   it.each([
-    ["numeric money", { ...createInput, amount: 42.5 }],
+    ["legacy amount field", { ...createInput, amount: "42.50" }],
+    ["numeric owed amount", { ...createInput, owedAmount: 42.5 }],
     ["zero owed amount", { ...createInput, owedAmount: "0.00" }],
-    ["owed amount above total", { ...createInput, owedAmount: "42.51" }],
     ["timestamp without offset", { ...createInput, purchaseDate: "2026-08-16T00:00:00.000Z" }],
     ["unsupported browser field", { ...createInput, moniesApiToken: "browser-secret" }],
   ])("rejects invalid create input with %s before private access", async (_name, data) => {
@@ -230,13 +242,16 @@ describe("Monies mutation server functions", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("requires amount and owed amount together for updates", async () => {
+  it("rejects the legacy amount field even with another valid update field", async () => {
     await expect(
       Promise.resolve().then(() =>
-        updateMoniesExpense({ data: { id: EXPENSE_ID, amount: "50.00" } } as never),
+        updateMoniesExpense({
+          data: { id: EXPENSE_ID, item: "Updated dinner", amount: "50.00" },
+        } as never),
       ),
     ).rejects.toThrow();
 
+    expect(getOwnerUser).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
 });

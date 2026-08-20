@@ -33,7 +33,7 @@ afterEach(() => {
 });
 
 describe("ExpenseList", () => {
-  it("shows the same expense facts in the desktop row and mobile card", () => {
+  it("shows the same owed-only entry facts in the desktop row and mobile card", () => {
     render(
       <ExpenseList
         expenses={[makeExpense()]}
@@ -48,13 +48,32 @@ describe("ExpenseList", () => {
     for (const testId of ["expense-desktop-list", "expense-mobile-list"]) {
       const layout = within(screen.getByTestId(testId));
       expect(layout.getByText(/Dinner with a long item description/)).toBeTruthy();
-      expect(layout.getByText("Lumi")).toBeTruthy();
-      expect(layout.getByText("Dum")).toBeTruthy();
-      expect(layout.getByText("$42.50")).toBeTruthy();
+      expect(layout.getByText("Dum owes Lumi")).toBeTruthy();
       expect(layout.getByText("$20.00")).toBeTruthy();
+      expect(layout.queryByText("$42.50")).toBeNull();
       expect(layout.getByText(/Aug 15, 2026/)).toBeTruthy();
       expect(layout.getByText(/8:00/)).toBeTruthy();
     }
+  });
+
+  it("uses owed-only desktop headings", () => {
+    render(
+      <ExpenseList
+        expenses={[makeExpense()]}
+        view="active"
+        pendingIds={new Set()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn(async () => true)}
+        onRestore={vi.fn(async () => true)}
+      />,
+    );
+
+    const desktop = within(screen.getByTestId("expense-desktop-list"));
+    expect(desktop.getByRole("columnheader", { name: "Note" })).toBeTruthy();
+    expect(desktop.getByRole("columnheader", { name: "Who owes who" })).toBeTruthy();
+    expect(desktop.getByRole("columnheader", { name: "Amount" })).toBeTruthy();
+    expect(desktop.getByRole("columnheader", { name: "Date" })).toBeTruthy();
+    expect(desktop.queryByRole("columnheader", { name: "Total" })).toBeNull();
   });
 
   it("reserves enough desktop width for two 44px action controls", () => {
@@ -99,13 +118,13 @@ describe("ExpenseList", () => {
     );
 
     expect(onDelete).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog", { name: "Delete expense?" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Delete entry?" })).toBeTruthy();
     expect(screen.getByText("Move “Dinner” to Trash?")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Move to Trash" }));
 
     await waitFor(() => expect(onDelete).toHaveBeenCalledOnce());
     expect(onDelete).toHaveBeenCalledWith(expense.id);
-    expect(screen.queryByRole("dialog", { name: "Delete expense?" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Delete entry?" })).toBeNull();
   });
 
   it("uses a 44px close target for delete confirmation", () => {
@@ -125,9 +144,9 @@ describe("ExpenseList", () => {
       }),
     );
 
-    expect(screen.getByRole("button", { name: "Close delete confirmation" }).className).toContain(
-      "size-11",
-    );
+    expect(
+      screen.getByRole("button", { name: "Close entry delete confirmation" }).className,
+    ).toContain("size-11");
   });
 
   it("shows deleted time and Restore in Trash", () => {
@@ -153,7 +172,7 @@ describe("ExpenseList", () => {
     expect(desktop.queryByRole("button", { name: /edit/i })).toBeNull();
   });
 
-  it("uses em dashes for a legacy expense without debtor or owed data", () => {
+  it("uses em dashes for a legacy entry without debtor or owed data", () => {
     render(
       <ExpenseList
         expenses={[makeExpense({ debtor: null, owedAmount: null })]}
@@ -168,7 +187,8 @@ describe("ExpenseList", () => {
     const row = within(screen.getByTestId("expense-desktop-list")).getByRole("row", {
       name: /Dinner with a long item description/i,
     });
-    expect(within(row).getAllByText("—")).toHaveLength(2);
+    expect(within(row).getByText("— owes Lumi")).toBeTruthy();
+    expect(within(row).getAllByText("—")).toHaveLength(1);
     expect(
       within(row).getByRole("button", { name: /Edit Dinner with a long item description/i }),
     ).toBeTruthy();

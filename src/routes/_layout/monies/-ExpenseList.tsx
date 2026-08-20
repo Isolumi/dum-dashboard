@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { Pencil, RotateCcw, Trash2 } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "#/components/ui/dialog";
@@ -40,10 +40,8 @@ function formatTorontoDate(value: string): string {
 
 function Relationship({ expense }: { expense: MoniesExpense }) {
   return (
-    <span className="inline-flex min-w-0 items-center gap-2">
-      <span className="truncate font-medium">{expense.payer.name}</span>
-      <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <span className="truncate">{expense.debtor?.name ?? "—"}</span>
+    <span className="block min-w-0 break-words">
+      {expense.debtor?.name ?? "—"} owes {expense.payer.name}
     </span>
   );
 }
@@ -64,20 +62,17 @@ function DesktopExpenseList({
       <table className="w-full table-fixed text-left text-sm">
         <thead className="border-b border-border bg-muted/40 text-xs text-muted-foreground">
           <tr>
-            <th scope="col" className="w-[28%] px-4 py-3 font-medium">
-              Item
+            <th scope="col" className="w-[30%] px-4 py-3 font-medium">
+              Note
             </th>
-            <th scope="col" className="w-[22%] px-3 py-3 font-medium">
-              Payer → debtor
+            <th scope="col" className="w-[24%] px-3 py-3 font-medium">
+              Who owes who
             </th>
-            <th scope="col" className="w-[11%] px-3 py-3 text-right font-medium">
-              Total
+            <th scope="col" className="w-[14%] px-3 py-3 text-right font-medium">
+              Amount
             </th>
-            <th scope="col" className="w-[11%] px-3 py-3 text-right font-medium">
-              Owed
-            </th>
-            <th scope="col" className="w-[18%] px-3 py-3 font-medium">
-              {view === "trash" ? "Deleted" : "Purchased"}
+            <th scope="col" className="w-[20%] px-3 py-3 font-medium">
+              Date
             </th>
             <th scope="col" className="w-32 px-3 py-3 text-right font-medium">
               Actions
@@ -94,9 +89,6 @@ function DesktopExpenseList({
                 </td>
                 <td className="min-w-0 px-3 py-3">
                   <Relationship expense={expense} />
-                </td>
-                <td className="px-3 py-3 text-right font-medium whitespace-nowrap tabular-nums">
-                  {formatCurrency(expense.amount)}
                 </td>
                 <td className="px-3 py-3 text-right whitespace-nowrap tabular-nums">
                   {formatCurrency(expense.owedAmount)}
@@ -221,21 +213,13 @@ function MobileExpenseList({
 
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <div>
-                <dt className="text-xs text-muted-foreground">Total</dt>
-                <dd className="mt-0.5 font-medium whitespace-nowrap tabular-nums">
-                  {formatCurrency(expense.amount)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Owed</dt>
+                <dt className="text-xs text-muted-foreground">Amount</dt>
                 <dd className="mt-0.5 whitespace-nowrap tabular-nums">
                   {formatCurrency(expense.owedAmount)}
                 </dd>
               </div>
               <div className="col-span-2">
-                <dt className="text-xs text-muted-foreground">
-                  {view === "trash" ? "Deleted" : "Purchased"}
-                </dt>
+                <dt className="text-xs text-muted-foreground">Date</dt>
                 <dd className="mt-0.5 text-muted-foreground">
                   {view === "trash" && expense.deletedAt
                     ? `Deleted ${formatTorontoDate(expense.deletedAt)}`
@@ -264,11 +248,11 @@ export function ExpenseList({
   if (expenses.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center">
-        <p className="font-medium">{view === "active" ? "No active expenses" : "Trash is empty"}</p>
+        <p className="font-medium">{view === "active" ? "No active entries" : "Trash is empty"}</p>
         <p className="mt-1 text-sm text-muted-foreground">
           {view === "active"
-            ? "Add an expense to start this ledger."
-            : "Deleted expenses will stay here for up to 30 days."}
+            ? "Add an entry to start tracking amounts owed."
+            : "Deleted entries will stay here for up to 30 days."}
         </p>
       </div>
     );
@@ -305,9 +289,9 @@ export function ExpenseList({
           if (!open && !deleting) setDeleteTarget(null);
         }}
       >
-        <DialogContent closeLabel="Close delete confirmation" closeButtonSize="touch">
+        <DialogContent closeLabel="Close entry delete confirmation" closeButtonSize="touch">
           <div className="space-y-2 px-5 py-5 pr-12">
-            <DialogTitle>Delete expense?</DialogTitle>
+            <DialogTitle>Delete entry?</DialogTitle>
             <p className="break-words text-sm text-muted-foreground">
               Move “{deleteTarget?.item}” to Trash?
             </p>

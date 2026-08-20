@@ -5,6 +5,7 @@ import type {
   CreateMoniesExpenseInput,
   MoniesExpense,
   MoniesExpensePage,
+  MoniesSummary,
   MoniesUser,
   UpdateMoniesExpenseFields,
 } from "#/routes/_layout/monies/-monies.types";
@@ -20,6 +21,7 @@ const PositiveMoneySchema = z
   .string()
   .regex(MONEY_PATTERN)
   .refine((value) => value !== "0.00", "must be greater than zero");
+const NonNegativeMoneySchema = z.string().regex(MONEY_PATTERN);
 const TimestampSchema = z.string().datetime({ offset: true });
 const PurchaseDateSchema = TimestampSchema.refine(
   (value) => /[+-]\d{2}:\d{2}$/.test(value),
@@ -58,6 +60,23 @@ const MoniesExpensePageSchema: z.ZodType<MoniesExpensePage> = z
   .strict();
 
 const MoniesUserListSchema = z.array(MoniesUserSchema);
+
+const MoniesSummarySchema: z.ZodType<MoniesSummary> = z
+  .object({
+    amount: NonNegativeMoneySchema,
+    debtor: MoniesUserSchema.nullable(),
+    creditor: MoniesUserSchema.nullable(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const isSettled = value.amount === "0.00";
+    if (isSettled && (value.debtor !== null || value.creditor !== null)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "settled summary must omit users" });
+    }
+    if (!isSettled && (value.debtor === null || value.creditor === null)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "owed summary must include users" });
+    }
+  });
 
 export class MoniesApiError extends Error {
   constructor() {
@@ -134,6 +153,11 @@ async function requestMonies<T>({
 export const listMoniesUsers = createServerOnlyFn(
   async (): Promise<MoniesUser[]> =>
     requestMonies({ method: "GET", path: "/api/users", schema: MoniesUserListSchema }),
+);
+
+export const getMoniesSummary = createServerOnlyFn(
+  async (): Promise<MoniesSummary> =>
+    requestMonies({ method: "GET", path: "/api/summary", schema: MoniesSummarySchema }),
 );
 
 export const listMoniesExpenses = createServerOnlyFn(

@@ -6,6 +6,7 @@ import {
   deleteMoniesExpense,
   getDeletedMoniesExpenses,
   getMoniesExpenses,
+  getMoniesSummary,
   getMoniesUsers,
   restoreMoniesExpense,
   updateMoniesExpense,
@@ -13,6 +14,7 @@ import {
 import type {
   CreateMoniesExpenseInput,
   MoniesExpense,
+  MoniesSummary,
   MoniesUser,
   UpdateMoniesExpenseInput,
 } from "./-monies.types";
@@ -20,10 +22,10 @@ import type {
 const PAGE_SIZE = 20;
 const POLL_INTERVAL_MS = 10_000;
 const MUTATION_ERROR_DURATION_MS = 6_000;
-const LOAD_ERROR = "Could not load expenses. Check your connection and try again.";
-const SAVE_ERROR = "Could not save expense. Check your connection and try again.";
-const DELETE_ERROR = "Could not move expense to Trash. Check your connection and try again.";
-const RESTORE_ERROR = "Could not restore expense. Check your connection and try again.";
+const LOAD_ERROR = "Could not load entries. Check your connection and try again.";
+const SAVE_ERROR = "Could not save entry. Check your connection and try again.";
+const DELETE_ERROR = "Could not move entry to Trash. Check your connection and try again.";
+const RESTORE_ERROR = "Could not restore entry. Check your connection and try again.";
 
 export type MoniesView = "active" | "trash";
 
@@ -49,6 +51,7 @@ function isSameContext(left: MoniesListContext, right: MoniesListContext): boole
 export interface MoniesController {
   users: MoniesUser[];
   expenses: MoniesExpense[];
+  summary: MoniesSummary | null;
   pendingIds: ReadonlySet<string>;
   status: "loading" | "ready" | "error";
   loadError: string | null;
@@ -70,6 +73,7 @@ export interface MoniesController {
 
 export function useMoniesController(): MoniesController {
   const [users, setUsers] = useState<MoniesUser[]>([]);
+  const [summary, setSummary] = useState<MoniesSummary | null>(null);
   const [listBuffer, setListBuffer] = useState<MoniesListBuffer>({
     context: null,
     expenses: [],
@@ -181,7 +185,11 @@ export function useMoniesController(): MoniesController {
           context.view === "active"
             ? getMoniesExpenses({ data: { page: context.page, pageSize: PAGE_SIZE } })
             : getDeletedMoniesExpenses({ data: { page: context.page, pageSize: PAGE_SIZE } });
-        const [freshUsers, freshPage] = await Promise.all([usersRequest, expensesRequest]);
+        const [freshUsers, freshPage, freshSummary] = await Promise.all([
+          usersRequest,
+          expensesRequest,
+          getMoniesSummary(),
+        ]);
         if (requestId !== loadRequestRef.current) return;
         if (!isSameContext(selectedContextRef.current, context)) return;
 
@@ -199,6 +207,7 @@ export function useMoniesController(): MoniesController {
           usersRef.current = freshUsers;
           usersLoadedRef.current = true;
           setUsers(freshUsers);
+          setSummary(freshSummary);
           setLoadedBuffer(context, freshPage.items, freshPage.total);
           setLoadError(null);
           setStatus("ready");
@@ -423,6 +432,7 @@ export function useMoniesController(): MoniesController {
 
   return {
     users,
+    summary,
     expenses,
     pendingIds,
     status,

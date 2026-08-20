@@ -12,24 +12,25 @@ import type {
 } from "./-monies.types";
 import { ExpenseFormDialog } from "./-ExpenseFormDialog";
 import { ExpenseList } from "./-ExpenseList";
+import { OwedSummary } from "./-OwedSummary";
 import { useMoniesController } from "./-useMoniesController";
 
 export const Route = createFileRoute("/_layout/monies/")({
   component: MoniesPage,
 });
 
-function LoadingExpenses() {
+function LoadingEntries() {
   return (
-    <div className="space-y-2" aria-label="Loading expenses" aria-live="polite">
+    <div className="space-y-2" aria-label="Loading entries" aria-live="polite">
       <Skeleton className="h-11 w-full motion-reduce:animate-none" />
       <Skeleton className="h-16 w-full motion-reduce:animate-none" />
       <Skeleton className="h-16 w-full motion-reduce:animate-none" />
-      <p className="sr-only">Loading expenses…</p>
+      <p className="sr-only">Loading entries…</p>
     </div>
   );
 }
 
-function MoniesPage() {
+export function MoniesPage() {
   const controller = useMoniesController();
   const [formOpen, setFormOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<MoniesExpense | null>(null);
@@ -55,16 +56,20 @@ function MoniesPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Monies</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Private two-person expense ledger.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Private two-person owed-amount tracker.
+          </p>
         </div>
         <Button type="button" className="min-h-11 px-3" onClick={openAddForm}>
           <Plus data-icon="inline-start" />
-          Add expense
+          Add entry
         </Button>
       </div>
 
+      {controller.summary ? <OwedSummary summary={controller.summary} className="mt-4" /> : null}
+
       <div className="mt-6 flex items-center justify-between gap-4 border-b border-border">
-        <nav className="flex" aria-label="Expense views">
+        <nav className="flex" aria-label="Entry views">
           <Button
             type="button"
             variant="ghost"
@@ -90,16 +95,16 @@ function MoniesPage() {
       <div className="mt-4 space-y-4">
         {controller.mutationError ? (
           <Alert variant="destructive" aria-live="assertive">
-            <AlertTitle>Expense action failed</AlertTitle>
+            <AlertTitle>Entry action failed</AlertTitle>
             <AlertDescription>{controller.mutationError}</AlertDescription>
           </Alert>
         ) : null}
 
-        {controller.status === "loading" ? <LoadingExpenses /> : null}
+        {controller.status === "loading" ? <LoadingEntries /> : null}
 
         {controller.status === "error" ? (
           <Alert variant="destructive">
-            <AlertTitle>Could not load expenses</AlertTitle>
+            <AlertTitle>Could not load entries</AlertTitle>
             <AlertDescription>
               <p>{controller.loadError}</p>
               <Button
@@ -126,14 +131,14 @@ function MoniesPage() {
         ) : null}
 
         {controller.status === "ready" && controller.totalPages > 1 ? (
-          <nav className="flex items-center justify-end gap-3" aria-label="Expense pages">
+          <nav className="flex items-center justify-end gap-3" aria-label="Entry pages">
             <Button
               type="button"
               variant="outline"
               className="min-h-11"
               onClick={controller.previousPage}
               disabled={controller.page <= 1}
-              aria-label="Previous expense page"
+              aria-label="Previous entry page"
             >
               Previous
             </Button>
@@ -146,7 +151,7 @@ function MoniesPage() {
               className="min-h-11"
               onClick={controller.nextPage}
               disabled={controller.page >= controller.totalPages}
-              aria-label="Next expense page"
+              aria-label="Next entry page"
             >
               Next
             </Button>

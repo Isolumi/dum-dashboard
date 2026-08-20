@@ -52,19 +52,16 @@ function renderDialog({
 }
 
 function fillAddForm() {
-  fireEvent.change(screen.getByRole("textbox", { name: "Item" }), {
+  fireEvent.change(screen.getByRole("textbox", { name: "Note" }), {
     target: { value: "Groceries" },
-  });
-  fireEvent.change(screen.getByRole("textbox", { name: "Full amount (CAD)" }), {
-    target: { value: "30.5" },
   });
   fireEvent.change(screen.getByRole("textbox", { name: "Amount owed (CAD)" }), {
     target: { value: "15" },
   });
-  fireEvent.change(screen.getByRole("combobox", { name: "Payer" }), {
+  fireEvent.change(screen.getByRole("combobox", { name: "Owed to" }), {
     target: { value: users[1]!.id },
   });
-  fireEvent.change(screen.getByLabelText("Purchase date and time (Toronto)"), {
+  fireEvent.change(screen.getByLabelText("Date and time (Toronto)"), {
     target: { value: "2026-08-15T18:30" },
   });
 }
@@ -75,15 +72,16 @@ afterEach(() => {
 });
 
 describe("ExpenseFormDialog", () => {
-  it("offers both registered people as payer choices", () => {
+  it("offers both registered people as owed-to choices", () => {
     renderDialog();
 
-    const payer = screen.getByRole("combobox", { name: "Payer" });
-    expect(within(payer).getByRole("option", { name: "Lumi" })).toBeTruthy();
-    expect(within(payer).getByRole("option", { name: "Dum" })).toBeTruthy();
+    const owedTo = screen.getByRole("combobox", { name: "Owed to" });
+    expect(within(owedTo).getByRole("option", { name: "Lumi" })).toBeTruthy();
+    expect(within(owedTo).getByRole("option", { name: "Dum" })).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Full amount (CAD)" })).toBeNull();
   });
 
-  it("normalizes both amounts and creates one idempotency key for an add", async () => {
+  it("normalizes the owed amount and creates one idempotency key for an add", async () => {
     const onSave = vi.fn(async () => true);
     const onOpenChange = vi.fn();
     const randomUUID = vi
@@ -92,13 +90,12 @@ describe("ExpenseFormDialog", () => {
     renderDialog({ onSave, onOpenChange });
     fillAddForm();
 
-    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add entry" }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
     expect(randomUUID).toHaveBeenCalledOnce();
     expect(onSave).toHaveBeenCalledWith({
       item: "Groceries",
-      amount: "30.50",
       owedAmount: "15.00",
       payerId: users[1]!.id,
       purchaseDate: "2026-08-15T18:30:00-04:00",
@@ -115,9 +112,9 @@ describe("ExpenseFormDialog", () => {
     renderDialog({ onSave });
     fillAddForm();
 
-    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add entry" }));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add entry" }));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
 
     expect(randomUUID).toHaveBeenCalledOnce();
@@ -133,11 +130,11 @@ describe("ExpenseFormDialog", () => {
     const onSave = vi.fn(async () => true);
     renderDialog({ onSave });
     fillAddForm();
-    fireEvent.change(screen.getByLabelText("Purchase date and time (Toronto)"), {
+    fireEvent.change(screen.getByLabelText("Date and time (Toronto)"), {
       target: { value: "2026-03-08T02:30" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add entry" }));
 
     expect(await screen.findByText("Enter a Toronto purchase date and time.")).toBeTruthy();
     expect(onSave).not.toHaveBeenCalled();
@@ -147,11 +144,11 @@ describe("ExpenseFormDialog", () => {
     const onSave = vi.fn(async () => true);
     renderDialog({ onSave });
     fillAddForm();
-    fireEvent.change(screen.getByLabelText("Purchase date and time (Toronto)"), {
+    fireEvent.change(screen.getByLabelText("Date and time (Toronto)"), {
       target: { value: "2026-11-01T01:30" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add entry" }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
     expect(onSave).toHaveBeenCalledWith(
@@ -162,30 +159,14 @@ describe("ExpenseFormDialog", () => {
   it("uses a 44px close target for the expense dialog", () => {
     renderDialog();
 
-    expect(screen.getByRole("button", { name: "Close expense form" }).className).toContain(
-      "size-11",
-    );
-  });
-
-  it("blocks submit when the owed amount exceeds the full amount", async () => {
-    const onSave = vi.fn(async () => true);
-    renderDialog({ onSave });
-    fillAddForm();
-    fireEvent.change(screen.getByRole("textbox", { name: "Amount owed (CAD)" }), {
-      target: { value: "31" },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
-
-    expect(await screen.findByText("Owed amount cannot exceed the full amount.")).toBeTruthy();
-    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Close entry form" }).className).toContain("size-11");
   });
 
   it("keeps the record ID and does not create an idempotency key for an edit", async () => {
     const onSave = vi.fn(async () => true);
     const randomUUID = vi.spyOn(globalThis.crypto, "randomUUID");
     renderDialog({ editing: expense, onSave });
-    fireEvent.change(screen.getByRole("textbox", { name: "Item" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Note" }), {
       target: { value: "Birthday dinner" },
     });
 
@@ -196,7 +177,6 @@ describe("ExpenseFormDialog", () => {
     expect(onSave).toHaveBeenCalledWith({
       id: expense.id,
       item: "Birthday dinner",
-      amount: "42.50",
       owedAmount: "20.00",
       payerId: users[0]!.id,
       purchaseDate: "2026-08-15T20:00:00-04:00",
@@ -209,18 +189,14 @@ describe("ExpenseFormDialog", () => {
     renderDialog({ onSave, onOpenChange });
     fillAddForm();
 
-    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add entry" }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
-    expect(screen.getByRole("dialog", { name: "Add expense" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Add entry" })).toBeTruthy();
     expect(
-      screen.getByText("Could not save expense. Check your connection and try again."),
+      screen.getByText("Could not save entry. Check your connection and try again."),
     ).toBeTruthy();
-    expect(screen.getByRole("textbox", { name: "Item" })).toHaveProperty("value", "Groceries");
-    expect(screen.getByRole("textbox", { name: "Full amount (CAD)" })).toHaveProperty(
-      "value",
-      "30.5",
-    );
+    expect(screen.getByRole("textbox", { name: "Note" })).toHaveProperty("value", "Groceries");
     expect(screen.getByRole("textbox", { name: "Amount owed (CAD)" })).toHaveProperty(
       "value",
       "15",
