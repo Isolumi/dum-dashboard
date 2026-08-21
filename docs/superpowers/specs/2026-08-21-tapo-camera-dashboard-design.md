@@ -170,11 +170,7 @@ The player has four user-visible states:
 
 The player retries after a failure with bounded backoff. It returns to Live without a full dashboard refresh when the camera or network recovers. Repeated retries must not create overlapping RTSP or WebSocket connections.
 
-## Security headers
-
-The existing `Permissions-Policy` continues to disable browser camera and microphone capture. This feature plays a remote stream and does not request device camera or microphone permission.
-
-The Content Security Policy must allow the same-origin HTTPS and WebSocket requests required by the player. It must not add a third-party script origin or a broad wildcard.
+The existing `Permissions-Policy` continues to disable browser camera and microphone capture. This feature plays a remote stream and does not request device camera or microphone permission. The camera change does not modify browser security headers.
 
 ## Verification
 
@@ -204,4 +200,3 @@ The Content Security Policy must allow the same-origin HTTPS and WebSocket reque
 ## Rollback
 
 Rollback is the normal GitOps revert of the camera feature commit. Argo CD then removes the go2rtc workload, Service, ingress path, ConfigMap, Infisical target, and NetworkPolicies. The Infisical source secrets can remain for a later retry or be deleted separately after the rollback is verified.
-
