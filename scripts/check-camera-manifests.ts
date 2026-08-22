@@ -39,6 +39,16 @@ const allowedKeyPaths = new Set([
   "docs/superpowers/plans/2026-08-21-tapo-camera-dashboard.md",
   "docs/homelab-dashboard-operations.md",
 ]);
+const cameraConfigPath = "k8s/overlays/dumachine/camera-config.yml";
+const documentationRtspPaths = new Set([
+  "docs/superpowers/specs/2026-08-21-tapo-camera-dashboard-design.md",
+  "docs/superpowers/plans/2026-08-21-tapo-camera-dashboard.md",
+  "docs/homelab-dashboard-operations.md",
+]);
+const rtspPatternPaths = new Set([
+  "scripts/check-camera-manifests.ts",
+  "tests/-check-camera-manifests.test.ts",
+]);
 const usernameBytes = Buffer.from(usernameKey, "ascii");
 const passwordBytes = Buffer.from(passwordKey, "ascii");
 const rtspBytes = Buffer.from("rtsp://", "ascii");
@@ -174,8 +184,15 @@ const validSourceTemplate = (contents: string): boolean => {
   return same(found.sort(), expected.sort());
 };
 
-const hasExpandedRtspUrl = (contents: string): boolean =>
-  /rtsp:\/\/[^\s$\\:@]+:[^\s$\\@]+@[^\s$\\/:]+/.test(contents);
+const hasConcreteCredentialBearingRtspUrl = (contents: string): boolean =>
+  (contents.match(/rtsp:\/\/[^\s"'`]+/g) ?? []).some((url) => {
+    const at = url.indexOf("@");
+    if (at < 0) return false;
+    const userInfo = url.slice("rtsp://".length, at);
+    return !(
+      userInfo === "..." || /^(?:\$\{[^}]+\}|<[^>]+>)(?::(?:\$\{[^}]+\}|<[^>]+>))?$/.test(userInfo)
+    );
+  });
 
 const inspectTrackedKubernetesFile = (
   relativePath: string,
@@ -223,16 +240,25 @@ const inspectTrackedFiles = (repoRoot: string): string[] => {
     if (!allowedKeyPaths.has(relativePath) && containsCameraKey(contents)) {
       violations.push(`${relativePath}: camera secret key name is not permitted in this file.`);
     }
-    if (hasExpandedRtspUrl(contents)) {
-      violations.push(`${relativePath}: expanded RTSP URL must not be committed.`);
-    }
-    if (
-      relativePath === "k8s/overlays/dumachine/camera-config.yml" &&
-      /rtsp:\/\//.test(contents) &&
-      !validSourceTemplate(contents)
-    ) {
+    const hasRtspMarker = contents.includes("rtsp://");
+    if (relativePath === cameraConfigPath && hasRtspMarker && !validSourceTemplate(contents)) {
       violations.push(
         `${relativePath}: only the approved unexpanded RTSP templates are permitted.`,
+      );
+    }
+    if (documentationRtspPaths.has(relativePath) && hasConcreteCredentialBearingRtspUrl(contents)) {
+      violations.push(
+        `${relativePath}: concrete credential-bearing RTSP URL must not be committed.`,
+      );
+    }
+    if (
+      hasRtspMarker &&
+      relativePath !== cameraConfigPath &&
+      !documentationRtspPaths.has(relativePath) &&
+      !rtspPatternPaths.has(relativePath)
+    ) {
+      violations.push(
+        `${relativePath}: RTSP URL or template is not permitted in runtime/source files.`,
       );
     }
     if (hasDirectIdentifierAssignment(relativePath, contents)) {

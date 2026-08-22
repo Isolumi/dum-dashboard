@@ -16,6 +16,17 @@ const expandedRtspMutation = [
   "rtsp",
   "://fixture-user:fixture-password@fixture-host:554/stream1",
 ].join("");
+const userOnlyRtspMutation = ["rtsp", "://fixture-user@fixture-host:554/stream1"].join("");
+const emptyPasswordRtspMutation = ["rtsp", "://fixture-user:@fixture-host:554/stream1"].join("");
+const partiallyExpandedRtspMutation = [
+  "rtsp",
+  "://fixture-user:${CAMERA_PASSWORD}@fixture-host:554/stream1",
+].join("");
+const copiedRuntimeTemplate = [
+  "rtsp",
+  "://${CAMERA_USER}:${CAMERA_PASSWORD}@${CAMERA_HOST}:554/stream1",
+].join("");
+const documentationRtspPlaceholder = ["rtsp", "://...@fixture-host:554/stream1"].join("");
 
 type Fixture = {
   publicDir: string;
@@ -344,6 +355,12 @@ describe("camera deployment boundary mutations", () => {
     expect(() => runChecker(fixture)).not.toThrow();
   });
 
+  test("allows non-secret RTSP placeholders in approved documentation", async () => {
+    const path = "docs/homelab-dashboard-operations.md";
+    await appendTracked(fixture, path, `reference: ${documentationRtspPlaceholder}`);
+    expect(() => runChecker(fixture)).not.toThrow();
+  });
+
   test.each([["data"], ["stringData"]])(
     "rejects a tracked Kubernetes Secret %s with a camera key",
     async (field) => {
@@ -385,6 +402,26 @@ describe("camera deployment boundary mutations", () => {
     "docs/homelab-dashboard-operations.md",
   ])("rejects an expanded RTSP URL in approved documentation %s", async (path) => {
     await appendTracked(fixture, path, `reference: ${expandedRtspMutation}`);
+    expectRejected(fixture, path);
+  });
+
+  test.each([
+    ["a user-only URL", userOnlyRtspMutation],
+    ["an empty-password URL", emptyPasswordRtspMutation],
+    ["a partially expanded URL", partiallyExpandedRtspMutation],
+  ])("rejects %s in approved documentation", async (_label, value) => {
+    const path = "docs/homelab-dashboard-operations.md";
+    await appendTracked(fixture, path, `reference: ${value}`);
+    expectRejected(fixture, path);
+  });
+
+  test("rejects an RTSP environment template outside the approved ConfigMap", async () => {
+    const path = "src/camera.ts";
+    await appendTracked(
+      fixture,
+      path,
+      `export const copiedTemplate = ${JSON.stringify(copiedRuntimeTemplate)};`,
+    );
     expectRejected(fixture, path);
   });
 
