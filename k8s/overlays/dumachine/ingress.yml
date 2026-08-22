@@ -18,6 +18,20 @@ spec:
     - host: doh.lumilumi.xyz
       http:
         paths:
+          - path: /camera-stream/video-rtc.js
+            pathType: Exact
+            backend:
+              service:
+                name: go2rtc
+                port:
+                  number: 1984
+          - path: /camera-stream/api/ws
+            pathType: Exact
+            backend:
+              service:
+                name: go2rtc
+                port:
+                  number: 1984
           - path: /
             pathType: Prefix
             backend:

@@ -234,7 +234,7 @@ const inspectTrackedFiles = (repoRoot: string): string[] => {
     if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) continue;
     const contents = readText(absolutePath);
     if (contents === undefined) continue;
-    if (viteCameraPattern.test(contents)) {
+    if (viteCameraPattern.test(contents) && !documentationRtspPaths.has(relativePath)) {
       violations.push(`${relativePath}: browser camera credential variable must not be committed.`);
     }
     if (!allowedKeyPaths.has(relativePath) && containsCameraKey(contents)) {

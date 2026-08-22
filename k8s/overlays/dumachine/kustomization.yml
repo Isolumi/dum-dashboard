@@ -4,6 +4,8 @@ resources:
   - ../../base
   - ../../../config
   - config.yml
+  - camera-config.yml
+  - camera-infisical.yml
   - certificate.yml
   - ingress.yml
   - monies-infisical.yml

@@ -384,6 +384,12 @@ describe("camera deployment boundary mutations", () => {
     expectRejected(fixture, path);
   });
 
+  test("allows a browser camera environment-name check in approved documentation", async () => {
+    const path = "docs/superpowers/plans/2026-08-21-tapo-camera-dashboard.md";
+    await appendTracked(fixture, path, `git grep -n 'VITE_${usernameKey}' -- ':!docs/**'`);
+    expect(() => runChecker(fixture)).not.toThrow();
+  });
+
   test("rejects a direct camera identifier assignment in an approved checker file", async () => {
     const path = "scripts/check-camera-manifests.ts";
     await appendTracked(fixture, path, `let ${usernameKey};\n${usernameKey} = "fixture-value";`);
