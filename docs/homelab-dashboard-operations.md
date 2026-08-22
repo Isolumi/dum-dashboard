@@ -234,6 +234,7 @@ To roll back the camera stream, create and merge a normal `v1` revert pull reque
 camera resources by hand or change Argo CD by hand:
 
 ```zsh
+set -e
 git fetch origin v1
 git switch --create rollback/camera-stream --track origin/v1
 git revert <camera-feature-commit>
