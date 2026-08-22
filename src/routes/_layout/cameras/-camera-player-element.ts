@@ -167,10 +167,12 @@ export async function createCameraStreamElement(
     if (typeof module.VideoRTC !== "function") {
       throw new Error("Camera stream player is unavailable");
     }
-    customElements.define(
-      customElementName,
-      buildCameraStreamElementClass(module.VideoRTC as VideoRTCConstructor),
-    );
+    if (!customElements.get(customElementName)) {
+      customElements.define(
+        customElementName,
+        buildCameraStreamElementClass(module.VideoRTC as VideoRTCConstructor),
+      );
+    }
   }
 
   const element = document.createElement(customElementName) as CameraStreamElement;

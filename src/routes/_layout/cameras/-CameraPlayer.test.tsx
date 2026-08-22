@@ -72,14 +72,25 @@ describe("CameraPlayer", () => {
   });
 
   it("shows the offline state when the player factory rejects", async () => {
+    const unhandledRejections: PromiseRejectionEvent[] = [];
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      unhandledRejections.push(event);
+    };
     const elementFactory = vi.fn(async () => {
       throw new Error("network module failed");
     });
 
-    render(
-      <CameraPlayer stream="camera-low" label="Front camera" elementFactory={elementFactory} />,
-    );
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
+    try {
+      render(
+        <CameraPlayer stream="camera-low" label="Front camera" elementFactory={elementFactory} />,
+      );
 
-    expect(await screen.findByText("Camera offline")).toBeTruthy();
+      expect(await screen.findByText("Camera offline")).toBeTruthy();
+      await Promise.resolve();
+      expect(unhandledRejections).toHaveLength(0);
+    } finally {
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+    }
   });
 });
