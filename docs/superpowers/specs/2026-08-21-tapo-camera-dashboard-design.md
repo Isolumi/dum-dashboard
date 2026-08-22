@@ -1,7 +1,7 @@
 # Tapo Camera Dashboard Design
 
 **Date:** 2026-08-21
-**Status:** Approved in chat; awaiting written-spec review
+**Status:** Approved
 
 ## Goal
 
@@ -99,9 +99,11 @@ Use normal production log levels. Live verification must confirm that success an
 
 ## HTTP boundary
 
-Traefik routes a same-origin prefix such as `/camera-stream` to the ClusterIP-only go2rtc Service. The existing `/` route continues to target Dum Dashboard.
+Traefik routes the required same-origin camera paths under `/camera-stream` to the ClusterIP-only go2rtc Service. The existing `/` route continues to target Dum Dashboard.
 
-go2rtc uses the same base path and an HTTP allow-list. Only the files and WebSocket endpoint required by the player are available. Configuration, stream inspection, mutation, debug, and settings endpoints are not exposed through ingress.
+go2rtc uses the same base path and an HTTP allow-list. Its internal static handler is enabled at `/camera-stream/`, but Traefik routes only the exact `/camera-stream/video-rtc.js` asset and `/camera-stream/api/ws` endpoint. Configuration, stream inspection, mutation, debug, settings, and other static files are not exposed through ingress.
+
+go2rtc loads only the `api`, `ws`, `rtsp`, and `mp4` modules. Command, script, transcoding, WebRTC, HLS, MJPEG, and unrelated source modules stay disabled. This prevents the WebSocket endpoint from using unsafe dynamic source types. The egress NetworkPolicy separately limits RTSP traffic to the camera address and port.
 
 The browser receives no RTSP address or camera credential. It knows only the safe stream names `camera-low` and `camera-high` and the same-origin player path.
 
@@ -169,6 +171,8 @@ The player has four user-visible states:
 4. **Offline:** The fixed message `Camera offline` is visible in the same frame.
 
 The player retries after a failure with bounded backoff. It returns to Live without a full dashboard refresh when the camera or network recovers. Repeated retries must not create overlapping RTSP or WebSocket connections.
+
+The dashboard adapter treats a go2rtc WebSocket error or 20 seconds without video playback as Offline. It closes only that stalled WebSocket, then go2rtc's maintained 15-second reconnect logic creates the next attempt. The adapter never shows the upstream error detail because it can contain internal connection data.
 
 The existing `Permissions-Policy` continues to disable browser camera and microphone capture. This feature plays a remote stream and does not request device camera or microphone permission. The camera change does not modify browser security headers.
 
