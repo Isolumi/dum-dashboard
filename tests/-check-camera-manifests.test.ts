@@ -403,6 +403,15 @@ describe("camera deployment boundary mutations", () => {
     expectRejected(fixture, path);
   });
 
+  test("rejects an Infisical API version change", async () => {
+    await replaceRendered(
+      fixture,
+      "apiVersion: secrets.infisical.com/v1beta1\nkind: InfisicalStaticSecret",
+      "apiVersion: secrets.infisical.com/v1alpha1\nkind: InfisicalStaticSecret",
+    );
+    expectRejected(fixture);
+  });
+
   test.each([
     "docs/superpowers/specs/2026-08-21-tapo-camera-dashboard-design.md",
     "docs/superpowers/plans/2026-08-21-tapo-camera-dashboard.md",

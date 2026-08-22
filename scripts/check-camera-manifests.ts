@@ -550,6 +550,7 @@ const policyAddsTrafficAllowance = (policy: Document): boolean =>
 const validateInfisical = (documents: Document[]): void => {
   const resource = findDocument(documents, "InfisicalStaticSecret", secretName);
   if (
+    resource?.apiVersion !== "secrets.infisical.com/v1beta1" ||
     resource?.metadata?.namespace !== "dum-dashboard" ||
     resource?.spec?.infisicalAuthRef?.name !== "dum-dashboard-monies-infisical-auth" ||
     resource?.spec?.infisicalAuthRef?.namespace !== "dum-dashboard" ||
