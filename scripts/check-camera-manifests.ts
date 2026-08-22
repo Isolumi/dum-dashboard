@@ -553,8 +553,10 @@ const validateInfisical = (documents: Document[]): void => {
     resource?.metadata?.namespace !== "dum-dashboard" ||
     resource?.spec?.infisicalAuthRef?.name !== "dum-dashboard-monies-infisical-auth" ||
     resource?.spec?.infisicalAuthRef?.namespace !== "dum-dashboard" ||
-    resource?.spec?.resyncInterval !== 60 ||
-    resource?.spec?.manageSecret !== true ||
+    !same(resource?.spec?.syncOptions, {
+      instantUpdates: false,
+      refreshInterval: "60s",
+    }) ||
     !same(resource?.spec?.sources, [
       { environmentSlug: "prod", projectId, secretPath: "/camera" },
     ]) ||

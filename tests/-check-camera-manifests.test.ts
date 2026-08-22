@@ -184,7 +184,7 @@ spec:
                 port:
                   number: 3000
 ---
-apiVersion: secrets.infisical.com/v1alpha1
+apiVersion: secrets.infisical.com/v1beta1
 kind: InfisicalStaticSecret
 metadata:
   name: dum-dashboard-camera-secrets
@@ -193,8 +193,9 @@ spec:
   infisicalAuthRef:
     name: dum-dashboard-monies-infisical-auth
     namespace: dum-dashboard
-  resyncInterval: 60
-  manageSecret: true
+  syncOptions:
+    refreshInterval: 60s
+    instantUpdates: false
   sources:
     - projectId: 1617f220-140c-4a04-a8e7-468a71e4ff50
       environmentSlug: prod
