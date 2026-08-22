@@ -13,8 +13,6 @@ import {
   type CameraStreamName,
 } from "./-camera-player-element";
 
-vi.mock("/camera-stream/video-rtc.js", () => ({ VideoRTC: FakeVideoRTC }));
-
 class FakeVideoRTC extends HTMLElement {
   mode = "";
   media = "";
@@ -226,6 +224,7 @@ describe("buildCameraStreamElementClass", () => {
 describe("createCameraStreamElement", () => {
   it("shares registration work between concurrent factory calls", async () => {
     const definitions = new Map<string, unknown>();
+    const loadVideoRtc = vi.fn(async () => ({ VideoRTC: FakeVideoRTC }));
     vi.stubGlobal("customElements", {
       define: (name: string, constructor: unknown) => {
         if (definitions.has(name)) {
@@ -238,13 +237,14 @@ describe("createCameraStreamElement", () => {
 
     try {
       const [low, high] = await Promise.all([
-        createCameraStreamElement("camera-low"),
-        createCameraStreamElement("camera-high"),
+        createCameraStreamElement("camera-low", loadVideoRtc),
+        createCameraStreamElement("camera-high", loadVideoRtc),
       ]);
 
       expect(low.src).toBe("/camera-stream/api/ws?src=camera-low");
       expect(high.src).toBe("/camera-stream/api/ws?src=camera-high");
       expect(definitions.get("dum-camera-stream")).toBeDefined();
+      expect(loadVideoRtc).toHaveBeenCalledOnce();
     } finally {
       vi.unstubAllGlobals();
     }

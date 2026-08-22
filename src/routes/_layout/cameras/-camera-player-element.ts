@@ -21,10 +21,16 @@ type UpstreamVideoRTC = Omit<CameraStreamElement, "onclose"> & {
 };
 
 type VideoRTCConstructor = new () => UpstreamVideoRTC;
+type VideoRtcModule = { VideoRTC?: unknown };
+type VideoRtcModuleLoader = () => Promise<VideoRtcModule>;
 
 const customElementName = "dum-camera-stream";
 const videoRtcModuleUrl = "/camera-stream/video-rtc.js";
 const startupTimeoutMs = 20_000;
+let registrationPromise: Promise<void> | undefined;
+
+const loadVideoRtcModule: VideoRtcModuleLoader = () =>
+  import(/* @vite-ignore */ videoRtcModuleUrl) as Promise<VideoRtcModule>;
 
 function emitPlaybackState(element: HTMLElement, state: CameraPlaybackState) {
   element.dispatchEvent(
@@ -157,21 +163,32 @@ export function buildCameraStreamElementClass(VideoRTC: VideoRTCConstructor): Vi
 
 export async function createCameraStreamElement(
   stream: CameraStreamName,
+  loadVideoRtc: VideoRtcModuleLoader = loadVideoRtcModule,
 ): Promise<CameraStreamElement> {
   if (typeof window === "undefined") {
     throw new Error("Camera streams require a browser");
   }
 
   if (!customElements.get(customElementName)) {
-    const module = (await import(/* @vite-ignore */ videoRtcModuleUrl)) as { VideoRTC?: unknown };
-    if (typeof module.VideoRTC !== "function") {
-      throw new Error("Camera stream player is unavailable");
+    if (!registrationPromise) {
+      registrationPromise = (async () => {
+        const module = await loadVideoRtc();
+        if (typeof module.VideoRTC !== "function") {
+          throw new Error("Camera stream player is unavailable");
+        }
+        if (!customElements.get(customElementName)) {
+          customElements.define(
+            customElementName,
+            buildCameraStreamElementClass(module.VideoRTC as VideoRTCConstructor),
+          );
+        }
+      })();
     }
-    if (!customElements.get(customElementName)) {
-      customElements.define(
-        customElementName,
-        buildCameraStreamElementClass(module.VideoRTC as VideoRTCConstructor),
-      );
+    const registration = registrationPromise;
+    try {
+      await registration;
+    } finally {
+      if (registrationPromise === registration) registrationPromise = undefined;
     }
   }
 
