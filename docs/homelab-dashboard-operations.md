@@ -196,7 +196,49 @@ Open `https://doh.lumilumi.xyz` on a device connected to your tailnet and confir
 - a missing source is shown as Unknown instead of Healthy;
 - a pod log stream opens, renders text, and closes when the panel closes.
 
-## 7. Roll back an image deployment
+## 7. Camera stream
+
+Reserve `192.168.2.44` for the Tapo camera in the router DHCP settings. A changed camera
+address is a configuration change.
+
+In Infisical, open project `1617f220-140c-4a04-a8e7-468a71e4ff50`, select environment `prod`,
+create path `/camera`, and add `TAPO_CAMERA_USERNAME` and `TAPO_CAMERA_PASSWORD` from the Tapo
+Camera Account. Do not add secret values to Git, this guide, or a shell command.
+
+The dashboard browser never receives these values. Only the `go2rtc` pod receives them. After a
+camera credential rotation and a successful Infisical refresh, restart only `deployment/go2rtc`.
+Kubernetes environment variables do not change inside a running pod:
+
+```zsh
+kubectl -n dum-dashboard rollout restart deployment/go2rtc
+kubectl -n dum-dashboard rollout status deployment/go2rtc --timeout=180s
+```
+
+Check camera health:
+
+```zsh
+kubectl -n dum-dashboard get infisicalstaticsecret dum-dashboard-camera-secrets
+kubectl -n dum-dashboard rollout status deployment/go2rtc --timeout=180s
+kubectl -n dum-dashboard get pod,service,ingress,networkpolicy -l app.kubernetes.io/part-of=dum-dashboard
+kubectl -n dum-dashboard logs deployment/go2rtc --tail=100
+```
+
+Check the internal stream names without displaying credentials:
+
+```zsh
+kubectl -n dum-dashboard exec deployment/go2rtc -- \
+  curl -fsS http://127.0.0.1:1984/camera-stream/api/streams
+```
+
+To roll back the camera stream, revert the camera feature commit through the normal `v1` Git
+workflow, then let Argo CD reconcile the revert. Do not delete camera resources by hand:
+
+```zsh
+git revert <camera-feature-commit>
+kubectl -n argocd get application dum-dashboard-dumachine --watch
+```
+
+## 8. Roll back an image deployment
 
 This reverts the latest GitOps image-tag commit and lets Argo restore the prior images:
 
