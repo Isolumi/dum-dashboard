@@ -61,7 +61,8 @@ const selectorCanMatchDashboard = (selector: unknown): boolean => {
     matchLabels &&
     Object.entries(matchLabels).some(
       ([key, expected]) =>
-        typeof expected !== "string" || expectedDashboardLabels[key] !== expected,
+        typeof expected !== "string" ||
+        (Object.hasOwn(expectedDashboardLabels, key) && expectedDashboardLabels[key] !== expected),
     )
   ) {
     return false;
@@ -78,15 +79,16 @@ const selectorCanMatchDashboard = (selector: unknown): boolean => {
     if (operator === "In") {
       if (!Array.isArray(values) || !values.every((entry) => typeof entry === "string"))
         return true;
-      if (dashboardValue === undefined || !values.includes(dashboardValue)) return false;
+      if (dashboardValue !== undefined && !values.includes(dashboardValue)) return false;
     } else if (operator === "NotIn") {
       if (!Array.isArray(values) || !values.every((entry) => typeof entry === "string"))
         return true;
-      if (dashboardValue === undefined || values.includes(dashboardValue)) return false;
+      if (dashboardValue !== undefined && values.includes(dashboardValue)) return false;
     } else if (operator === "Exists") {
-      if (dashboardValue === undefined || values !== undefined) return false;
+      if (dashboardValue === undefined || values !== undefined) return true;
     } else if (operator === "DoesNotExist") {
-      if (dashboardValue !== undefined || values !== undefined) return false;
+      if (dashboardValue !== undefined) return false;
+      if (values !== undefined) return true;
     } else {
       return true;
     }
@@ -440,8 +442,10 @@ export const checkMoniesRepository = (options: CheckOptions): void => {
 const readArgument = (name: string): string => {
   const index = process.argv.indexOf(name);
   const value = index >= 0 ? process.argv[index + 1] : undefined;
-  if (typeof value !== "string" || value.length === 0) fail(`Missing required argument ${name}.`);
-  return resolve(value);
+  if (typeof value !== "string" || value.length === 0) {
+    fail(`Missing required argument ${name}.`);
+  }
+  return resolve(value ?? "");
 };
 
 if (import.meta.main) {

@@ -16,7 +16,7 @@ const cameraHost = "192.168.2.44";
 const cameraKeys = [usernameKey, passwordKey];
 const allowedModules = ["api", "ws", "rtsp", "mp4"];
 const allowedPaths = ["/camera-stream/", "/camera-stream/api/ws", "/camera-stream/api/streams"];
-const expectedCameraLabels = {
+const expectedCameraLabels: Record<string, string> = {
   "app.kubernetes.io/component": "camera-stream",
   "app.kubernetes.io/name": "go2rtc",
 };
@@ -174,6 +174,9 @@ const validSourceTemplate = (contents: string): boolean => {
   return same(found.sort(), expected.sort());
 };
 
+const hasExpandedRtspUrl = (contents: string): boolean =>
+  /rtsp:\/\/[^\s$\\:@]+:[^\s$\\@]+@[^\s$\\/:]+/.test(contents);
+
 const inspectTrackedKubernetesFile = (
   relativePath: string,
   contents: string,
@@ -220,7 +223,7 @@ const inspectTrackedFiles = (repoRoot: string): string[] => {
     if (!allowedKeyPaths.has(relativePath) && containsCameraKey(contents)) {
       violations.push(`${relativePath}: camera secret key name is not permitted in this file.`);
     }
-    if (!allowedKeyPaths.has(relativePath) && /rtsp:\/\//.test(contents)) {
+    if (hasExpandedRtspUrl(contents)) {
       violations.push(`${relativePath}: expanded RTSP URL must not be committed.`);
     }
     if (
@@ -348,11 +351,56 @@ const validateDeployments = (documents: Document[]): void => {
   ) {
     fail("go2rtc Deployment does not match the immutable image, secret, or security contract.");
   }
-  for (const name of ["dum-dashboard", "homelab-gateway"]) {
-    const workload = findDocument(documents, "Deployment", name);
-    for (const workloadContainer of workload?.spec?.template?.spec?.containers ?? []) {
-      if (containsCameraKey(workloadContainer.env ?? [])) {
-        fail(`${name} must not receive camera credentials.`);
+};
+
+const podSpecs = (document: Document): Document[] => {
+  if (document?.metadata?.namespace !== "dum-dashboard") return [];
+  const directPodSpec = document.kind === "Pod" ? document.spec : document.spec?.template?.spec;
+  const cronJobPodSpec = document.spec?.jobTemplate?.spec?.template?.spec;
+  return [directPodSpec, cronJobPodSpec].filter(Boolean);
+};
+
+const secretVolumeReferencesCameraSecret = (volume: Document): boolean =>
+  volume?.secret?.secretName === secretName ||
+  (volume?.projected?.sources ?? []).some(
+    (source: Document) => source?.secret?.name === secretName,
+  );
+
+const validateCameraSecretInjection = (documents: Document[]): void => {
+  for (const document of documents) {
+    for (const pod of podSpecs(document)) {
+      if ((pod.volumes ?? []).some(secretVolumeReferencesCameraSecret)) {
+        fail("Camera Secret must not be mounted as a pod volume.");
+      }
+      for (const [containerType, containers] of [
+        ["containers", pod.containers ?? []],
+        ["initContainers", pod.initContainers ?? []],
+        ["ephemeralContainers", pod.ephemeralContainers ?? []],
+      ] as const) {
+        for (const container of containers) {
+          const isGo2rtcMainContainer =
+            document.kind === "Deployment" &&
+            document.metadata?.name === "go2rtc" &&
+            containerType === "containers" &&
+            container.name === "go2rtc";
+          const usesCameraEnvFrom = (container.envFrom ?? []).some(
+            (entry: Document) => entry?.secretRef?.name === secretName,
+          );
+          const cameraSecretEnv = (container.env ?? []).filter(
+            (entry: Document) => entry?.valueFrom?.secretKeyRef?.name === secretName,
+          );
+          const hasUnexpectedGo2rtcReference = cameraSecretEnv.some(
+            (entry: Document) =>
+              !cameraKeys.includes(entry.name) || entry.valueFrom?.secretKeyRef?.key !== entry.name,
+          );
+          if (
+            usesCameraEnvFrom ||
+            hasUnexpectedGo2rtcReference ||
+            (!isGo2rtcMainContainer && cameraSecretEnv.length > 0)
+          ) {
+            fail("Only the go2rtc main container may reference the camera Secret by secretKeyRef.");
+          }
+        }
       }
     }
   }
@@ -374,11 +422,32 @@ const validateIngress = (documents: Document[]): void => {
   const paths = ingress?.spec?.rules?.flatMap((rule: Document) => rule.http?.paths ?? []) ?? [];
   const cameraPaths = paths.filter((path: Document) => path.backend?.service?.name === "go2rtc");
   const expectedCameraPaths = ["/camera-stream/video-rtc.js", "/camera-stream/api/ws"];
+  const allIngresses = documents.filter(
+    (document) => document.kind === "Ingress" && document.metadata?.namespace === "dum-dashboard",
+  );
+  const allCameraPaths = allIngresses
+    .flatMap((resource) =>
+      (resource.spec?.rules ?? []).flatMap((rule: Document) => rule.http?.paths ?? []),
+    )
+    .filter((path: Document) => path.backend?.service?.name === "go2rtc");
+  const hasGo2rtcDefaultBackend = allIngresses.some(
+    (resource) => resource.spec?.defaultBackend?.service?.name === "go2rtc",
+  );
   if (
     ingress?.metadata?.namespace !== "dum-dashboard" ||
     cameraPaths.length !== 2 ||
+    allCameraPaths.length !== 2 ||
+    hasGo2rtcDefaultBackend ||
     !same(
       cameraPaths.map((path: Document) => ({
+        path: path.path,
+        pathType: path.pathType,
+        port: path.backend?.service?.port?.number,
+      })),
+      expectedCameraPaths.map((path) => ({ path, pathType: "Exact", port: 1984 })),
+    ) ||
+    !same(
+      allCameraPaths.map((path: Document) => ({
         path: path.path,
         pathType: path.pathType,
         port: path.backend?.service?.port?.number,
@@ -398,6 +467,59 @@ const validateIngress = (documents: Document[]): void => {
     );
   }
 };
+
+const selectorCanMatchCamera = (selector: unknown): boolean => {
+  const value = asRecord(selector);
+  if (!value) return true;
+  if (Object.keys(value).some((key) => key !== "matchLabels" && key !== "matchExpressions")) {
+    return true;
+  }
+  const matchLabels = asRecord(value.matchLabels);
+  if (value.matchLabels !== undefined && !matchLabels) return true;
+  if (
+    matchLabels &&
+    Object.entries(matchLabels).some(
+      ([key, expected]) =>
+        typeof expected !== "string" ||
+        (Object.hasOwn(expectedCameraLabels, key) && expectedCameraLabels[key] !== expected),
+    )
+  ) {
+    return false;
+  }
+  if (value.matchExpressions === undefined) return true;
+  if (!Array.isArray(value.matchExpressions)) return true;
+  for (const expression of value.matchExpressions) {
+    const requirement = asRecord(expression);
+    const key = requirement?.key;
+    const operator = requirement?.operator;
+    const values = requirement?.values;
+    if (typeof key !== "string" || typeof operator !== "string") return true;
+    const cameraValue = expectedCameraLabels[key];
+    if (operator === "In") {
+      if (!Array.isArray(values) || !values.every((entry) => typeof entry === "string"))
+        return true;
+      if (cameraValue !== undefined && !values.includes(cameraValue)) return false;
+    } else if (operator === "NotIn") {
+      if (!Array.isArray(values) || !values.every((entry) => typeof entry === "string"))
+        return true;
+      if (cameraValue !== undefined && values.includes(cameraValue)) return false;
+    } else if (operator === "Exists") {
+      if (cameraValue === undefined || values !== undefined) return true;
+    } else if (operator === "DoesNotExist") {
+      if (cameraValue !== undefined) return false;
+      if (values !== undefined) return true;
+    } else {
+      return true;
+    }
+  }
+  return true;
+};
+
+const policyAddsTrafficAllowance = (policy: Document): boolean =>
+  ["ingress", "egress"].some((field) => {
+    const rules = policy.spec?.[field];
+    return Object.hasOwn(policy.spec ?? {}, field) && (!Array.isArray(rules) || rules.length > 0);
+  });
 
 const validateInfisical = (documents: Document[]): void => {
   const resource = findDocument(documents, "InfisicalStaticSecret", secretName);
@@ -422,7 +544,14 @@ const validateNetworkPolicy = (documents: Document[]): void => {
   const policies = documents.filter(
     (document) =>
       document.kind === "NetworkPolicy" &&
+      document.metadata?.namespace === "dum-dashboard" &&
       same(document.spec?.podSelector?.matchLabels, expectedCameraLabels),
+  );
+  const cameraSelectingPolicies = documents.filter(
+    (document) =>
+      document.kind === "NetworkPolicy" &&
+      document.metadata?.namespace === "dum-dashboard" &&
+      selectorCanMatchCamera(document.spec?.podSelector),
   );
   const policy = policies[0];
   if (
@@ -441,6 +570,13 @@ const validateNetworkPolicy = (documents: Document[]): void => {
   ) {
     fail("Camera NetworkPolicy must allow only Traefik ingress and camera RTSP egress.");
   }
+  if (
+    cameraSelectingPolicies.some(
+      (candidate) => candidate !== policy && policyAddsTrafficAllowance(candidate),
+    )
+  ) {
+    fail("No additional NetworkPolicy may add ingress or egress allowances for go2rtc.");
+  }
 };
 
 const checkRenderedManifestContract = (options: CameraCheckOptions): void => {
@@ -449,6 +585,7 @@ const checkRenderedManifestContract = (options: CameraCheckOptions): void => {
     fail("Camera credentials must not have direct rendered values.");
   validateConfigMap(documents);
   validateDeployments(documents);
+  validateCameraSecretInjection(documents);
   validateService(documents);
   validateIngress(documents);
   validateInfisical(documents);
@@ -469,8 +606,10 @@ export const checkCameraRepository = (options: CameraCheckOptions): void => {
 const readArgument = (name: string): string => {
   const index = process.argv.indexOf(name);
   const value = index >= 0 ? process.argv[index + 1] : undefined;
-  if (typeof value !== "string" || value.length === 0) fail(`Missing required argument ${name}.`);
-  return resolve(value);
+  if (typeof value !== "string" || value.length === 0) {
+    fail(`Missing required argument ${name}.`);
+  }
+  return resolve(value ?? "");
 };
 
 if (import.meta.main) {

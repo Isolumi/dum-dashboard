@@ -12,6 +12,10 @@ const image =
 const usernameKey = ["TAPO", "CAMERA", "USERNAME"].join("_");
 const passwordKey = ["TAPO", "CAMERA", "PASSWORD"].join("_");
 const host = ["192", "168", "2", "44"].join(".");
+const expandedRtspMutation = [
+  "rtsp",
+  "://fixture-user:fixture-password@fixture-host:554/stream1",
+].join("");
 
 type Fixture = {
   publicDir: string;
@@ -265,7 +269,17 @@ data:
       camera-high: rtsp://\${${usernameKey}}:\${${passwordKey}}@\${TAPO_CAMERA_HOST}:554/stream1
 `,
     ),
-    writeFixtureFile(fixture, "docs/operations/camera.md", "Camera operation guide.\n"),
+    writeFixtureFile(
+      fixture,
+      "docs/superpowers/specs/2026-08-21-tapo-camera-dashboard-design.md",
+      "Camera design.\n",
+    ),
+    writeFixtureFile(
+      fixture,
+      "docs/superpowers/plans/2026-08-21-tapo-camera-dashboard.md",
+      "Camera plan.\n",
+    ),
+    writeFixtureFile(fixture, "docs/homelab-dashboard-operations.md", "Camera operation guide.\n"),
     writeFixtureFile(fixture, "rendered.yml", renderedManifest),
     writeFixtureFile(fixture, ".output/public/app.js", "globalThis.camera = true;\n"),
   ]);
@@ -288,6 +302,11 @@ const replaceRendered = async (fixture: Fixture, before: string, after: string):
   const original = await readFile(fixture.renderedPath, "utf8");
   expect(original).toContain(before);
   await writeFile(fixture.renderedPath, original.replace(before, after));
+};
+
+const appendRenderedManifest = async (fixture: Fixture, mutation: string): Promise<void> => {
+  const original = await readFile(fixture.renderedPath, "utf8");
+  await writeFile(fixture.renderedPath, `${original}\n${mutation}\n`);
 };
 
 const runChecker = (fixture: Fixture): void =>
@@ -356,11 +375,16 @@ describe("camera deployment boundary mutations", () => {
 
   test("rejects an expanded RTSP URL beside the approved ConfigMap templates", async () => {
     const path = "k8s/overlays/dumachine/camera-config.yml";
-    await appendTracked(
-      fixture,
-      path,
-      "      mutation: rtsp://fixture-user:fixture-password@fixture-host:554/stream1",
-    );
+    await appendTracked(fixture, path, `      mutation: ${expandedRtspMutation}`);
+    expectRejected(fixture, path);
+  });
+
+  test.each([
+    "docs/superpowers/specs/2026-08-21-tapo-camera-dashboard-design.md",
+    "docs/superpowers/plans/2026-08-21-tapo-camera-dashboard.md",
+    "docs/homelab-dashboard-operations.md",
+  ])("rejects an expanded RTSP URL in approved documentation %s", async (path) => {
+    await appendTracked(fixture, path, `reference: ${expandedRtspMutation}`);
     expectRejected(fixture, path);
   });
 
@@ -418,6 +442,63 @@ describe("camera deployment boundary mutations", () => {
     expectRejected(fixture);
   });
 
+  test("rejects dashboard envFrom from the camera Secret", async () => {
+    await replaceRendered(
+      fixture,
+      "        - name: dashboard\n---",
+      "        - name: dashboard\n          envFrom:\n            - secretRef:\n                name: dum-dashboard-camera-secrets\n---",
+    );
+    expectRejected(fixture);
+  });
+
+  test("rejects a gateway Secret volume", async () => {
+    await replaceRendered(
+      fixture,
+      "        - name: gateway\n---",
+      "        - name: gateway\n      volumes:\n        - name: camera-secret\n          secret:\n            secretName: dum-dashboard-camera-secrets\n---",
+    );
+    expectRejected(fixture);
+  });
+
+  test("rejects a gateway projected Secret volume", async () => {
+    await replaceRendered(
+      fixture,
+      "        - name: gateway\n---",
+      "        - name: gateway\n      volumes:\n        - name: camera-secret\n          projected:\n            sources:\n              - secret:\n                  name: dum-dashboard-camera-secrets\n---",
+    );
+    expectRejected(fixture);
+  });
+
+  test("rejects an init container that reads the camera Secret", async () => {
+    await replaceRendered(
+      fixture,
+      "        - name: dashboard\n---",
+      "        - name: dashboard\n      initContainers:\n        - name: credential-reader\n          env:\n            - name: TAPO_CAMERA_PASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: dum-dashboard-camera-secrets\n                  key: TAPO_CAMERA_PASSWORD\n---",
+    );
+    expectRejected(fixture);
+  });
+
+  test("rejects a camera Secret reference in another pod-template workload", async () => {
+    await appendRenderedManifest(
+      fixture,
+      `---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: unrelated-workload
+  namespace: dum-dashboard
+spec:
+  template:
+    spec:
+      containers:
+        - name: unrelated
+          envFrom:
+            - secretRef:
+                name: dum-dashboard-camera-secrets`,
+    );
+    expectRejected(fixture);
+  });
+
   test("rejects a changed go2rtc image", async () => {
     await replaceRendered(fixture, image, "ghcr.io/alexxit/go2rtc:1.9.14");
     expectRejected(fixture);
@@ -438,6 +519,25 @@ describe("camera deployment boundary mutations", () => {
     ["container filesystem", "readOnlyRootFilesystem: true", "readOnlyRootFilesystem: false"],
   ])("rejects weakened %s security", async (_label, before, after) => {
     await replaceRendered(fixture, before, after);
+    expectRejected(fixture);
+  });
+
+  test("rejects an Ingress default backend routed to go2rtc", async () => {
+    await appendRenderedManifest(
+      fixture,
+      `---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: camera-default-backend
+  namespace: dum-dashboard
+spec:
+  defaultBackend:
+    service:
+      name: go2rtc
+      port:
+        number: 1984`,
+    );
     expectRejected(fixture);
   });
 
@@ -470,6 +570,33 @@ describe("camera deployment boundary mutations", () => {
   });
 
   test.each([
+    ["a broad path", "/camera-stream", "Prefix"],
+    ["a sensitive streams endpoint", "/camera-stream/api/streams", "Exact"],
+  ])("rejects a second Ingress with %s routed to go2rtc", async (_label, path, pathType) => {
+    await appendRenderedManifest(
+      fixture,
+      `---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: camera-bypass
+  namespace: dum-dashboard
+spec:
+  rules:
+    - http:
+        paths:
+          - path: ${path}
+            pathType: ${pathType}
+            backend:
+              service:
+                name: go2rtc
+                port:
+                  number: 1984`,
+    );
+    expectRejected(fixture);
+  });
+
+  test.each([
     ["exec"],
     ["echo"],
     ["expr"],
@@ -495,6 +622,30 @@ describe("camera deployment boundary mutations", () => {
 
   test("rejects NetworkPolicy egress outside the camera RTSP endpoint", async () => {
     await replaceRendered(fixture, "192.168.2.44/32", "0.0.0.0/0");
+    expectRejected(fixture);
+  });
+
+  test.each([
+    [
+      "a subset selector with permissive ingress",
+      "podSelector:\n    matchLabels:\n      app.kubernetes.io/name: go2rtc",
+      "ingress:\n    - {}",
+    ],
+    ["an empty selector with permissive egress", "podSelector: {}", "egress:\n    - {}"],
+  ])("rejects an extra go2rtc-selecting NetworkPolicy with %s", async (_label, selector, rules) => {
+    await appendRenderedManifest(
+      fixture,
+      `---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: camera-policy-bypass
+  namespace: dum-dashboard
+spec:
+  ${selector}
+  policyTypes: [Ingress, Egress]
+  ${rules}`,
+    );
     expectRejected(fixture);
   });
 
