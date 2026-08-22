@@ -238,24 +238,36 @@ git fetch origin v1
 git switch --create rollback/camera-stream --track origin/v1
 git revert <camera-feature-commit>
 git push -u origin rollback/camera-stream
-gh pr create \
+pr_url="$(gh pr create \
   --base v1 \
   --head rollback/camera-stream \
   --title "revert: remove private Tapo camera dashboard" \
-  --body "Reverts the camera stream feature."
-gh pr checks --watch
-gh pr merge --merge --delete-branch
-camera_run_id="$(gh run list \
-  --workflow "Build and deploy images" \
-  --branch v1 \
-  --event push \
-  --limit 1 \
-  --json databaseId \
-  --jq '.[0].databaseId')"
+  --body "Reverts the camera stream feature.")"
+gh pr checks "$pr_url" --watch
+gh pr merge "$pr_url" --merge --delete-branch
+merge_sha="$(gh pr view "$pr_url" --json mergeCommit --jq '.mergeCommit.oid')"
+test -n "${merge_sha}"
+camera_run_id=""
+for attempt in {1..30}; do
+  camera_run_id="$(gh run list \
+    --workflow "Build and deploy images" \
+    --branch v1 \
+    --commit "$merge_sha" \
+    --event push \
+    --limit 1 \
+    --json databaseId \
+    --jq '.[0].databaseId')"
+  [[ -n "${camera_run_id}" ]] && break
+  sleep 10
+done
 test -n "${camera_run_id}"
 gh run watch "${camera_run_id}" --exit-status
-git fetch origin deploy
-git log -1 --oneline origin/deploy
+for attempt in {1..30}; do
+  git fetch origin deploy
+  git merge-base --is-ancestor "$merge_sha" origin/deploy && break
+  sleep 10
+done
+git merge-base --is-ancestor "$merge_sha" origin/deploy
 kubectl -n argocd get application dum-dashboard-dumachine --watch
 ```
 
