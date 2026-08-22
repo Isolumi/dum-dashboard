@@ -189,6 +189,11 @@ const appendFixtureFile = async (
   await writeFile(path, `${original}\n${mutation}\n`);
 };
 
+const appendRenderedManifest = async (fixture: Fixture, mutation: string): Promise<void> => {
+  const original = await readFile(fixture.renderedPath, "utf8");
+  await writeFile(fixture.renderedPath, `${original}\n${mutation}\n`);
+};
+
 const createBuiltArtifact = async (
   fixture: Fixture,
   name: string,
@@ -370,5 +375,49 @@ describe("Monies client-secret guard mutations", () => {
     );
 
     expect(() => runChecker(fixture)).not.toThrow();
+  });
+
+  test("allows an egress policy that can select only the go2rtc camera pod", async () => {
+    await appendRenderedManifest(
+      fixture,
+      `---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: go2rtc-camera-isolation
+  namespace: dum-dashboard
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: go2rtc
+  policyTypes: [Egress]
+  egress: []`,
+    );
+
+    expect(() => runChecker(fixture)).not.toThrow();
+  });
+
+  test.each([
+    ["an empty selector", "podSelector: {}"],
+    [
+      "a dashboard-matching selector",
+      "podSelector:\n    matchLabels:\n      app.kubernetes.io/name: dum-dashboard",
+    ],
+  ])("rejects egress policy with %s", async (_label, selector) => {
+    await appendRenderedManifest(
+      fixture,
+      `---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dashboard-egress-mutation
+  namespace: dum-dashboard
+spec:
+  ${selector}
+  policyTypes: [Egress]
+  egress: []`,
+    );
+
+    expect(() => runChecker(fixture)).toThrow("dashboard egress policy");
   });
 });
