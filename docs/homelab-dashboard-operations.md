@@ -230,11 +230,32 @@ kubectl -n dum-dashboard exec deployment/go2rtc -- \
   curl -fsS http://127.0.0.1:1984/camera-stream/api/streams
 ```
 
-To roll back the camera stream, revert the camera feature commit through the normal `v1` Git
-workflow, then let Argo CD reconcile the revert. Do not delete camera resources by hand:
+To roll back the camera stream, create and merge a normal `v1` revert pull request. Do not delete
+camera resources by hand or change Argo CD by hand:
 
 ```zsh
+git fetch origin v1
+git switch --create rollback/camera-stream --track origin/v1
 git revert <camera-feature-commit>
+git push -u origin rollback/camera-stream
+gh pr create \
+  --base v1 \
+  --head rollback/camera-stream \
+  --title "revert: remove private Tapo camera dashboard" \
+  --body "Reverts the camera stream feature."
+gh pr checks --watch
+gh pr merge --merge --delete-branch
+camera_run_id="$(gh run list \
+  --workflow "Build and deploy images" \
+  --branch v1 \
+  --event push \
+  --limit 1 \
+  --json databaseId \
+  --jq '.[0].databaseId')"
+test -n "${camera_run_id}"
+gh run watch "${camera_run_id}" --exit-status
+git fetch origin deploy
+git log -1 --oneline origin/deploy
 kubectl -n argocd get application dum-dashboard-dumachine --watch
 ```
 
