@@ -1,8 +1,7 @@
 import type { ComponentType } from "react";
 import type { LucideIcon } from "lucide-react";
-import { CalendarDays, Camera, CheckSquare, Clock, Server, WalletCards } from "lucide-react";
+import { CalendarDays, Camera, CheckSquare, Server, WalletCards } from "lucide-react";
 import { TodoBentoCard } from "#/routes/_layout/todos/-TodoBentoCard";
-import { ClockBentoCard } from "#/tools/ClockBentoCard";
 import { CalendarBentoCard } from "#/routes/_layout/calendar/-CalendarBentoCard";
 import { MoniesBentoCard } from "#/routes/_layout/monies/-MoniesBentoCard";
 import { HomelabBentoCard } from "#/routes/_layout/homelab/-HomelabBentoCard";
@@ -27,14 +26,6 @@ export const tools: ToolEntry[] = [
     route: "/todos",
     icon: CheckSquare,
     BentoCard: TodoBentoCard,
-  },
-  {
-    id: "clock",
-    label: "Clock",
-    route: "/",
-    icon: Clock,
-    BentoCard: ClockBentoCard,
-    overviewOnly: true,
   },
   {
     id: "cameras",
