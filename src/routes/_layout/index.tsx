@@ -21,17 +21,24 @@ function OverviewError() {
 }
 
 function OverviewPage() {
-  const [firstTool, ...remainingTools] = tools;
+  const primaryTools = tools.filter((tool) => tool.id === "todos" || tool.id === "calendar");
+  const sideTools = tools.filter((tool) => tool.id !== "todos" && tool.id !== "calendar");
   const toolData = Route.useLoaderData();
 
   return (
     <div className="p-6">
       <h1 className="sr-only">Overview</h1>
       <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[2fr_1fr] md:gap-6">
-        {firstTool && <firstTool.BentoCard tool={firstTool} data={toolData[firstTool.id]} />}
-        {remainingTools.length > 0 && (
-          <div className="flex flex-col gap-4 md:gap-6">
-            {remainingTools.map((tool) => (
+        {primaryTools.length > 0 && (
+          <div className="grid items-start gap-4 md:gap-6">
+            {primaryTools.map((tool) => (
+              <tool.BentoCard key={tool.id} tool={tool} data={toolData[tool.id]} />
+            ))}
+          </div>
+        )}
+        {sideTools.length > 0 && (
+          <div className="grid items-start gap-4 md:gap-6">
+            {sideTools.map((tool) => (
               <tool.BentoCard key={tool.id} tool={tool} data={toolData[tool.id]} />
             ))}
           </div>
