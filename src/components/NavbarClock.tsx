@@ -16,22 +16,34 @@ export function NavbarClock() {
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
-    setNow(new Date());
-    const intervalId = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(intervalId);
+    const updateClock = () => setNow(new Date());
+    updateClock();
+
+    const millisecondsUntilNextMinute = 60_000 - (Date.now() % 60_000);
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+    const timeoutId = setTimeout(() => {
+      updateClock();
+      intervalId = setInterval(updateClock, 60_000);
+    }, millisecondsUntilNextMinute);
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (intervalId !== undefined) clearInterval(intervalId);
+    };
   }, []);
+
+  const date = now ? formatDate(now) : "---, --- --";
+  const time = now ? formatTime(now) : "--:--";
 
   return (
     <time
-      aria-label="Current date and time"
+      aria-label={`Current date and time: ${date}, ${time}`}
       dateTime={now?.toISOString()}
       className="inline-flex items-center gap-2 whitespace-nowrap text-[11px] text-muted-foreground sm:text-xs"
     >
-      <span className="tracking-wide">{now ? formatDate(now) : "---, --- --"}</span>
+      <span className="tracking-wide">{date}</span>
       <span aria-hidden="true">·</span>
-      <span className="font-medium tabular-nums text-foreground">
-        {now ? formatTime(now) : "--:--"}
-      </span>
+      <span className="font-medium tabular-nums text-foreground">{time}</span>
     </time>
   );
 }
