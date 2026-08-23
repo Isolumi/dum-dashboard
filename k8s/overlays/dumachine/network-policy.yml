@@ -53,3 +53,40 @@ spec:
       ports:
         - port: 3000
           protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: go2rtc-camera-isolation
+  namespace: dum-dashboard
+  labels:
+    app.kubernetes.io/name: go2rtc
+    app.kubernetes.io/component: camera-stream
+    app.kubernetes.io/part-of: dum-dashboard
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: go2rtc
+      app.kubernetes.io/component: camera-stream
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: traefik-kube-system
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 1984
+          protocol: TCP
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 192.168.2.44/32
+      ports:
+        - port: 554
+          protocol: TCP

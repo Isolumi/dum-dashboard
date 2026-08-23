@@ -15,7 +15,7 @@ const tokenBytes = Buffer.from(tokenName, "ascii");
 const privateHostBytes = Buffer.from(privateHost, "ascii");
 const viteMoniesPattern = /\bVITE_[A-Z0-9_]*MONIES[A-Z0-9_]*\b/i;
 const tokenAssignmentPattern = /^\s*(?:export\s+)?MONIES_API_TOKEN\s*=/m;
-const expectedDashboardLabels = {
+const expectedDashboardLabels: Record<string, string> = {
   "app.kubernetes.io/name": "dum-dashboard",
   "app.kubernetes.io/component": "dashboard",
 };
@@ -48,6 +48,53 @@ const hasLabels = (
   actual: Record<string, string> | undefined,
   expected: Record<string, string>,
 ): boolean => Object.entries(expected).every(([key, value]) => actual?.[key] === value);
+
+const selectorCanMatchDashboard = (selector: unknown): boolean => {
+  const value = asRecord(selector);
+  if (!value) return true;
+  if (Object.keys(value).some((key) => key !== "matchLabels" && key !== "matchExpressions")) {
+    return true;
+  }
+  const matchLabels = asRecord(value.matchLabels);
+  if (value.matchLabels !== undefined && !matchLabels) return true;
+  if (
+    matchLabels &&
+    Object.entries(matchLabels).some(
+      ([key, expected]) =>
+        typeof expected !== "string" ||
+        (Object.hasOwn(expectedDashboardLabels, key) && expectedDashboardLabels[key] !== expected),
+    )
+  ) {
+    return false;
+  }
+  if (value.matchExpressions === undefined) return true;
+  if (!Array.isArray(value.matchExpressions)) return true;
+  for (const expression of value.matchExpressions) {
+    const requirement = asRecord(expression);
+    const key = requirement?.key;
+    const operator = requirement?.operator;
+    const values = requirement?.values;
+    if (typeof key !== "string" || typeof operator !== "string") return true;
+    const dashboardValue = expectedDashboardLabels[key];
+    if (operator === "In") {
+      if (!Array.isArray(values) || !values.every((entry) => typeof entry === "string"))
+        return true;
+      if (dashboardValue !== undefined && !values.includes(dashboardValue)) return false;
+    } else if (operator === "NotIn") {
+      if (!Array.isArray(values) || !values.every((entry) => typeof entry === "string"))
+        return true;
+      if (dashboardValue !== undefined && values.includes(dashboardValue)) return false;
+    } else if (operator === "Exists") {
+      if (dashboardValue === undefined || values !== undefined) return true;
+    } else if (operator === "DoesNotExist") {
+      if (dashboardValue !== undefined) return false;
+      if (values !== undefined) return true;
+    } else {
+      return true;
+    }
+  }
+  return true;
+};
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === "object" && !Array.isArray(value)
@@ -372,10 +419,11 @@ const checkRenderedManifestContract = ({ repoRoot, renderedPath }: CheckOptions)
   }
   for (const policy of documents.filter((document) => document.kind === "NetworkPolicy")) {
     if (
-      policy.spec?.policyTypes?.includes("Egress") ||
-      Object.hasOwn(policy.spec ?? {}, "egress")
+      (policy.spec?.policyTypes?.includes("Egress") ||
+        Object.hasOwn(policy.spec ?? {}, "egress")) &&
+      selectorCanMatchDashboard(policy.spec?.podSelector)
     ) {
-      fail("Task 12 must not add a dashboard egress policy.");
+      fail("Task 12 must not add a dashboard egress policy that can select dashboard pods.");
     }
   }
 };
@@ -394,8 +442,10 @@ export const checkMoniesRepository = (options: CheckOptions): void => {
 const readArgument = (name: string): string => {
   const index = process.argv.indexOf(name);
   const value = index >= 0 ? process.argv[index + 1] : undefined;
-  if (!value) fail(`Missing required argument ${name}.`);
-  return resolve(value);
+  if (typeof value !== "string" || value.length === 0) {
+    fail(`Missing required argument ${name}.`);
+  }
+  return resolve(value ?? "");
 };
 
 if (import.meta.main) {

@@ -16,6 +16,7 @@ import { Route as LayoutHomelabRouteRouteImport } from './routes/_layout/homelab
 import { Route as LayoutTodosIndexRouteImport } from './routes/_layout/todos/index'
 import { Route as LayoutMoniesIndexRouteImport } from './routes/_layout/monies/index'
 import { Route as LayoutHomelabIndexRouteImport } from './routes/_layout/homelab/index'
+import { Route as LayoutCamerasIndexRouteImport } from './routes/_layout/cameras/index'
 import { Route as LayoutCalendarIndexRouteImport } from './routes/_layout/calendar/index'
 import { Route as CalendarOauthCallbackRouteImport } from './routes/calendar/oauth/callback'
 import { Route as LayoutHomelabServicesRouteImport } from './routes/_layout/homelab/services'
@@ -56,6 +57,11 @@ const LayoutHomelabIndexRoute = LayoutHomelabIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => LayoutHomelabRouteRoute,
+} as any)
+const LayoutCamerasIndexRoute = LayoutCamerasIndexRouteImport.update({
+  id: '/cameras/',
+  path: '/cameras/',
+  getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutCalendarIndexRoute = LayoutCalendarIndexRouteImport.update({
   id: '/calendar/',
@@ -99,6 +105,7 @@ export interface FileRoutesByFullPath {
   '/homelab/services': typeof LayoutHomelabServicesRoute
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/calendar/': typeof LayoutCalendarIndexRoute
+  '/cameras/': typeof LayoutCamerasIndexRoute
   '/homelab/': typeof LayoutHomelabIndexRoute
   '/monies/': typeof LayoutMoniesIndexRoute
   '/todos/': typeof LayoutTodosIndexRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   '/homelab/services': typeof LayoutHomelabServicesRoute
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/calendar': typeof LayoutCalendarIndexRoute
+  '/cameras': typeof LayoutCamerasIndexRoute
   '/homelab': typeof LayoutHomelabIndexRoute
   '/monies': typeof LayoutMoniesIndexRoute
   '/todos': typeof LayoutTodosIndexRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   '/_layout/homelab/services': typeof LayoutHomelabServicesRoute
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/_layout/calendar/': typeof LayoutCalendarIndexRoute
+  '/_layout/cameras/': typeof LayoutCamerasIndexRoute
   '/_layout/homelab/': typeof LayoutHomelabIndexRoute
   '/_layout/monies/': typeof LayoutMoniesIndexRoute
   '/_layout/todos/': typeof LayoutTodosIndexRoute
@@ -144,6 +153,7 @@ export interface FileRouteTypes {
     | '/homelab/services'
     | '/calendar/oauth/callback'
     | '/calendar/'
+    | '/cameras/'
     | '/homelab/'
     | '/monies/'
     | '/todos/'
@@ -157,6 +167,7 @@ export interface FileRouteTypes {
     | '/homelab/services'
     | '/calendar/oauth/callback'
     | '/calendar'
+    | '/cameras'
     | '/homelab'
     | '/monies'
     | '/todos'
@@ -172,6 +183,7 @@ export interface FileRouteTypes {
     | '/_layout/homelab/services'
     | '/calendar/oauth/callback'
     | '/_layout/calendar/'
+    | '/_layout/cameras/'
     | '/_layout/homelab/'
     | '/_layout/monies/'
     | '/_layout/todos/'
@@ -234,6 +246,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/homelab/'
       preLoaderRoute: typeof LayoutHomelabIndexRouteImport
       parentRoute: typeof LayoutHomelabRouteRoute
+    }
+    '/_layout/cameras/': {
+      id: '/_layout/cameras/'
+      path: '/cameras'
+      fullPath: '/cameras/'
+      preLoaderRoute: typeof LayoutCamerasIndexRouteImport
+      parentRoute: typeof LayoutRoute
     }
     '/_layout/calendar/': {
       id: '/_layout/calendar/'
@@ -302,6 +321,7 @@ interface LayoutRouteChildren {
   LayoutDevColoursRoute: typeof LayoutDevColoursRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
   LayoutCalendarIndexRoute: typeof LayoutCalendarIndexRoute
+  LayoutCamerasIndexRoute: typeof LayoutCamerasIndexRoute
   LayoutMoniesIndexRoute: typeof LayoutMoniesIndexRoute
   LayoutTodosIndexRoute: typeof LayoutTodosIndexRoute
 }
@@ -311,6 +331,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutDevColoursRoute: LayoutDevColoursRoute,
   LayoutIndexRoute: LayoutIndexRoute,
   LayoutCalendarIndexRoute: LayoutCalendarIndexRoute,
+  LayoutCamerasIndexRoute: LayoutCamerasIndexRoute,
   LayoutMoniesIndexRoute: LayoutMoniesIndexRoute,
   LayoutTodosIndexRoute: LayoutTodosIndexRoute,
 }

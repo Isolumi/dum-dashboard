@@ -3,6 +3,8 @@ kind: Kustomization
 resources:
   - dashboard-deployment.yml
   - dashboard-service.yml
+  - go2rtc-deployment.yml
+  - go2rtc-service.yml
   - gateway-deployment.yml
   - gateway-service.yml
   - gateway-rbac.yml

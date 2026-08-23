@@ -65,6 +65,9 @@ jobs:
       - name: Verify Monies client-secret boundary
         run: bash scripts/check-monies-manifests.sh
 
+      - name: Verify camera secret and network boundaries
+        run: bash scripts/check-camera-manifests.sh
+
   build-and-push:
     if: github.event_name == 'push'
     needs: verify

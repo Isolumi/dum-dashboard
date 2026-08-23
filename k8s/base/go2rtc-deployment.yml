@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go2rtc
+  namespace: dum-dashboard
+  labels:
+    app.kubernetes.io/name: go2rtc
+    app.kubernetes.io/component: camera-stream
+    app.kubernetes.io/part-of: dum-dashboard
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: go2rtc
+      app.kubernetes.io/component: camera-stream
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: go2rtc
+        app.kubernetes.io/component: camera-stream
+        app.kubernetes.io/part-of: dum-dashboard
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: go2rtc
+          image: ghcr.io/alexxit/go2rtc:1.9.14@sha256:1120820fa7405c7655c71928c1f919feaa031fbb34fdc13ebe716006179fe346
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 1984
+              protocol: TCP
+          env:
+            - name: TAPO_CAMERA_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: go2rtc-config
+                  key: TAPO_CAMERA_HOST
+            - name: TAPO_CAMERA_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: dum-dashboard-camera-secrets
+                  key: TAPO_CAMERA_USERNAME
+            - name: TAPO_CAMERA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dum-dashboard-camera-secrets
+                  key: TAPO_CAMERA_PASSWORD
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: go2rtc-config
+            items:
+              - key: go2rtc.yml
+                path: go2rtc.yaml
