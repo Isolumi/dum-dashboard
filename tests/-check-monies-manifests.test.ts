@@ -189,6 +189,11 @@ const appendFixtureFile = async (
   await writeFile(path, `${original}\n${mutation}\n`);
 };
 
+const appendRenderedManifest = async (fixture: Fixture, mutation: string): Promise<void> => {
+  const original = await readFile(fixture.renderedPath, "utf8");
+  await writeFile(fixture.renderedPath, `${original}\n${mutation}\n`);
+};
+
 const createBuiltArtifact = async (
   fixture: Fixture,
   name: string,
@@ -367,6 +372,105 @@ describe("Monies client-secret guard mutations", () => {
       fixture,
       relativePath,
       `vi.stubEnv(${JSON.stringify(tokenName)}, "test-token");`,
+    );
+
+    expect(() => runChecker(fixture)).not.toThrow();
+  });
+
+  test("allows an egress policy that can select only the go2rtc camera pod", async () => {
+    await appendRenderedManifest(
+      fixture,
+      `---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: go2rtc-camera-isolation
+  namespace: dum-dashboard
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: go2rtc
+  policyTypes: [Egress]
+  egress: []`,
+    );
+
+    expect(() => runChecker(fixture)).not.toThrow();
+  });
+
+  test.each([
+    ["an empty selector", "podSelector: {}"],
+    [
+      "a dashboard-matching selector",
+      "podSelector:\n    matchLabels:\n      app.kubernetes.io/name: dum-dashboard",
+    ],
+  ])("rejects egress policy with %s", async (_label, selector) => {
+    await appendRenderedManifest(
+      fixture,
+      `---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dashboard-egress-mutation
+  namespace: dum-dashboard
+spec:
+  ${selector}
+  policyTypes: [Egress]
+  egress: []`,
+    );
+
+    expect(() => runChecker(fixture)).toThrow("dashboard egress policy");
+  });
+
+  test.each([
+    ["an unknown matchLabel", "matchLabels:\n      app.kubernetes.io/part-of: dum-dashboard"],
+    [
+      "an unknown In expression",
+      "matchExpressions:\n      - key: app.kubernetes.io/part-of\n        operator: In\n        values: [dum-dashboard]",
+    ],
+    [
+      "an unknown NotIn expression",
+      "matchExpressions:\n      - key: app.kubernetes.io/part-of\n        operator: NotIn\n        values: [other]",
+    ],
+    [
+      "an unknown Exists expression",
+      "matchExpressions:\n      - key: app.kubernetes.io/part-of\n        operator: Exists",
+    ],
+  ])("rejects egress policy with %s", async (_label, selector) => {
+    await appendRenderedManifest(
+      fixture,
+      `---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dashboard-egress-unknown-selector
+  namespace: dum-dashboard
+spec:
+  podSelector:
+    ${selector}
+  policyTypes: [Egress]
+  egress: []`,
+    );
+
+    expect(() => runChecker(fixture)).toThrow("dashboard egress policy");
+  });
+
+  test("allows an egress policy with a contradictory known-label expression", async () => {
+    await appendRenderedManifest(
+      fixture,
+      `---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: camera-only-expression
+  namespace: dum-dashboard
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [go2rtc]
+  policyTypes: [Egress]
+  egress: []`,
     );
 
     expect(() => runChecker(fixture)).not.toThrow();

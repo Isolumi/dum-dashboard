@@ -11,6 +11,7 @@ import {
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Camera } from "lucide-react";
 
 const { getCalendarEventsMock, getHomelabOverviewMock, getTodosMock } = vi.hoisted(() => ({
   getCalendarEventsMock: vi.fn(),
@@ -30,11 +31,27 @@ vi.mock("#/routes/_layout/calendar/-calendar.functions", () => ({
   getCalendarEvents: getCalendarEventsMock,
 }));
 
-import { Route } from "./index";
+class FakeCameraStreamElement extends HTMLElement {
+  mode = "";
+  media = "";
+  background = true;
+  visibilityCheck = false;
+  visibilityThreshold = 0;
+  src = "";
+  video: HTMLVideoElement | null = null;
+  ws: WebSocket | null = null;
+}
+
+if (!customElements.get("dum-camera-stream")) {
+  customElements.define("dum-camera-stream", FakeCameraStreamElement);
+}
+
+const { tools } = await import("#/tools/registry");
+const { Route } = await import("./index");
 
 async function renderInsideLayout(content: ReactNode) {
   const rootRoute = createRootRoute({ component: () => <main>{content}</main> });
-  const routes = ["todos", "calendar", "homelab"].map((path) =>
+  const routes = ["todos", "cameras", "calendar", "homelab"].map((path) =>
     createRoute({ getParentRoute: () => rootRoute, path }),
   );
   const router = createRouter({
@@ -58,6 +75,18 @@ afterEach(() => {
 });
 
 describe("main dashboard composition", () => {
+  it("registers Cameras immediately after Clock with the Camera icon", () => {
+    const clockIndex = tools.findIndex((tool) => tool.id === "clock");
+    const cameraTool = tools[clockIndex + 1];
+
+    expect(cameraTool).toMatchObject({
+      id: "cameras",
+      label: "Cameras",
+      route: "/cameras",
+      icon: Camera,
+    });
+  });
+
   it("catches the production break where a stalled Homelab request blocks static dashboard cards", async () => {
     const loader = Route.options.loader as ((context: never) => unknown) | undefined;
     if (!loader) throw new Error("Dashboard loader is missing");
@@ -94,6 +123,27 @@ describe("main dashboard composition", () => {
 
     const todoCard = screen.getByRole("region", { name: "Todos" });
     expect(todoCard.parentElement?.className).toContain("items-start");
+  });
+
+  it("keeps Clock, Camera, and Calendar in that order in the overview right column", async () => {
+    vi.spyOn(Route, "useLoaderData").mockReturnValue({});
+    const OverviewPage = Route.options.component as ComponentType;
+
+    await renderInsideLayout(<OverviewPage />);
+
+    const clockCard = screen.getByText(/^\d{2}:\d{2}$/).parentElement;
+    const cameraCard = screen.getByRole("region", { name: "Camera" }).closest("a");
+    const calendarCard = screen.getByRole("link", { name: "Open Calendar tool" });
+
+    expect(clockCard?.parentElement).toBe(cameraCard?.parentElement);
+    expect(cameraCard?.parentElement).toBe(calendarCard.parentElement);
+    expect(
+      (clockCard?.compareDocumentPosition(cameraCard ?? document.body) ?? 0) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      (cameraCard?.compareDocumentPosition(calendarCard) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("catches the production break where the error wrapper nests a second main landmark", async () => {
