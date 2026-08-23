@@ -75,10 +75,10 @@ afterEach(() => {
 });
 
 describe("main dashboard composition", () => {
-  it("registers Cameras immediately after Clock with the Camera icon", () => {
-    const clockIndex = tools.findIndex((tool) => tool.id === "clock");
-    const cameraTool = tools[clockIndex + 1];
+  it("keeps the clock out of the bento registry and retains the Cameras tool", () => {
+    const cameraTool = tools.find((tool) => tool.id === "cameras");
 
+    expect(tools.find((tool) => tool.id === "clock")).toBeUndefined();
     expect(cameraTool).toMatchObject({
       id: "cameras",
       label: "Cameras",
@@ -125,25 +125,25 @@ describe("main dashboard composition", () => {
     expect(todoCard.parentElement?.className).toContain("items-start");
   });
 
-  it("keeps Clock, Camera, and Calendar in that order in the overview right column", async () => {
+  it("stacks Calendar directly after Todos and keeps the other tools in the side column", async () => {
     vi.spyOn(Route, "useLoaderData").mockReturnValue({});
     const OverviewPage = Route.options.component as ComponentType;
 
     await renderInsideLayout(<OverviewPage />);
 
-    const clockCard = screen.getByText(/^\d{2}:\d{2}$/).parentElement;
-    const cameraCard = screen.getByRole("region", { name: "Camera" }).closest("a");
+    const todoCard = screen.getByRole("region", { name: "Todos" });
     const calendarCard = screen.getByRole("link", { name: "Open Calendar tool" });
+    const cameraCard = screen.getByRole("region", { name: "Camera" }).closest("a");
+    const moniesCard = screen.getByRole("link", { name: "Open Monies tool" });
+    const homelabCard = screen.getByRole("link", { name: "Open Homelab overview" });
 
-    expect(clockCard?.parentElement).toBe(cameraCard?.parentElement);
-    expect(cameraCard?.parentElement).toBe(calendarCard.parentElement);
+    expect(todoCard.parentElement).toBe(calendarCard.parentElement);
     expect(
-      (clockCard?.compareDocumentPosition(cameraCard ?? document.body) ?? 0) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      todoCard.compareDocumentPosition(calendarCard) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(
-      (cameraCard?.compareDocumentPosition(calendarCard) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(cameraCard?.parentElement).not.toBe(todoCard.parentElement);
+    expect(cameraCard?.parentElement).toBe(moniesCard.parentElement);
+    expect(moniesCard.parentElement).toBe(homelabCard.parentElement);
   });
 
   it("catches the production break where the error wrapper nests a second main landmark", async () => {
