@@ -1,6 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { tools } from "#/tools/registry";
 
+const SIDE_TOOL_RANK: Record<string, number> = {
+  monies: 0,
+  homelab: 1,
+  cameras: 2,
+};
+
 export const Route = createFileRoute("/_layout/")({
   loader: loadToolData,
   errorComponent: OverviewError,
@@ -22,7 +28,9 @@ function OverviewError() {
 
 function OverviewPage() {
   const primaryTools = tools.filter((tool) => tool.id === "todos" || tool.id === "calendar");
-  const sideTools = tools.filter((tool) => tool.id !== "todos" && tool.id !== "calendar");
+  const sideTools = tools
+    .filter((tool) => tool.id !== "todos" && tool.id !== "calendar")
+    .sort((left, right) => (SIDE_TOOL_RANK[left.id] ?? 99) - (SIDE_TOOL_RANK[right.id] ?? 99));
   const toolData = Route.useLoaderData();
 
   return (
