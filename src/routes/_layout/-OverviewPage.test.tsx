@@ -125,7 +125,7 @@ describe("main dashboard composition", () => {
     expect(todoCard.parentElement?.className).toContain("items-start");
   });
 
-  it("stacks Calendar directly after Todos and keeps the other tools in the side column", async () => {
+  it("stacks Calendar after Todos and orders Monies, Homelab, then Camera in the side column", async () => {
     vi.spyOn(Route, "useLoaderData").mockReturnValue({});
     const OverviewPage = Route.options.component as ComponentType;
 
@@ -136,14 +136,49 @@ describe("main dashboard composition", () => {
     const cameraCard = screen.getByRole("region", { name: "Camera" }).closest("a");
     const moniesCard = screen.getByRole("link", { name: "Open Monies tool" });
     const homelabCard = screen.getByRole("link", { name: "Open Homelab overview" });
+    if (!cameraCard) throw new Error("Camera card link is missing");
 
     expect(todoCard.parentElement).toBe(calendarCard.parentElement);
     expect(
       todoCard.compareDocumentPosition(calendarCard) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(cameraCard?.parentElement).not.toBe(todoCard.parentElement);
-    expect(cameraCard?.parentElement).toBe(moniesCard.parentElement);
+    expect(cameraCard.parentElement).not.toBe(todoCard.parentElement);
+    expect(cameraCard.parentElement).toBe(moniesCard.parentElement);
     expect(moniesCard.parentElement).toBe(homelabCard.parentElement);
+    expect(
+      moniesCard.compareDocumentPosition(homelabCard) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      homelabCard.compareDocumentPosition(cameraCard) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("keeps Camera as the final side card when another tool is added", async () => {
+    const futureTool = {
+      id: "future",
+      label: "Future",
+      route: "/future",
+      icon: Camera,
+      BentoCard: () => <a aria-label="Open Future tool" href="/future" />,
+    };
+    tools.push(futureTool);
+
+    try {
+      vi.spyOn(Route, "useLoaderData").mockReturnValue({});
+      const OverviewPage = Route.options.component as ComponentType;
+
+      await renderInsideLayout(<OverviewPage />);
+
+      const futureCard = screen.getByRole("link", { name: "Open Future tool" });
+      const cameraCard = screen.getByRole("region", { name: "Camera" }).closest("a");
+      if (!cameraCard) throw new Error("Camera card link is missing");
+
+      expect(
+        futureCard.compareDocumentPosition(cameraCard) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    } finally {
+      tools.splice(tools.indexOf(futureTool), 1);
+    }
   });
 
   it("catches the production break where the error wrapper nests a second main landmark", async () => {
