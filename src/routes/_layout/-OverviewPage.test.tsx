@@ -153,6 +153,34 @@ describe("main dashboard composition", () => {
     ).toBeTruthy();
   });
 
+  it("keeps Camera as the final side card when another tool is added", async () => {
+    const futureTool = {
+      id: "future",
+      label: "Future",
+      route: "/future",
+      icon: Camera,
+      BentoCard: () => <a aria-label="Open Future tool" href="/future" />,
+    };
+    tools.push(futureTool);
+
+    try {
+      vi.spyOn(Route, "useLoaderData").mockReturnValue({});
+      const OverviewPage = Route.options.component as ComponentType;
+
+      await renderInsideLayout(<OverviewPage />);
+
+      const futureCard = screen.getByRole("link", { name: "Open Future tool" });
+      const cameraCard = screen.getByRole("region", { name: "Camera" }).closest("a");
+      if (!cameraCard) throw new Error("Camera card link is missing");
+
+      expect(
+        futureCard.compareDocumentPosition(cameraCard) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    } finally {
+      tools.splice(tools.indexOf(futureTool), 1);
+    }
+  });
+
   it("catches the production break where the error wrapper nests a second main landmark", async () => {
     const OverviewError = Route.options.errorComponent as ComponentType<{
       error: Error;

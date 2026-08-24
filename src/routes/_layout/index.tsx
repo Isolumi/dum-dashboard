@@ -4,7 +4,7 @@ import { tools } from "#/tools/registry";
 const SIDE_TOOL_RANK: Record<string, number> = {
   monies: 0,
   homelab: 1,
-  cameras: 2,
+  cameras: Number.POSITIVE_INFINITY,
 };
 
 export const Route = createFileRoute("/_layout/")({
@@ -30,7 +30,7 @@ function OverviewPage() {
   const primaryTools = tools.filter((tool) => tool.id === "todos" || tool.id === "calendar");
   const sideTools = tools
     .filter((tool) => tool.id !== "todos" && tool.id !== "calendar")
-    .sort((left, right) => (SIDE_TOOL_RANK[left.id] ?? 99) - (SIDE_TOOL_RANK[right.id] ?? 99));
+    .sort((left, right) => (SIDE_TOOL_RANK[left.id] ?? 2) - (SIDE_TOOL_RANK[right.id] ?? 2));
   const toolData = Route.useLoaderData();
 
   return (
