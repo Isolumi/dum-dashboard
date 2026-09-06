@@ -116,14 +116,17 @@ applications:
         name: kube-prometheus-stack-grafana
         imageRepository: docker.io/grafana/grafana
         tracksSource: false
+        expectedImagePolicy: best-effort
       - kind: Deployment
         name: kube-prometheus-stack-kube-state-metrics
         imageRepository: registry.k8s.io/kube-state-metrics/kube-state-metrics
         tracksSource: false
+        expectedImagePolicy: best-effort
       - kind: Deployment
         name: kube-prometheus-stack-operator
         imageRepository: quay.io/prometheus-operator/prometheus-operator
         tracksSource: false
+        expectedImagePolicy: best-effort
 
 services:
   - id: yootoob-mp3

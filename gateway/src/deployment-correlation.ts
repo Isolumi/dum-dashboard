@@ -407,17 +407,19 @@ function workloadState(
   }
 
   if (!expected.reference) {
-    issues.push(
-      issue(
-        "deployment-expected-image-unavailable",
-        "unknown",
-        `Argo CD does not report the expected image for ${target.name}.`,
-        "argocd",
-        resource,
-        input.observedAt,
-        { repository: target.imageRepository, expectedImage: null },
-      ),
-    );
+    if (target.expectedImagePolicy !== "best-effort") {
+      issues.push(
+        issue(
+          "deployment-expected-image-unavailable",
+          "unknown",
+          `Argo CD does not report the expected image for ${target.name}.`,
+          "argocd",
+          resource,
+          input.observedAt,
+          { repository: target.imageRepository, expectedImage: null },
+        ),
+      );
+    }
   } else if (!expected.tag && !expected.digest) {
     issues.push(
       issue(
