@@ -10,6 +10,7 @@ const workloadSchema = z
     name: nonEmptyString,
     imageRepository: nonEmptyString,
     tracksSource: z.boolean(),
+    expectedImagePolicy: z.enum(["required", "best-effort"]).optional(),
   })
   .strict();
 
