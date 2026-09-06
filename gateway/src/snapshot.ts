@@ -157,8 +157,19 @@ function parseServiceCatalogEntry(value: unknown): ServiceCatalogEntry | null {
       "imageRepository",
       "tracksSource",
     ]);
+    const workloadProperties = readOwnDataRecord(workload);
+    const rawExpectedImagePolicy = workloadProperties?.get("expectedImagePolicy");
+    let expectedImagePolicy: ApplicationCatalogEntry["workloads"][number]["expectedImagePolicy"];
+    if (rawExpectedImagePolicy === undefined) {
+      expectedImagePolicy = undefined;
+    } else if (rawExpectedImagePolicy === "required" || rawExpectedImagePolicy === "best-effort") {
+      expectedImagePolicy = rawExpectedImagePolicy;
+    } else {
+      return null;
+    }
     if (
       !fields ||
+      !workloadProperties ||
       !isNonEmptyString(fields.kind) ||
       !isNonEmptyString(fields.name) ||
       !isNonEmptyString(fields.imageRepository) ||
@@ -171,6 +182,7 @@ function parseServiceCatalogEntry(value: unknown): ServiceCatalogEntry | null {
       name: fields.name,
       imageRepository: fields.imageRepository,
       tracksSource: fields.tracksSource,
+      ...(expectedImagePolicy === undefined ? {} : { expectedImagePolicy }),
     };
   });
   if (!workloads || workloads.length === 0) return null;

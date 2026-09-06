@@ -318,6 +318,75 @@ describe("correlateDeployment", () => {
     );
   });
 
+  it("keeps a healthy best-effort workload healthy when Argo omits its image", () => {
+    const imageRepository = "registry.k8s.io/kube-state-metrics/kube-state-metrics";
+    const definition: ApplicationCatalogEntry = {
+      id: "monitoring",
+      name: "Monitoring",
+      namespace: "monitoring",
+      argoApplication: "kube-prometheus-stack",
+      workloads: [
+        {
+          kind: "Deployment",
+          name: "kube-prometheus-stack-kube-state-metrics",
+          imageRepository,
+          tracksSource: false,
+          expectedImagePolicy: "best-effort",
+        },
+      ],
+    };
+    const result = correlateDeployment(
+      {
+        workflow: null,
+        application: {
+          ...application(),
+          name: definition.argoApplication,
+          images: [],
+        },
+        kubernetes: {
+          workloads: [
+            {
+              kind: "Deployment",
+              name: "kube-prometheus-stack-kube-state-metrics",
+              namespace: "monitoring",
+              status: "healthy",
+              createdAt: "2026-09-06T00:00:00Z",
+              revision: "1",
+              desiredReplicas: 1,
+              availableReplicas: 1,
+            },
+          ],
+          pods: [
+            {
+              name: "kube-prometheus-stack-kube-state-metrics-abc",
+              namespace: "monitoring",
+              status: "healthy",
+              ready: true,
+              containerImages: [
+                imageEvidence(
+                  "kube-state-metrics",
+                  imageRepository,
+                  "v2.19.0",
+                  `sha256:${"d".repeat(64)}`,
+                ),
+              ],
+            },
+          ],
+        },
+        observedAt: "2026-09-06T00:02:00Z",
+      },
+      definition,
+    );
+
+    expect(result.status).toBe("healthy");
+    expect(result.workloads[0]?.status).toBe("healthy");
+    expect(result.issues).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ruleId: "deployment-expected-image-unavailable" }),
+      ]),
+    );
+  });
+
   it("correlates a catalog application without leaking Yootoob defaults", () => {
     const repository = "ghcr.io/isolumi/uwumi-hermes";
     const definition: ApplicationCatalogEntry = {

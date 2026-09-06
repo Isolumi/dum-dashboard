@@ -46,6 +46,7 @@ applications:
         name: kube-prometheus-stack-grafana
         imageRepository: docker.io/grafana/grafana
         tracksSource: false
+        expectedImagePolicy: best-effort
 services:
   - id: yootoob-mp3
     name: Yootoob MP3
@@ -94,6 +95,7 @@ services:
             name: "kube-prometheus-stack-grafana",
             imageRepository: "docker.io/grafana/grafana",
             tracksSource: false,
+            expectedImagePolicy: "best-effort",
           },
         ],
       },
