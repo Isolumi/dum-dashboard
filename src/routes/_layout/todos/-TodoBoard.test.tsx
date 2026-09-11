@@ -2,15 +2,22 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 
 import type { TodoController } from "./-useTodoController";
 
+type TestDragEvent = {
+  active: { id: string; rect?: { current?: { translated?: { top: number } } } };
+  over: { id: string; rect?: { top: number; height: number } } | null;
+};
+
 const dndTestState = vi.hoisted(() => ({
-  onDragEndHandlers: [] as Array<
-    (event: { active: { id: string }; over: { id: string } | null }) => void
-  >,
+  onDragStartHandlers: [] as Array<(event: { active: { id: string } }) => void>,
+  onDragOverHandlers: [] as Array<(event: TestDragEvent) => void>,
+  onDragEndHandlers: [] as Array<(event: TestDragEvent) => void>,
+  onDragCancelHandlers: [] as Array<() => void>,
+  sensorCalls: [] as Array<{ name: string; options: unknown }>,
 }));
 
 vi.mock("#/components/ui/popover", () => {
@@ -71,14 +78,29 @@ vi.mock("@dnd-kit/core", async (importOriginal) => {
     ...actual,
     DndContext: ({
       children,
+      onDragStart,
+      onDragOver,
       onDragEnd,
+      onDragCancel,
     }: {
       children: React.ReactNode;
-      onDragEnd: (event: { active: { id: string }; over: { id: string } | null }) => void;
+      onDragStart: (event: { active: { id: string } }) => void;
+      onDragOver: (event: TestDragEvent) => void;
+      onDragEnd: (event: TestDragEvent) => void;
+      onDragCancel: () => void;
     }) => {
+      dndTestState.onDragStartHandlers.push(onDragStart);
+      dndTestState.onDragOverHandlers.push(onDragOver);
       dndTestState.onDragEndHandlers.push(onDragEnd);
+      dndTestState.onDragCancelHandlers.push(onDragCancel);
       return <>{children}</>;
     },
+    DragOverlay: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    useSensor: (sensor: { name?: string }, options: unknown) => {
+      dndTestState.sensorCalls.push({ name: sensor.name ?? "unknown", options });
+      return { sensor, options };
+    },
+    useSensors: (...sensors: unknown[]) => sensors,
   };
 });
 
@@ -89,7 +111,11 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  dndTestState.onDragStartHandlers.length = 0;
+  dndTestState.onDragOverHandlers.length = 0;
   dndTestState.onDragEndHandlers.length = 0;
+  dndTestState.onDragCancelHandlers.length = 0;
+  dndTestState.sensorCalls.length = 0;
 });
 
 function makeController(overrides: Partial<TodoController> = {}): TodoController {
@@ -106,6 +132,7 @@ function makeController(overrides: Partial<TodoController> = {}): TodoController
     remove: vi.fn().mockResolvedValue(undefined),
     reorder: vi.fn().mockResolvedValue(undefined),
     move: vi.fn().mockResolvedValue(undefined),
+    setDragging: vi.fn(),
     ...overrides,
   };
 }
@@ -124,6 +151,23 @@ function makeTodo(id: string, priority: "high" | "low", sort_order: number) {
 }
 
 describe("TodoBoard", () => {
+  it("uses deliberate mouse and touch activation thresholds", () => {
+    render(<TodoBoard controller={makeController()} variant="full" />);
+
+    expect(dndTestState.sensorCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "MouseSensor",
+          options: { activationConstraint: { distance: 6 } },
+        }),
+        expect.objectContaining({
+          name: "TouchSensor",
+          options: { activationConstraint: { delay: 160, tolerance: 6 } },
+        }),
+      ]),
+    );
+  });
+
   it.each(["compact", "full"] as const)(
     "keeps empty High and Low sections ready to add todos in %s mode",
     (variant) => {
@@ -208,12 +252,26 @@ describe("TodoBoard", () => {
     });
     render(<TodoBoard controller={controller} variant="full" />);
 
-    dndTestState.onDragEndHandlers[0]?.({
-      active: { id: highTodo.id },
-      over: { id: lowTodo.id },
+    act(() => {
+      dndTestState.onDragStartHandlers[0]?.({ active: { id: highTodo.id } });
+      dndTestState.onDragOverHandlers[0]?.({
+        active: { id: highTodo.id },
+        over: { id: lowTodo.id },
+      });
+    });
+
+    expect(screen.getByTestId("todo-drag-overlay").textContent).toContain(highTodo.name);
+    expect(controller.setDragging).toHaveBeenCalledWith(true);
+
+    act(() => {
+      dndTestState.onDragEndHandlers[0]?.({
+        active: { id: highTodo.id },
+        over: { id: lowTodo.id },
+      });
     });
 
     expect(move).toHaveBeenCalledWith(highTodo.id, "low", 0);
+    expect(controller.setDragging).toHaveBeenLastCalledWith(false);
   });
 
   it("appends a High todo after the last Low todo through the trailing drop target", () => {
@@ -227,9 +285,16 @@ describe("TodoBoard", () => {
     });
     render(<TodoBoard controller={controller} variant="full" />);
 
-    dndTestState.onDragEndHandlers[0]?.({
-      active: { id: highTodo.id },
-      over: { id: "priority-low-end" },
+    act(() => {
+      dndTestState.onDragStartHandlers[0]?.({ active: { id: highTodo.id } });
+      dndTestState.onDragOverHandlers[0]?.({
+        active: { id: highTodo.id },
+        over: { id: "priority-low-end" },
+      });
+      dndTestState.onDragEndHandlers[0]?.({
+        active: { id: highTodo.id },
+        over: { id: "priority-low-end" },
+      });
     });
 
     expect(move).toHaveBeenCalledWith(highTodo.id, "low", 1);
@@ -246,9 +311,16 @@ describe("TodoBoard", () => {
     });
     render(<TodoBoard controller={controller} variant="full" />);
 
-    dndTestState.onDragEndHandlers[0]?.({
-      active: { id: first.id },
-      over: { id: second.id },
+    act(() => {
+      dndTestState.onDragStartHandlers[0]?.({ active: { id: first.id } });
+      dndTestState.onDragOverHandlers[0]?.({
+        active: { id: first.id },
+        over: { id: second.id },
+      });
+      dndTestState.onDragEndHandlers[0]?.({
+        active: { id: first.id },
+        over: { id: second.id },
+      });
     });
 
     expect(reorder).toHaveBeenCalledWith("high", [second.id, first.id]);
@@ -265,11 +337,42 @@ describe("TodoBoard", () => {
     });
     render(<TodoBoard controller={controller} variant="full" />);
 
-    dndTestState.onDragEndHandlers[0]?.({
-      active: { id: first.id },
-      over: { id: "priority-high-end" },
+    act(() => {
+      dndTestState.onDragStartHandlers[0]?.({ active: { id: first.id } });
+      dndTestState.onDragOverHandlers[0]?.({
+        active: { id: first.id },
+        over: { id: "priority-high-end" },
+      });
+      dndTestState.onDragEndHandlers[0]?.({
+        active: { id: first.id },
+        over: { id: "priority-high-end" },
+      });
     });
 
     expect(reorder).toHaveBeenCalledWith("high", [second.id, first.id]);
+  });
+
+  it("restores the original preview without a server write when dragging is cancelled", () => {
+    const highTodo = makeTodo("high-todo", "high", 0);
+    const lowTodo = makeTodo("low-todo", "low", 0);
+    const controller = makeController({
+      todos: [highTodo, lowTodo],
+      grouped: { high: [highTodo], low: [lowTodo] },
+    });
+    render(<TodoBoard controller={controller} variant="full" />);
+
+    act(() => {
+      dndTestState.onDragStartHandlers[0]?.({ active: { id: highTodo.id } });
+      dndTestState.onDragOverHandlers[0]?.({
+        active: { id: highTodo.id },
+        over: { id: lowTodo.id },
+      });
+      dndTestState.onDragCancelHandlers[0]?.();
+    });
+
+    expect(controller.move).not.toHaveBeenCalled();
+    expect(controller.reorder).not.toHaveBeenCalled();
+    expect(controller.setDragging).toHaveBeenLastCalledWith(false);
+    expect(screen.queryByTestId("todo-drag-overlay")).toBeNull();
   });
 });

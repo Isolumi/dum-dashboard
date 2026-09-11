@@ -200,6 +200,7 @@ describe("AddTodoRow (expanded state)", () => {
     fireEvent.change(screen.getByLabelText(/choose date and time time/i), {
       target: { value: "14:30" },
     });
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
     const dateTrigger = screen.getByRole("button", { name: /choose date and time/i });
     expect(dateTrigger.textContent?.trim()).toBe("");
     expect(dateTrigger.querySelector("svg")).toBeTruthy();

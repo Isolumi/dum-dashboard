@@ -210,7 +210,7 @@ describe("TodoDueDatePicker", () => {
     expect((timeInput as HTMLInputElement).type).toBe("time");
   });
 
-  it("serializes typed local date and time changes as ISO timestamps", () => {
+  it("commits typed date and time once when Done is selected", () => {
     const onChange = vi.fn();
     render(
       <TodoDueDatePicker
@@ -226,13 +226,18 @@ describe("TodoDueDatePicker", () => {
     const timeInput = screen.getByLabelText(/edit due date for "deploy app" time/i);
 
     fireEvent.change(dateInput, { target: { value: "2026-08-09" } });
-    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 7, 9, 9, 0).toISOString(), true);
-
     fireEvent.change(timeInput, { target: { value: "15:30" } });
-    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 7, 9, 15, 30).toISOString(), true);
+
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
+
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledWith(new Date(2026, 7, 9, 15, 30).toISOString(), true);
+    expect(screen.queryByLabelText(/edit due date for "deploy app" date/i)).toBeNull();
   });
 
-  it("preserves the existing time for calendar picks and supports clearing", () => {
+  it("keeps calendar picks and Clear as drafts until Done commits them", () => {
     const onChange = vi.fn();
     render(
       <TodoDueDatePicker
@@ -245,10 +250,65 @@ describe("TodoDueDatePicker", () => {
     fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));
     fireEvent.click(screen.getByRole("button", { name: /december 25, 2026/i }));
 
-    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 11, 25, 15, 30).toISOString(), true);
+    expect(onChange).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: /clear due date/i }));
-    expect(onChange).toHaveBeenLastCalledWith(null, false);
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
+
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledWith(null, false);
+  });
+
+  it("discards a draft when Cancel is selected", () => {
+    const onChange = vi.fn();
+    const originalValue = new Date(2026, 7, 9, 15, 30).toISOString();
+    render(
+      <TodoDueDatePicker
+        value={originalValue}
+        hasTime
+        onChange={onChange}
+        label={'Edit due date for "Deploy app"'}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));
+    fireEvent.change(screen.getByLabelText(/edit due date for "deploy app" date/i), {
+      target: { value: "2026-08-11" },
+    });
+    fireEvent.change(screen.getByLabelText(/edit due date for "deploy app" time/i), {
+      target: { value: "18:45" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText(/edit due date for "deploy app" date/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));
+    expect(
+      (screen.getByLabelText(/edit due date for "deploy app" date/i) as HTMLInputElement).value,
+    ).toBe("2026-08-09");
+    expect(
+      (screen.getByLabelText(/edit due date for "deploy app" time/i) as HTMLInputElement).value,
+    ).toBe("15:30");
+  });
+
+  it("does not send a no-op save when Done is selected without changes", () => {
+    const onChange = vi.fn();
+    render(
+      <TodoDueDatePicker
+        value={new Date(2026, 7, 9, 15, 30).toISOString()}
+        hasTime
+        onChange={onChange}
+        label={'Edit due date for "Deploy app"'}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
+
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("closes the popover on Escape", () => {
