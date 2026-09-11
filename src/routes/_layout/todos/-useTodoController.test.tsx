@@ -685,6 +685,21 @@ describe("useTodoController", () => {
     expect(result.current.todos).toEqual([savedTodo]);
   });
 
+  it("pauses polling while a todo is being dragged", async () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useTodoController([highTodo]));
+
+    act(() => result.current.setDragging(true));
+    await act(async () => vi.advanceTimersByTimeAsync(6_000));
+
+    expect(getTodos).not.toHaveBeenCalled();
+
+    act(() => result.current.setDragging(false));
+    await act(async () => vi.advanceTimersByTimeAsync(3_000));
+
+    expect(getTodos).toHaveBeenCalledOnce();
+  });
+
   it("discards a poll that started during a mutation even when it resolves afterward", async () => {
     vi.useFakeTimers();
     const pendingUpdate = deferred<Todo>();

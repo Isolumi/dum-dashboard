@@ -125,6 +125,7 @@ describe("TodoRow", () => {
     expect(screen.queryByRole("button", { name: /december 25, 2026/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));
     fireEvent.click(screen.getByRole("button", { name: /december 25, 2026/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
 
     expect(onUpdate).toHaveBeenCalledWith({
       id: "todo-high",
@@ -167,6 +168,7 @@ describe("TodoRow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /edit due date for "deploy app"/i }));
     fireEvent.click(screen.getByRole("button", { name: /clear due date/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
 
     expect(onUpdate).toHaveBeenCalledWith({
       id: "todo-high",

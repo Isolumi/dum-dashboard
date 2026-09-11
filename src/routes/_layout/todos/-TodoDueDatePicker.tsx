@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 
 import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
@@ -34,14 +34,15 @@ interface DueDatePanelProps {
   dateValue: string;
   disabled: boolean;
   label: string;
+  onCancel: () => void;
   onClear: () => void;
   onDateChange: (value: string) => void;
   onDateSelect: (date: Date | undefined) => void;
+  onDone: () => void;
   onTimeChange: (value: string) => void;
   selectedDate: Date | undefined;
   timeInputId: string;
   timeValue: string;
-  value: string | null;
 }
 
 function DueDatePanel({
@@ -49,14 +50,15 @@ function DueDatePanel({
   dateValue,
   disabled,
   label,
+  onCancel,
   onClear,
   onDateChange,
   onDateSelect,
+  onDone,
   onTimeChange,
   selectedDate,
   timeInputId,
   timeValue,
-  value,
 }: DueDatePanelProps) {
   return (
     <div className="flex flex-col gap-3 p-3">
@@ -82,16 +84,24 @@ function DueDatePanel({
         />
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
         <Button
           type="button"
           variant="ghost"
-          disabled={disabled || (!dateValue && !value)}
+          disabled={disabled || !dateValue}
           onClick={onClear}
           aria-label="Clear due date"
         >
           Clear
         </Button>
+        <div className="flex items-center gap-1">
+          <Button type="button" variant="ghost" disabled={disabled} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="button" disabled={disabled} onClick={onDone}>
+            Done
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -114,35 +124,50 @@ export function TodoDueDatePicker({
   const timeInputId = useId();
   const titleId = useId();
 
-  useEffect(() => {
+  const resetDraft = useCallback(() => {
     const next = getTodoDueDateInputValues(value, hasTime);
     setDateValue(next.dateValue);
     setTimeValue(next.timeValue);
   }, [hasTime, value]);
+
+  useEffect(() => {
+    if (!open) resetDraft();
+  }, [open, resetDraft]);
 
   const selectedDate = useMemo(
     () => (dateValue ? new Date(`${dateValue}T00:00:00`) : undefined),
     [dateValue],
   );
 
-  const displayValue = useMemo(() => {
-    if (!dateValue) return "";
-    if (!timeValue) return formatTodoDueDate(dateValue);
-    return formatTodoDueDate(toTodoDueDate(dateValue, timeValue), true);
-  }, [dateValue, timeValue]);
+  const displayValue = useMemo(() => formatTodoDueDate(value, hasTime), [hasTime, value]);
 
   const compactIconOnly = compact && showValue && !value;
 
-  function updateDueDate(nextDateValue: string, nextTimeValue: string) {
-    setDateValue(nextDateValue);
-    setTimeValue(nextTimeValue);
+  function handleOpenChange(nextOpen: boolean) {
+    resetDraft();
+    setOpen(nextOpen);
+  }
 
-    if (!nextDateValue) {
-      onChange(null, false);
+  function cancelDraft() {
+    resetDraft();
+    setOpen(false);
+  }
+
+  function commitDraft() {
+    const committed = getTodoDueDateInputValues(value, hasTime);
+    if (committed.dateValue === dateValue && committed.timeValue === timeValue) {
+      setOpen(false);
       return;
     }
 
-    onChange(toTodoDueDate(nextDateValue, nextTimeValue), true);
+    if (!dateValue) {
+      onChange(null, false);
+    } else if (!timeValue) {
+      onChange(dateValue, false);
+    } else {
+      onChange(toTodoDueDate(dateValue, timeValue), true);
+    }
+    setOpen(false);
   }
 
   function renderTrigger() {
@@ -187,47 +212,51 @@ export function TodoDueDatePicker({
       dateValue={dateValue}
       disabled={disabled}
       label={label}
-      onClear={() => updateDueDate("", "")}
+      onCancel={cancelDraft}
+      onClear={() => {
+        setDateValue("");
+        setTimeValue("");
+      }}
       onDateChange={(nextDateValue) => {
         if (!nextDateValue) {
-          updateDueDate("", "");
+          setDateValue("");
+          setTimeValue("");
           return;
         }
 
-        updateDueDate(nextDateValue, timeValue || DEFAULT_TODO_DUE_TIME);
+        setDateValue(nextDateValue);
+        setTimeValue((current) => current || DEFAULT_TODO_DUE_TIME);
       }}
       onDateSelect={(date) => {
         if (!date) {
-          updateDueDate("", "");
+          setDateValue("");
+          setTimeValue("");
           return;
         }
 
-        updateDueDate(format(date, "yyyy-MM-dd"), timeValue || DEFAULT_TODO_DUE_TIME);
+        setDateValue(format(date, "yyyy-MM-dd"));
+        setTimeValue((current) => current || DEFAULT_TODO_DUE_TIME);
       }}
+      onDone={commitDraft}
       onTimeChange={(nextTimeValue) => {
-        const nextValue = nextTimeValue || DEFAULT_TODO_DUE_TIME;
-        setTimeValue(nextValue);
-
-        if (!dateValue) return;
-        onChange(toTodoDueDate(dateValue, nextValue), true);
+        setTimeValue(nextTimeValue);
       }}
       selectedDate={selectedDate}
       timeInputId={timeInputId}
       timeValue={timeValue}
-      value={value}
     />
   );
 
   const closeOnEscape = (event: React.KeyboardEvent) => {
     if (event.key === "Escape") {
       event.preventDefault();
-      setOpen(false);
+      cancelDraft();
     }
   };
 
   if (presentation === "dialog") {
     return (
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogTrigger render={renderTrigger()}>{triggerContents}</DialogTrigger>
         <DialogContent
           data-testid="due-date-dialog"
@@ -244,7 +273,7 @@ export function TodoDueDatePicker({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger render={renderTrigger()}>{triggerContents}</PopoverTrigger>
       <PopoverContent
         data-testid="due-date-popover"

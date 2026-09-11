@@ -31,7 +31,15 @@ function SortableTodoRow({
   isPending,
   dragDisabled,
 }: TodoRowProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: todo.id,
     disabled: isPending || dragDisabled,
     data: { priority: todo.priority },
@@ -43,17 +51,14 @@ function SortableTodoRow({
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      className={cn(isDragging && "relative z-10 opacity-50")}
-    >
+    <div ref={setNodeRef} style={style} className={cn(isDragging && "relative z-10 opacity-0")}>
       <TodoRow
         todo={todo}
         onUpdate={onUpdate}
         onDelete={onDelete}
         dragListeners={isPending || dragDisabled ? undefined : listeners}
+        dragAttributes={isPending || dragDisabled ? undefined : attributes}
+        dragActivatorRef={setActivatorNodeRef}
         compact={compact}
         isPending={isPending}
         dragDisabled={dragDisabled}

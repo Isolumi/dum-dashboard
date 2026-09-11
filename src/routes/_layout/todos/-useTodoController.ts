@@ -60,6 +60,7 @@ export interface TodoController {
   remove(id: string): Promise<void>;
   reorder(priority: TodoPriority, orderedIds: string[]): Promise<void>;
   move(id: string, targetPriority: TodoPriority, targetIndex: number): Promise<void>;
+  setDragging(active: boolean): void;
 }
 
 export function useTodoController(initialTodos?: Todo[]): TodoController {
@@ -83,6 +84,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   const orderingQueueRef = useRef<Promise<void>>(Promise.resolve());
   const orderingQueueBusyRef = useRef(false);
   const shouldLoadInitiallyRef = useRef(!hasInitialTodos);
+  const draggingRef = useRef(false);
 
   const replaceTodos = useCallback((replace: (current: Todo[]) => Todo[]) => {
     const next = replace(todosRef.current);
@@ -185,7 +187,14 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
     void loadTodos();
   }, [loadTodos]);
 
-  usePollingRefresh(() => loadTodos({ showLoading: false }), POLL_INTERVAL_MS);
+  usePollingRefresh(() => {
+    if (draggingRef.current) return;
+    return loadTodos({ showLoading: false });
+  }, POLL_INTERVAL_MS);
+
+  const setDragging = useCallback((active: boolean) => {
+    draggingRef.current = active;
+  }, []);
 
   const beginMutation = useCallback(() => {
     mutationCountRef.current += 1;
@@ -470,5 +479,6 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
     remove,
     reorder,
     move,
+    setDragging,
   };
 }

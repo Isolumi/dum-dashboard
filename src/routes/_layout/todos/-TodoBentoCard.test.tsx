@@ -16,6 +16,10 @@ import {
 import type { ToolEntry } from "#/tools/registry";
 
 const dndTestState = vi.hoisted(() => ({
+  currentOnDragStart: undefined as undefined | ((event: { active: { id: string } }) => void),
+  currentOnDragOver: undefined as
+    | undefined
+    | ((event: { active: { id: string }; over: { id: string } | null }) => void),
   currentOnDragEnd: undefined as
     | undefined
     | ((event: { active: { id: string }; over: { id: string } | null }) => void),
@@ -93,16 +97,25 @@ vi.mock("#/components/ui/calendar", () => ({
 vi.mock("@dnd-kit/core", () => ({
   DndContext: ({
     children,
+    onDragStart,
+    onDragOver,
     onDragEnd,
   }: {
     children: React.ReactNode;
+    onDragStart: (event: { active: { id: string } }) => void;
+    onDragOver: (event: { active: { id: string }; over: { id: string } | null }) => void;
     onDragEnd: (event: { active: { id: string }; over: { id: string } | null }) => void;
   }) => {
+    dndTestState.currentOnDragStart = onDragStart;
+    dndTestState.currentOnDragOver = onDragOver;
     dndTestState.currentOnDragEnd = onDragEnd;
     return <>{children}</>;
   },
+  DragOverlay: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   KeyboardSensor: class {},
-  PointerSensor: class {},
+  MeasuringStrategy: { Always: "always" },
+  MouseSensor: class {},
+  TouchSensor: class {},
   closestCenter: () => null,
   useDroppable: () => ({ isOver: false, setNodeRef: () => undefined }),
   useSensor: () => ({}),
@@ -135,6 +148,11 @@ vi.mock("@dnd-kit/sortable", () => ({
       onClick: () => {
         const nextId = dndTestState.nextSortableId.get(id);
         if (nextId) {
+          dndTestState.currentOnDragStart?.({ active: { id } });
+          dndTestState.currentOnDragOver?.({
+            active: { id },
+            over: { id: nextId },
+          });
           dndTestState.onDragEndBySortableId.get(id)?.({
             active: { id },
             over: { id: nextId },
@@ -142,6 +160,7 @@ vi.mock("@dnd-kit/sortable", () => ({
         }
       },
     },
+    setActivatorNodeRef: () => undefined,
     setNodeRef: () => undefined,
     transform: null,
     transition: undefined,
@@ -329,6 +348,7 @@ describe("TodoBentoCard", () => {
         .getAllByRole("button", { name: /december 25, 2026/i })
         .find((element) => element.tagName === "BUTTON")!,
     );
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
 
     await waitFor(() =>
       expect(updateTodo).toHaveBeenCalledWith({
