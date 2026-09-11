@@ -57,6 +57,10 @@ describe("PrioritySection", () => {
     expect(screen.queryAllByRole("button", { name: /^change/i })).toHaveLength(0);
     expect(row.firstElementChild).toBe(dragHandle);
     expect(row.children[1]).toBe(statusControl);
+    expect(row.parentElement?.getAttribute("role")).toBeNull();
+    expect(dragHandle.getAttribute("aria-roledescription")).toBe("sortable");
+    expect(dragHandle.getAttribute("tabindex")).toBe("0");
+    expect(dragHandle.className).toContain("touch-none");
     expect(screen.queryByRole("button", { name: /add a new todo/i })).toBeNull();
   });
 
