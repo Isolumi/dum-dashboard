@@ -1,8 +1,12 @@
 import type { Todo, TodoPriority } from "#/lib/database.types";
 import { getTodoDueDateCalendarKey } from "./-todoDueDate";
 
-export const PRIORITY_ORDER: TodoPriority[] = ["high", "low"];
-export const PRIORITY_LABELS: Record<TodoPriority, string> = {
+export type TodoSection = "today" | TodoPriority;
+export type TodoGroups = Record<TodoSection, Todo[]>;
+
+export const TODO_SECTION_ORDER: TodoSection[] = ["today", "high", "low"];
+export const TODO_SECTION_LABELS: Record<TodoSection, string> = {
+  today: "Today",
   high: "High",
   low: "Low",
 };
@@ -22,14 +26,33 @@ function dueDateSortValue(todo: Todo): number | null {
   return Date.parse(`${utcDate}T00:00:00.000Z`);
 }
 
-export function groupAndSortTodos(todos: Todo[]): Record<TodoPriority, Todo[]> {
-  const groups: Record<TodoPriority, Todo[]> = { high: [], low: [] };
+export function getTorontoDateKey(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Toronto",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+export function isTodoTodayOverdue(todo: Todo, now = new Date()): boolean {
+  return Boolean(
+    todo.today_date && todo.status !== "complete" && todo.today_date < getTorontoDateKey(now),
+  );
+}
+
+export function groupAndSortTodos(todos: Todo[]): TodoGroups {
+  const groups: TodoGroups = { today: [], high: [], low: [] };
   for (const todo of todos) {
-    groups[todo.priority].push(todo);
+    groups[todo.today_date ? "today" : todo.priority].push(todo);
   }
-  for (const key of PRIORITY_ORDER) {
+  for (const key of TODO_SECTION_ORDER) {
     groups[key].sort((a, b) => {
-      const sortOrderDifference = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+      const aOrder = key === "today" ? (a.today_sort_order ?? 0) : (a.sort_order ?? 0);
+      const bOrder = key === "today" ? (b.today_sort_order ?? 0) : (b.sort_order ?? 0);
+      const sortOrderDifference = aOrder - bOrder;
       if (sortOrderDifference !== 0) return sortOrderDifference;
 
       const aComplete = a.status === "complete" ? 1 : 0;

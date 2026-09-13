@@ -327,7 +327,11 @@ describe("DeleteTodoSchema", () => {
 
 describe("ReorderTodosSchema", () => {
   it("rejects empty reorder batches", () => {
-    const result = ReorderTodosSchema.safeParse({ expected_ids: [], ordered_ids: [] });
+    const result = ReorderTodosSchema.safeParse({
+      section: "today",
+      expected_ids: [],
+      ordered_ids: [],
+    });
     expect(result.success).toBe(false);
   });
 
@@ -336,7 +340,9 @@ describe("ReorderTodosSchema", () => {
     ["duplicate ordered id", [TODO_ID, SECOND_TODO_ID], [TODO_ID, TODO_ID]],
     ["different Todo sets", [TODO_ID, SECOND_TODO_ID], [TODO_ID, LOW_TODO_ID]],
   ])("rejects %s", (_name, expected_ids, ordered_ids) => {
-    expect(ReorderTodosSchema.safeParse({ expected_ids, ordered_ids }).success).toBe(false);
+    expect(
+      ReorderTodosSchema.safeParse({ section: "high", expected_ids, ordered_ids }).success,
+    ).toBe(false);
   });
 });
 
@@ -347,6 +353,7 @@ describe("reorderTodos", () => {
     await expect(
       reorderTodos({
         data: {
+          section: "today",
           expected_ids: [TODO_ID, SECOND_TODO_ID],
           ordered_ids: [SECOND_TODO_ID, TODO_ID],
         },
@@ -354,7 +361,8 @@ describe("reorderTodos", () => {
     ).resolves.toBeUndefined();
 
     expect(rpcMock).toHaveBeenCalledOnce();
-    expect(rpcMock).toHaveBeenCalledWith("reorder_todos_atomically", {
+    expect(rpcMock).toHaveBeenCalledWith("reorder_todo_section_atomically", {
+      p_section: "today",
       p_expected_ids: [TODO_ID, SECOND_TODO_ID],
       p_ordered_ids: [SECOND_TODO_ID, TODO_ID],
     });
@@ -367,6 +375,7 @@ describe("reorderTodos", () => {
     await expect(
       reorderTodos({
         data: {
+          section: "high",
           expected_ids: [TODO_ID, SECOND_TODO_ID],
           ordered_ids: [SECOND_TODO_ID, TODO_ID],
         },
@@ -378,7 +387,7 @@ describe("reorderTodos", () => {
 describe("MoveTodoInputSchema", () => {
   const validMove = {
     id: TODO_ID,
-    target_priority: "low" as const,
+    target_section: "today" as const,
     source_ids: [SECOND_TODO_ID],
     target_ids: [TODO_ID, LOW_TODO_ID],
   };
@@ -412,7 +421,7 @@ describe("moveTodo", () => {
       moveTodo({
         data: {
           id: TODO_ID,
-          target_priority: "low",
+          target_section: "today",
           source_ids: [SECOND_TODO_ID],
           target_ids: [TODO_ID, LOW_TODO_ID],
         },
@@ -420,9 +429,9 @@ describe("moveTodo", () => {
     ).resolves.toBeUndefined();
 
     expect(rpcMock).toHaveBeenCalledOnce();
-    expect(rpcMock).toHaveBeenCalledWith("move_todo_between_priorities", {
+    expect(rpcMock).toHaveBeenCalledWith("move_todo_between_sections", {
       p_todo_id: TODO_ID,
-      p_target_priority: "low",
+      p_target_section: "today",
       p_source_ids: [SECOND_TODO_ID],
       p_target_ids: [TODO_ID, LOW_TODO_ID],
     });
@@ -436,7 +445,7 @@ describe("moveTodo", () => {
       moveTodo({
         data: {
           id: TODO_ID,
-          target_priority: "low",
+          target_section: "today",
           source_ids: [SECOND_TODO_ID],
           target_ids: [TODO_ID, LOW_TODO_ID],
         },

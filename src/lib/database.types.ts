@@ -158,6 +158,8 @@ export type Database = {
           priority: Database["public"]["Enums"]["todo_priority"];
           sort_order: number;
           status: Database["public"]["Enums"]["todo_status"];
+          today_date: string | null;
+          today_sort_order: number | null;
         };
         Insert: {
           created_at?: string;
@@ -168,6 +170,8 @@ export type Database = {
           priority?: Database["public"]["Enums"]["todo_priority"];
           sort_order?: number;
           status?: Database["public"]["Enums"]["todo_status"];
+          today_date?: string | null;
+          today_sort_order?: number | null;
         };
         Update: {
           created_at?: string;
@@ -178,6 +182,8 @@ export type Database = {
           priority?: Database["public"]["Enums"]["todo_priority"];
           sort_order?: number;
           status?: Database["public"]["Enums"]["todo_status"];
+          today_date?: string | null;
+          today_sort_order?: number | null;
         };
         Relationships: [];
       };
@@ -210,6 +216,15 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      move_todo_between_sections: {
+        Args: {
+          p_source_ids: string[];
+          p_target_ids: string[];
+          p_target_section: string;
+          p_todo_id: string;
+        };
+        Returns: undefined;
+      };
       move_todo_between_priorities: {
         Args: {
           p_source_ids: string[];
@@ -223,6 +238,14 @@ export type Database = {
         Args: {
           p_expected_ids: string[];
           p_ordered_ids: string[];
+        };
+        Returns: undefined;
+      };
+      reorder_todo_section_atomically: {
+        Args: {
+          p_expected_ids: string[];
+          p_ordered_ids: string[];
+          p_section: string;
         };
         Returns: undefined;
       };

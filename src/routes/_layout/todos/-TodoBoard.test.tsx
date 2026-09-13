@@ -121,7 +121,7 @@ beforeEach(() => {
 function makeController(overrides: Partial<TodoController> = {}): TodoController {
   return {
     todos: [],
-    grouped: { high: [], low: [] },
+    grouped: { today: [], high: [], low: [] },
     pendingIds: new Set(),
     status: "ready",
     loadError: null,
@@ -145,6 +145,8 @@ function makeTodo(id: string, priority: "high" | "low", sort_order: number) {
     status: "not_started" as const,
     due_date: null,
     due_date_has_time: false,
+    today_date: null,
+    today_sort_order: null,
     sort_order,
     created_at: "2026-08-10T00:00:00.000Z",
   };
@@ -169,10 +171,11 @@ describe("TodoBoard", () => {
   });
 
   it.each(["compact", "full"] as const)(
-    "keeps empty High and Low sections ready to add todos in %s mode",
+    "keeps empty Today, High, and Low sections ready to receive todos in %s mode",
     (variant) => {
       render(<TodoBoard controller={makeController()} variant={variant} />);
 
+      expect(screen.getByText("Today")).toBeTruthy();
       expect(screen.getByText("High")).toBeTruthy();
       expect(screen.getByText("Low")).toBeTruthy();
       expect(screen.getAllByRole("button", { name: /add a new todo/i })).toHaveLength(1);
@@ -247,7 +250,7 @@ describe("TodoBoard", () => {
     const move = vi.fn().mockResolvedValue(undefined);
     const controller = makeController({
       todos: [highTodo, lowTodo],
-      grouped: { high: [highTodo], low: [lowTodo] },
+      grouped: { today: [], high: [highTodo], low: [lowTodo] },
       move,
     });
     render(<TodoBoard controller={controller} variant="full" />);
@@ -274,13 +277,38 @@ describe("TodoBoard", () => {
     expect(controller.setDragging).toHaveBeenLastCalledWith(false);
   });
 
+  it("moves a High todo into Today and keeps Today as its destination", () => {
+    const highTodo = makeTodo("high-todo", "high", 0);
+    const move = vi.fn().mockResolvedValue(undefined);
+    const controller = makeController({
+      todos: [highTodo],
+      grouped: { today: [], high: [highTodo], low: [] },
+      move,
+    });
+    render(<TodoBoard controller={controller} variant="full" />);
+
+    act(() => {
+      dndTestState.onDragStartHandlers[0]?.({ active: { id: highTodo.id } });
+      dndTestState.onDragOverHandlers[0]?.({
+        active: { id: highTodo.id },
+        over: { id: "section-today" },
+      });
+      dndTestState.onDragEndHandlers[0]?.({
+        active: { id: highTodo.id },
+        over: { id: "section-today" },
+      });
+    });
+
+    expect(move).toHaveBeenCalledWith(highTodo.id, "today", 0);
+  });
+
   it("appends a High todo after the last Low todo through the trailing drop target", () => {
     const highTodo = makeTodo("high-todo", "high", 0);
     const lowTodo = makeTodo("low-todo", "low", 0);
     const move = vi.fn().mockResolvedValue(undefined);
     const controller = makeController({
       todos: [highTodo, lowTodo],
-      grouped: { high: [highTodo], low: [lowTodo] },
+      grouped: { today: [], high: [highTodo], low: [lowTodo] },
       move,
     });
     render(<TodoBoard controller={controller} variant="full" />);
@@ -306,7 +334,7 @@ describe("TodoBoard", () => {
     const reorder = vi.fn().mockResolvedValue(undefined);
     const controller = makeController({
       todos: [first, second],
-      grouped: { high: [first, second], low: [] },
+      grouped: { today: [], high: [first, second], low: [] },
       reorder,
     });
     render(<TodoBoard controller={controller} variant="full" />);
@@ -332,7 +360,7 @@ describe("TodoBoard", () => {
     const reorder = vi.fn().mockResolvedValue(undefined);
     const controller = makeController({
       todos: [first, second],
-      grouped: { high: [first, second], low: [] },
+      grouped: { today: [], high: [first, second], low: [] },
       reorder,
     });
     render(<TodoBoard controller={controller} variant="full" />);
@@ -357,7 +385,7 @@ describe("TodoBoard", () => {
     const lowTodo = makeTodo("low-todo", "low", 0);
     const controller = makeController({
       todos: [highTodo, lowTodo],
-      grouped: { high: [highTodo], low: [lowTodo] },
+      grouped: { today: [], high: [highTodo], low: [lowTodo] },
     });
     render(<TodoBoard controller={controller} variant="full" />);
 

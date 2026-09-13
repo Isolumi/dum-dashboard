@@ -82,6 +82,8 @@ const highTodo: Todo = {
   status: "not_started",
   due_date: "2026-01-10",
   due_date_has_time: false,
+  today_date: null,
+  today_sort_order: null,
   sort_order: 0,
   created_at: "2026-01-01T00:00:00.000Z",
 };
@@ -117,6 +119,21 @@ describe("TodoRow", () => {
     renderTodoRow();
 
     expect(screen.queryAllByRole("button", { name: /^change/i })).toHaveLength(0);
+  });
+
+  it("shows a subtle overdue state when a Today todo remains after its day", () => {
+    renderTodoRow({
+      todo: {
+        ...highTodo,
+        due_date: null,
+        today_date: "2026-08-08",
+        today_sort_order: 0,
+      },
+    });
+
+    const overdue = screen.getByText("Overdue");
+    expect(overdue.className).toContain("text-muted-foreground");
+    expect(overdue.className).not.toContain("text-destructive");
   });
 
   it("sends the selected due date when its date control is used", () => {

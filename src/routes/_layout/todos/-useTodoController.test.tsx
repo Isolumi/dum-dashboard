@@ -33,6 +33,8 @@ function makeTodo(overrides: Partial<Todo> = {}): Todo {
     due_date: null,
     due_date_has_time: false,
     sort_order: 0,
+    today_date: null,
+    today_sort_order: null,
     created_at: "2026-08-06T12:00:00.000Z",
     ...overrides,
   };
@@ -425,6 +427,7 @@ describe("useTodoController", () => {
 
     expect(reorderTodos).toHaveBeenCalledWith({
       data: {
+        section: "high",
         expected_ids: [first.id, second.id],
         ordered_ids: [second.id, first.id],
       },
@@ -459,7 +462,7 @@ describe("useTodoController", () => {
     expect(moveTodo).toHaveBeenCalledWith({
       data: {
         id: first.id,
-        target_priority: "low",
+        target_section: "low",
         source_ids: [second.id],
         target_ids: [lowTodo.id, first.id],
       },
@@ -512,7 +515,7 @@ describe("useTodoController", () => {
     expect(moveTodo).toHaveBeenCalledWith({
       data: {
         id: first.id,
-        target_priority: "low",
+        target_section: "low",
         source_ids: [second.id],
         target_ids: [first.id, lowTodo.id],
       },
@@ -523,6 +526,68 @@ describe("useTodoController", () => {
     await act(async () => {
       pendingMove.resolve();
       await mutation;
+    });
+  });
+
+  it("moves a todo into Today without changing its saved priority", async () => {
+    const high = makeTodo({ id: "high", priority: "high", sort_order: 0 });
+    const { result } = renderHook(() => useTodoController([high]));
+
+    await act(async () => result.current.move(high.id, "today", 0));
+
+    expect(result.current.grouped.today).toHaveLength(1);
+    expect(result.current.grouped.today[0]).toMatchObject({
+      id: high.id,
+      priority: "high",
+      today_sort_order: 0,
+    });
+    expect(result.current.grouped.today[0]?.today_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(moveTodo).toHaveBeenCalledWith({
+      data: {
+        id: high.id,
+        target_section: "today",
+        source_ids: [],
+        target_ids: [high.id],
+      },
+    });
+  });
+
+  it("moves a Today todo to Low and clears its Today fields", async () => {
+    const today = makeTodo({
+      id: "today",
+      priority: "high",
+      today_date: "2026-09-12",
+      today_sort_order: 0,
+    });
+    const { result } = renderHook(() => useTodoController([today]));
+
+    await act(async () => result.current.move(today.id, "low", 0));
+
+    expect(result.current.grouped.today).toHaveLength(0);
+    expect(result.current.grouped.low[0]).toMatchObject({
+      id: today.id,
+      priority: "low",
+      today_date: null,
+      today_sort_order: null,
+      sort_order: 0,
+    });
+  });
+
+  it("reorders Today with its independent order field", async () => {
+    const first = makeTodo({ id: "first", today_date: "2026-09-12", today_sort_order: 0 });
+    const second = makeTodo({ id: "second", today_date: "2026-09-13", today_sort_order: 1 });
+    const { result } = renderHook(() => useTodoController([first, second]));
+
+    await act(async () => result.current.reorder("today", [second.id, first.id]));
+
+    expect(result.current.grouped.today.map((todo) => todo.id)).toEqual([second.id, first.id]);
+    expect(result.current.grouped.today.map((todo) => todo.today_sort_order)).toEqual([0, 1]);
+    expect(reorderTodos).toHaveBeenCalledWith({
+      data: {
+        section: "today",
+        expected_ids: [first.id, second.id],
+        ordered_ids: [second.id, first.id],
+      },
     });
   });
 

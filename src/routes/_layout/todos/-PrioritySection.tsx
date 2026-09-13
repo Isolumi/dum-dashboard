@@ -3,13 +3,15 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import type { Todo, TodoPriority } from "#/lib/database.types";
+import type { Todo } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
 import type { TodoRowProps } from "./-TodoRow";
 import { TodoRow } from "./-TodoRow";
+import { getTodoSectionTargetId } from "./-todoDrag";
+import type { TodoSection } from "./-todoUtils";
 
 export interface PrioritySectionProps {
-  priority: TodoPriority;
+  priority: TodoSection;
   label: string;
   todos: Todo[];
   onUpdate: TodoRowProps["onUpdate"];
@@ -18,7 +20,8 @@ export interface PrioritySectionProps {
   isPending?: (id: string) => boolean;
 }
 
-const SECTION_LABEL_STYLES: Record<TodoPriority, string> = {
+const SECTION_LABEL_STYLES: Record<TodoSection, string> = {
+  today: "text-foreground",
   high: "text-muted-foreground",
   low: "text-muted-foreground",
 };
@@ -42,7 +45,7 @@ function SortableTodoRow({
   } = useSortable({
     id: todo.id,
     disabled: isPending || dragDisabled,
-    data: { priority: todo.priority },
+    data: { section: todo.today_date ? "today" : todo.priority },
   });
 
   const style = {
@@ -78,10 +81,12 @@ function PrioritySectionComponent({
 }: PrioritySectionProps) {
   const todoIds = useMemo(() => todos.map((t) => t.id), [todos]);
   const hasPendingTodo = todos.some((todo) => isPending?.(todo.id));
-  const { setNodeRef: setDroppableNodeRef } = useDroppable({ id: `priority-${priority}` });
+  const { setNodeRef: setDroppableNodeRef } = useDroppable({
+    id: getTodoSectionTargetId(priority),
+  });
   const { isOver: isTrailingDropTargetActive, setNodeRef: setTrailingDropTargetRef } = useDroppable(
     {
-      id: `priority-${priority}-end`,
+      id: getTodoSectionTargetId(priority, true),
     },
   );
 
