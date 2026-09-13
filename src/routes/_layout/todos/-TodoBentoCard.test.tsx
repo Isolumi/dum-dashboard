@@ -183,6 +183,8 @@ function makeTodo(overrides: Partial<Todo> = {}): Todo {
     due_date: null,
     due_date_has_time: false,
     sort_order: 0,
+    today_date: null,
+    today_sort_order: null,
     created_at: "2026-08-06T12:00:00.000Z",
     ...overrides,
   };
@@ -387,6 +389,7 @@ describe("TodoBentoCard", () => {
     await waitFor(() =>
       expect(reorderTodos).toHaveBeenCalledWith({
         data: {
+          section: "high",
           expected_ids: [first.id, second.id],
           ordered_ids: [second.id, first.id],
         },

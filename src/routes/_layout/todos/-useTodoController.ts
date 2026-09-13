@@ -10,7 +10,13 @@ import {
   reorderTodos,
   updateTodo,
 } from "#/routes/todos/todos.functions";
-import { groupAndSortTodos } from "./-todoUtils";
+import {
+  getTorontoDateKey,
+  groupAndSortTodos,
+  TODO_SECTION_ORDER,
+  type TodoGroups,
+  type TodoSection,
+} from "./-todoUtils";
 
 const POLL_INTERVAL_MS = 3_000;
 const MUTATION_ERROR_DURATION_MS = 4_000;
@@ -29,7 +35,13 @@ export type TodoUpdateFields = {
 
 type TodoUpdateState = Pick<
   Todo,
-  "name" | "priority" | "status" | "due_date" | "due_date_has_time"
+  | "name"
+  | "priority"
+  | "status"
+  | "due_date"
+  | "due_date_has_time"
+  | "today_date"
+  | "today_sort_order"
 >;
 
 function getTodoUpdateState(todo: Todo): TodoUpdateState {
@@ -39,12 +51,14 @@ function getTodoUpdateState(todo: Todo): TodoUpdateState {
     status: todo.status,
     due_date: todo.due_date,
     due_date_has_time: todo.due_date_has_time,
+    today_date: todo.today_date,
+    today_sort_order: todo.today_sort_order,
   };
 }
 
 export interface TodoController {
   todos: Todo[];
-  grouped: Record<TodoPriority, Todo[]>;
+  grouped: TodoGroups;
   pendingIds: ReadonlySet<string>;
   status: "loading" | "ready" | "error";
   loadError: string | null;
@@ -58,8 +72,8 @@ export interface TodoController {
   }): Promise<void>;
   update(fields: TodoUpdateFields): Promise<void>;
   remove(id: string): Promise<void>;
-  reorder(priority: TodoPriority, orderedIds: string[]): Promise<void>;
-  move(id: string, targetPriority: TodoPriority, targetIndex: number): Promise<void>;
+  reorder(section: TodoSection, orderedIds: string[]): Promise<void>;
+  move(id: string, targetSection: TodoSection, targetIndex: number): Promise<void>;
   setDragging(active: boolean): void;
 }
 
@@ -216,7 +230,9 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
       if (name.length === 0) return;
 
       beginMutation();
-      const priorityTodos = todosRef.current.filter((todo) => todo.priority === fields.priority);
+      const priorityTodos = todosRef.current.filter(
+        (todo) => todo.today_date === null && todo.priority === fields.priority,
+      );
       const optimisticTodo: Todo = {
         id: crypto.randomUUID(),
         name,
@@ -225,6 +241,8 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
         due_date: fields.due_date,
         due_date_has_time: fields.due_date_has_time,
         sort_order: Math.max(-1, ...priorityTodos.map((todo) => todo.sort_order)) + 1,
+        today_date: null,
+        today_sort_order: null,
         created_at: new Date().toISOString(),
       };
       replaceTodos((current) => [...current, optimisticTodo]);
@@ -332,20 +350,23 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   );
 
   const reorder = useCallback(
-    (priority: TodoPriority, orderedIds: string[]): Promise<void> => {
+    (section: TodoSection, orderedIds: string[]): Promise<void> => {
       if (orderedIds.some((id) => blockedIdsRef.current.has(id))) return Promise.resolve();
 
       return runOrderingMutation(async () => {
         if (orderedIds.some((id) => blockedIdsRef.current.has(id))) return;
 
-        const expectedIds = groupAndSortTodos(todosRef.current)[priority].map((todo) => todo.id);
+        const expectedIds = groupAndSortTodos(todosRef.current)[section].map((todo) => todo.id);
         const orderedSortOrders = new Map(
           orderedIds.map((id, sortOrder) => [id, sortOrder] as const),
         );
         const previousSortOrders = new Map(
-          todosRef.current
-            .filter((todo) => todo.priority === priority && orderedSortOrders.has(todo.id))
-            .map((todo) => [todo.id, todo.sort_order] as const),
+          groupAndSortTodos(todosRef.current)
+            [section].filter((todo) => orderedSortOrders.has(todo.id))
+            .map((todo) => [
+              todo.id,
+              section === "today" ? todo.today_sort_order : todo.sort_order,
+            ]),
         );
 
         markPendingIds(orderedIds);
@@ -353,15 +374,17 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
         replaceTodos((current) =>
           current.map((todo) => {
             const sortOrder = orderedSortOrders.get(todo.id);
-            return todo.priority === priority && sortOrder !== undefined
-              ? { ...todo, sort_order: sortOrder }
-              : todo;
+            if (sortOrder === undefined) return todo;
+            return section === "today"
+              ? { ...todo, today_sort_order: sortOrder }
+              : { ...todo, sort_order: sortOrder };
           }),
         );
 
         try {
           await reorderTodos({
             data: {
+              section,
               expected_ids: expectedIds,
               ordered_ids: orderedIds,
             },
@@ -370,7 +393,9 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
           replaceTodos((current) =>
             current.map((todo) => {
               if (!previousSortOrders.has(todo.id)) return todo;
-              return { ...todo, sort_order: previousSortOrders.get(todo.id)! };
+              return section === "today"
+                ? { ...todo, today_sort_order: previousSortOrders.get(todo.id)! }
+                : { ...todo, sort_order: previousSortOrders.get(todo.id)! };
             }),
           );
           setMutationError(REORDER_ERROR);
@@ -391,7 +416,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   );
 
   const move = useCallback(
-    (id: string, targetPriority: TodoPriority, targetIndex: number): Promise<void> => {
+    (id: string, targetSection: TodoSection, targetIndex: number): Promise<void> => {
       if (blockedIdsRef.current.has(id)) return Promise.resolve();
 
       return runOrderingMutation(async () => {
@@ -399,22 +424,39 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
 
         const previousTodos = todosRef.current;
         const movedTodo = previousTodos.find((todo) => todo.id === id);
-        if (!movedTodo || movedTodo.priority === targetPriority) return;
+        if (!movedTodo) return;
 
         const groupedTodos = groupAndSortTodos(previousTodos);
-        const sourceTodos = groupedTodos[movedTodo.priority].filter((todo) => todo.id !== id);
-        const targetTodos = [...groupedTodos[targetPriority]];
-        const normalizedTargetIndex = Math.max(0, Math.min(targetIndex, targetTodos.length));
-        targetTodos.splice(normalizedTargetIndex, 0, { ...movedTodo, priority: targetPriority });
+        const sourceSection = TODO_SECTION_ORDER.find((section) =>
+          groupedTodos[section].some((todo) => todo.id === id),
+        );
+        if (!sourceSection || sourceSection === targetSection) return;
 
-        const normalizedSourceTodos = sourceTodos.map((todo, sort_order) => ({
-          ...todo,
-          sort_order,
-        }));
-        const normalizedTargetTodos = targetTodos.map((todo, sort_order) => ({
-          ...todo,
-          sort_order,
-        }));
+        const sourceTodos = groupedTodos[sourceSection].filter((todo) => todo.id !== id);
+        const targetTodos = [...groupedTodos[targetSection]];
+        const normalizedTargetIndex = Math.max(0, Math.min(targetIndex, targetTodos.length));
+        targetTodos.splice(normalizedTargetIndex, 0, movedTodo);
+
+        const normalizeTodo = (todo: Todo, section: TodoSection, order: number): Todo =>
+          section === "today"
+            ? {
+                ...todo,
+                today_date: todo.today_date ?? getTorontoDateKey(),
+                today_sort_order: order,
+              }
+            : {
+                ...todo,
+                priority: section,
+                sort_order: order,
+                today_date: null,
+                today_sort_order: null,
+              };
+        const normalizedSourceTodos = sourceTodos.map((todo, order) =>
+          normalizeTodo(todo, sourceSection, order),
+        );
+        const normalizedTargetTodos = targetTodos.map((todo, order) =>
+          normalizeTodo(todo, targetSection, order),
+        );
         const normalizedTodos = [...normalizedSourceTodos, ...normalizedTargetTodos];
         const normalizedById = new Map(normalizedTodos.map((todo) => [todo.id, todo] as const));
         const affectedIds = normalizedTodos.map((todo) => todo.id);
@@ -422,7 +464,15 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
         const previousPositions = new Map(
           affectedIds.map((affectedId) => {
             const todo = previousTodos.find((candidate) => candidate.id === affectedId)!;
-            return [affectedId, { priority: todo.priority, sort_order: todo.sort_order }] as const;
+            return [
+              affectedId,
+              {
+                priority: todo.priority,
+                sort_order: todo.sort_order,
+                today_date: todo.today_date,
+                today_sort_order: todo.today_sort_order,
+              },
+            ] as const;
           }),
         );
 
@@ -434,7 +484,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
           await moveTodo({
             data: {
               id,
-              target_priority: targetPriority,
+              target_section: targetSection,
               source_ids: normalizedSourceTodos.map((todo) => todo.id),
               target_ids: normalizedTargetTodos.map((todo) => todo.id),
             },

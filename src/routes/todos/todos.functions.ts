@@ -7,9 +7,10 @@ import { getSupabaseAdmin } from "#/lib/supabase-admin";
 import type { Todo } from "#/lib/database.types";
 
 const TODO_COLUMNS =
-  "id,name,status,priority,due_date,due_date_has_time,sort_order,created_at" as const;
+  "id,name,status,priority,due_date,due_date_has_time,sort_order,today_date,today_sort_order,created_at" as const;
 
 const TodoDueDateSchema = z.union([z.string().date(), z.string().datetime({ offset: true })]);
+const TodoSectionSchema = z.enum(["today", "high", "low"] as const);
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function inferDueDateHasTime(value: string | null | undefined): boolean {
@@ -64,6 +65,7 @@ const TodoIdListSchema = z.array(z.string().uuid()).max(200);
 
 export const ReorderTodosSchema = z
   .object({
+    section: TodoSectionSchema,
     expected_ids: TodoIdListSchema.min(1),
     ordered_ids: TodoIdListSchema.min(1),
   })
@@ -99,7 +101,7 @@ export const ReorderTodosSchema = z
 export const MoveTodoSchema = z
   .object({
     id: z.string().uuid(),
-    target_priority: z.enum(["high", "low"] as const),
+    target_section: TodoSectionSchema,
     source_ids: TodoIdListSchema,
     target_ids: TodoIdListSchema.min(1),
   })
@@ -248,7 +250,8 @@ export const reorderTodos = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<void> => {
     noStore();
     assertTodoMutationRequest();
-    const { error } = await getSupabaseAdmin().rpc("reorder_todos_atomically", {
+    const { error } = await getSupabaseAdmin().rpc("reorder_todo_section_atomically", {
+      p_section: data.section,
       p_expected_ids: data.expected_ids,
       p_ordered_ids: data.ordered_ids,
     });
@@ -258,10 +261,11 @@ export const reorderTodos = createServerFn({ method: "POST" })
 export const moveTodo = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(MoveTodoInputSchema))
   .handler(async ({ data }): Promise<void> => {
+    noStore();
     assertTodoMutationRequest();
-    const { error } = await getSupabaseAdmin().rpc("move_todo_between_priorities", {
+    const { error } = await getSupabaseAdmin().rpc("move_todo_between_sections", {
       p_todo_id: data.id,
-      p_target_priority: data.target_priority,
+      p_target_section: data.target_section,
       p_source_ids: data.source_ids,
       p_target_ids: data.target_ids,
     });

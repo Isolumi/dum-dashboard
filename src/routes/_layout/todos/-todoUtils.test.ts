@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { Todo } from "#/lib/database.types";
-import { groupAndSortTodos, PRIORITY_ORDER } from "./-todoUtils";
+import {
+  getTorontoDateKey,
+  groupAndSortTodos,
+  isTodoTodayOverdue,
+  TODO_SECTION_ORDER,
+} from "./-todoUtils";
 
 function makeTodo(overrides: Partial<Todo> = {}): Todo {
   return {
@@ -11,6 +16,8 @@ function makeTodo(overrides: Partial<Todo> = {}): Todo {
     priority: "low",
     due_date: null,
     due_date_has_time: false,
+    today_date: null,
+    today_sort_order: null,
     sort_order: 0,
     created_at: "2026-01-01T00:00:00Z",
     ...overrides,
@@ -18,17 +25,34 @@ function makeTodo(overrides: Partial<Todo> = {}): Todo {
 }
 
 describe("groupAndSortTodos", () => {
-  it("returns only high and low groups and follows persisted sort order before status", () => {
+  it("puts Today todos in one exclusive section and keeps their priority", () => {
     const grouped = groupAndSortTodos([
+      makeTodo({
+        id: "today-low",
+        priority: "low",
+        today_date: "2026-09-13",
+        today_sort_order: 0,
+      }),
       makeTodo({ id: "high-complete", priority: "high", status: "complete", sort_order: 0 }),
       makeTodo({ id: "high-active", priority: "high", status: "not_started", sort_order: 1 }),
       makeTodo({ id: "low-active", priority: "low", status: "started", sort_order: 0 }),
     ]);
 
-    expect(PRIORITY_ORDER).toEqual(["high", "low"]);
-    expect(Object.keys(grouped)).toEqual(["high", "low"]);
+    expect(TODO_SECTION_ORDER).toEqual(["today", "high", "low"]);
+    expect(Object.keys(grouped)).toEqual(["today", "high", "low"]);
+    expect(grouped.today.map((todo) => todo.id)).toEqual(["today-low"]);
+    expect(grouped.today[0]?.priority).toBe("low");
     expect(grouped.high.map((todo) => todo.id)).toEqual(["high-complete", "high-active"]);
     expect(grouped.low.map((todo) => todo.id)).toEqual(["low-active"]);
+  });
+
+  it("sorts the Today section by its independent order", () => {
+    const grouped = groupAndSortTodos([
+      makeTodo({ id: "second", today_date: "2026-09-12", today_sort_order: 1 }),
+      makeTodo({ id: "first", priority: "high", today_date: "2026-09-13", today_sort_order: 0 }),
+    ]);
+
+    expect(grouped.today.map((todo) => todo.id)).toEqual(["first", "second"]);
   });
 
   it("follows persisted sort order before due date", () => {
@@ -104,5 +128,27 @@ describe("groupAndSortTodos", () => {
       "timed-previous-day",
       "date-only-next-day",
     ]);
+  });
+});
+
+describe("Today dates", () => {
+  it("uses the Toronto calendar date across UTC midnight", () => {
+    expect(getTorontoDateKey(new Date("2026-09-14T02:30:00.000Z"))).toBe("2026-09-13");
+  });
+
+  it("keeps an unfinished Today todo and marks it overdue after its assigned day", () => {
+    const todo = makeTodo({ today_date: "2026-09-12" });
+
+    expect(isTodoTodayOverdue(todo, new Date("2026-09-13T16:00:00.000Z"))).toBe(true);
+    expect(groupAndSortTodos([todo]).today).toEqual([todo]);
+  });
+
+  it("does not mark completed or current-day Today todos overdue", () => {
+    const now = new Date("2026-09-13T16:00:00.000Z");
+
+    expect(isTodoTodayOverdue(makeTodo({ today_date: "2026-09-13" }), now)).toBe(false);
+    expect(
+      isTodoTodayOverdue(makeTodo({ today_date: "2026-09-12", status: "complete" }), now),
+    ).toBe(false);
   });
 });
