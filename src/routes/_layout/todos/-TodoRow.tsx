@@ -9,6 +9,7 @@ import { cn } from "#/lib/utils";
 
 import { TodoDueDatePicker } from "./-TodoDueDatePicker";
 import { isTodoDueDateOverdue } from "./-todoDueDate";
+import { isTodoTodayOverdue } from "./-todoUtils";
 
 export interface TodoRowProps {
   todo: Todo;
@@ -82,6 +83,7 @@ function TodoRowComponent({
     todo.due_date &&
     todo.status !== "complete" &&
     isTodoDueDateOverdue(todo.due_date, todo.due_date_has_time);
+  const isTodayOverdue = isTodoTodayOverdue(todo);
 
   function saveName() {
     const trimmed = nameValue.trim();
@@ -186,11 +188,12 @@ function TodoRowComponent({
         <div className="flex shrink-0 items-center gap-0.5">
           <div
             className={cn(
-              "shrink-0 text-right",
-              todo.due_date ? "w-32" : "w-9 [@media(pointer:coarse)]:w-11",
+              "flex shrink-0 items-center justify-end gap-1 text-right",
+              todo.due_date || isTodayOverdue ? "w-32" : "w-9 [@media(pointer:coarse)]:w-11",
               todo.due_date && (isOverdue ? "text-destructive" : "text-muted-foreground"),
             )}
           >
+            {isTodayOverdue && <span className="text-xs text-muted-foreground">Overdue</span>}
             <TodoDueDatePicker
               value={todo.due_date}
               onChange={(due_date, due_date_has_time) =>
@@ -218,10 +221,11 @@ function TodoRowComponent({
         <>
           <div
             className={cn(
-              "w-40 shrink-0 text-right",
+              "flex w-40 shrink-0 items-center justify-end gap-1 text-right",
               todo.due_date && (isOverdue ? "text-destructive" : "text-muted-foreground"),
             )}
           >
+            {isTodayOverdue && <span className="text-xs text-muted-foreground">Overdue</span>}
             <TodoDueDatePicker
               value={todo.due_date}
               onChange={(due_date, due_date_has_time) =>

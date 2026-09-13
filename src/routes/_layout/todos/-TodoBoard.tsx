@@ -27,13 +27,14 @@ import { AlertCircle, Circle, GripVertical } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
 import { Skeleton } from "#/components/ui/skeleton";
-import type { Todo, TodoPriority } from "#/lib/database.types";
+import type { Todo } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
 import { AddTodoRow } from "./-AddTodoRow";
 import { PrioritySection } from "./-PrioritySection";
-import { findTodoPriority, moveTodoPreview } from "./-todoDrag";
+import { findTodoSection, getTodoSectionTargetId, moveTodoPreview } from "./-todoDrag";
 import type { TodoGroups } from "./-todoDrag";
-import { PRIORITY_LABELS, PRIORITY_ORDER } from "./-todoUtils";
+import { TODO_SECTION_LABELS, TODO_SECTION_ORDER } from "./-todoUtils";
+import type { TodoSection } from "./-todoUtils";
 import type { TodoController } from "./-useTodoController";
 
 export interface TodoBoardProps {
@@ -57,15 +58,19 @@ function TodoBoardSkeleton({ compact }: { compact: boolean }) {
 }
 
 function cloneGroups(groups: TodoGroups): TodoGroups {
-  return { high: [...groups.high], low: [...groups.low] };
+  return { today: [...groups.today], high: [...groups.high], low: [...groups.low] };
 }
 
-function getDropPriority(groups: TodoGroups, overId: string): TodoPriority | null {
-  const todoPriority = findTodoPriority(groups, overId);
-  if (todoPriority) return todoPriority;
+function getDropSection(groups: TodoGroups, overId: string): TodoSection | null {
+  const todoSection = findTodoSection(groups, overId);
+  if (todoSection) return todoSection;
 
-  const priority = /^priority-(high|low)(?:-end)?$/.exec(overId)?.[1];
-  return priority === "high" || priority === "low" ? priority : null;
+  const section = /^(?:section-(today)|priority-(high|low))(?:-end)?$/.exec(overId);
+  return section?.[1] === "today"
+    ? "today"
+    : section?.[2] === "high" || section?.[2] === "low"
+      ? section[2]
+      : null;
 }
 
 function isBelowTarget({ active, over }: DragOverEvent | DragEndEvent): boolean {
@@ -116,9 +121,9 @@ export function TodoBoard({ controller, variant }: TodoBoardProps): ReactElement
       let overId = getFirstCollision(collisions, "id");
 
       if (overId !== null) {
-        const sectionPriority = /^priority-(high|low)$/.exec(String(overId))?.[1];
-        if (sectionPriority === "high" || sectionPriority === "low") {
-          const sectionIds = new Set(displayedGroups[sectionPriority].map((todo) => todo.id));
+        const section = getDropSection(displayedGroups, String(overId));
+        if (section && String(overId) === getTodoSectionTargetId(section)) {
+          const sectionIds = new Set(displayedGroups[section].map((todo) => todo.id));
           if (sectionIds.size > 0) {
             overId =
               getFirstCollision(
@@ -193,9 +198,9 @@ export function TodoBoard({ controller, variant }: TodoBoardProps): ReactElement
     }
 
     const overId = String(over.id);
-    const sourcePriority = findTodoPriority(initial, activeId);
-    const currentPriority = findTodoPriority(finalGroups, activeId);
-    const targetPriority = getDropPriority(finalGroups, overId);
+    const sourcePriority = findTodoSection(initial, activeId);
+    const currentPriority = findTodoSection(finalGroups, activeId);
+    const targetPriority = getDropSection(finalGroups, overId);
 
     if (!sourcePriority || !currentPriority || !targetPriority) {
       finishDrag();
@@ -207,7 +212,9 @@ export function TodoBoard({ controller, variant }: TodoBoardProps): ReactElement
       const sourceIndex = sourceTodos.findIndex((todo) => todo.id === activeId);
       const overIndex = sourceTodos.findIndex((todo) => todo.id === overId);
       const destinationIndex =
-        overId === `priority-${sourcePriority}-end` ? sourceTodos.length - 1 : overIndex;
+        overId === getTodoSectionTargetId(sourcePriority, true)
+          ? sourceTodos.length - 1
+          : overIndex;
 
       if (sourceIndex >= 0 && destinationIndex >= 0 && sourceIndex !== destinationIndex) {
         void controller.reorder(
@@ -220,7 +227,7 @@ export function TodoBoard({ controller, variant }: TodoBoardProps): ReactElement
     }
 
     finalGroups = moveTodoPreview(finalGroups, activeId, overId, isBelowTarget(event));
-    const finalPriority = findTodoPriority(finalGroups, activeId);
+    const finalPriority = findTodoSection(finalGroups, activeId);
 
     if (finalPriority && finalPriority !== sourcePriority) {
       const targetIndex = finalGroups[finalPriority].findIndex((todo) => todo.id === activeId);
@@ -267,12 +274,12 @@ export function TodoBoard({ controller, variant }: TodoBoardProps): ReactElement
             onDragCancel={finishDrag}
           >
             <div className={cn("flex flex-col", compact ? "gap-1" : "gap-2")}>
-              {PRIORITY_ORDER.map((priority) => (
+              {TODO_SECTION_ORDER.map((priority) => (
                 <PrioritySection
                   key={priority}
                   compact={compact}
                   priority={priority}
-                  label={PRIORITY_LABELS[priority]}
+                  label={TODO_SECTION_LABELS[priority]}
                   todos={displayedGroups[priority]}
                   onUpdate={controller.update}
                   onDelete={controller.remove}

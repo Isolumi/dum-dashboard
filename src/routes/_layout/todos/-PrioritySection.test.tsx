@@ -30,6 +30,8 @@ const highTodo: Todo = {
   due_date: null,
   due_date_has_time: false,
   sort_order: 0,
+  today_date: null,
+  today_sort_order: null,
   created_at: "2026-01-01T00:00:00.000Z",
 };
 
