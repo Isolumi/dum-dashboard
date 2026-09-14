@@ -61,8 +61,12 @@ export async function listTodoRecords(filters: TodoListFilters = {}): Promise<To
   const nameQuery = filters.query?.trim().slice(0, 100);
   if (nameQuery) query = query.ilike("name", `%${nameQuery}%`);
 
-  const limit = Math.min(Math.max(Math.trunc(filters.limit ?? 50), 1), 50);
-  const { data, error } = await query.order("sort_order", { ascending: true }).limit(limit);
+  const orderedQuery = query.order("sort_order", { ascending: true });
+  const result =
+    filters.limit === Number.POSITIVE_INFINITY
+      ? await orderedQuery
+      : await orderedQuery.limit(Math.min(Math.max(Math.trunc(filters.limit ?? 50), 1), 50));
+  const { data, error } = result;
   if (error) throwDatabaseError(error);
   return data ?? [];
 }
@@ -145,6 +149,29 @@ function todoSection(todo: Todo): TodoSection {
   return todo.today_date !== null ? "today" : todo.priority;
 }
 
+function compareTodoIds(left: Todo, right: Todo): number {
+  return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+}
+
+function compareSectionTodos(section: TodoSection, left: Todo, right: Todo): number {
+  if (section !== "today") {
+    return left.sort_order - right.sort_order || compareTodoIds(left, right);
+  }
+
+  if (left.today_sort_order === null) {
+    return right.today_sort_order === null ? compareTodoIds(left, right) : 1;
+  }
+  if (right.today_sort_order === null) return -1;
+  return left.today_sort_order - right.today_sort_order || compareTodoIds(left, right);
+}
+
+function todoIdsInSection(todos: Todo[], section: TodoSection, omittedId?: string): string[] {
+  return todos
+    .filter((todo) => todo.id !== omittedId && todoSection(todo) === section)
+    .sort((left, right) => compareSectionTodos(section, left, right))
+    .map((todo) => todo.id);
+}
+
 async function listAllTodoRecords(): Promise<Todo[]> {
   const { data, error } = await getSupabaseAdmin()
     .from("todos")
@@ -162,13 +189,8 @@ export async function moveTodoRecordToSectionEnd(id: string, target: TodoSection
   const source = todoSection(current);
   if (source === target) return current;
 
-  const source_ids = todos
-    .filter((todo) => todo.id !== id && todoSection(todo) === source)
-    .map((todo) => todo.id);
-  const target_ids = [
-    ...todos.filter((todo) => todoSection(todo) === target).map((todo) => todo.id),
-    id,
-  ];
+  const source_ids = todoIdsInSection(todos, source, id);
+  const target_ids = [...todoIdsInSection(todos, target), id];
 
   await moveTodoRecord({ id, target_section: target, source_ids, target_ids });
   return await getTodoRecord(id);

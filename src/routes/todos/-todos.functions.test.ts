@@ -505,7 +505,10 @@ describe("thin browser todo functions", () => {
 
     expect(noStore).toHaveBeenCalledOnce();
     expect(getOwnerUser).toHaveBeenCalledOnce();
-    expect(listTodoRecordsMock).toHaveBeenCalledOnce();
+    expect(listTodoRecordsMock).toHaveBeenCalledWith({
+      limit: Number.POSITIVE_INFINITY,
+      status: "all",
+    });
     expect(vi.mocked(getOwnerUser).mock.invocationCallOrder[0]).toBeLessThan(
       listTodoRecordsMock.mock.invocationCallOrder[0],
     );

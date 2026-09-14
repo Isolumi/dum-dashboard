@@ -30,7 +30,7 @@ export function assertTodoMutationRequest(): void {
 export const getTodos = createServerFn({ method: "POST" }).handler(async (): Promise<Todo[]> => {
   noStore();
   getOwnerUser();
-  return await listTodoRecords();
+  return await listTodoRecords({ limit: Number.POSITIVE_INFINITY, status: "all" });
 });
 
 export const getTodo = createServerFn({ method: "POST" })

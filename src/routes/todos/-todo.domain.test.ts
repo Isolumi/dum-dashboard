@@ -217,6 +217,14 @@ describe("listTodoRecords", () => {
     expect(mocks.limitMock).toHaveBeenCalledWith(50);
   });
 
+  it("allows the browser wrapper to request all records without a limit", async () => {
+    await listTodoRecords({ limit: Number.POSITIVE_INFINITY, status: "all" });
+
+    expect(mocks.limitMock).not.toHaveBeenCalled();
+    expect(mocks.eqMock).not.toHaveBeenCalledWith("status", expect.anything());
+    expect(mocks.neqMock).not.toHaveBeenCalled();
+  });
+
   it("returns only complete records for status=complete", async () => {
     await listTodoRecords({ status: "complete" });
 
@@ -439,5 +447,85 @@ describe("moveTodoRecordToSectionEnd", () => {
     });
 
     expect(mocks.rpcMock).not.toHaveBeenCalled();
+  });
+
+  it("orders the complete Today target by today_sort_order with nulls last and then ID", async () => {
+    const todayFirst = makeTodo("33333333-3333-4333-8333-333333333333", "low", {
+      sort_order: 8,
+      today_date: "2026-09-14",
+      today_sort_order: 1,
+    });
+    const todaySecond = makeTodo("44444444-4444-4444-8444-444444444444", "high", {
+      sort_order: 0,
+      today_date: "2026-09-14",
+      today_sort_order: 2,
+    });
+    const todayNull = makeTodo("55555555-5555-4555-8555-555555555555", "high", {
+      sort_order: 2,
+      today_date: "2026-09-14",
+      today_sort_order: null,
+    });
+    mocks.listRowsMock.mockResolvedValue([todaySecond, lowTodo, todayNull, todayFirst]);
+    mocks.maybeSingleMock.mockResolvedValueOnce({
+      data: { ...lowTodo, today_date: "2026-09-14" },
+      error: null,
+    });
+
+    await moveTodoRecordToSectionEnd(TODO_ID, "today");
+
+    expect(mocks.rpcMock).toHaveBeenCalledWith(
+      "move_todo_between_sections",
+      expect.objectContaining({
+        p_source_ids: [],
+        p_target_ids: [todayFirst.id, todaySecond.id, todayNull.id, TODO_ID],
+      }),
+    );
+  });
+
+  it("orders complete priority arrays by sort_order and then ID", async () => {
+    const movingToday = makeTodo(TODO_ID, "low", {
+      sort_order: 9,
+      today_date: "2026-09-14",
+      today_sort_order: 0,
+    });
+    const todaySecond = makeTodo("66666666-6666-4666-8666-666666666666", "high", {
+      sort_order: 0,
+      today_date: "2026-09-14",
+      today_sort_order: 2,
+    });
+    const todayFirst = makeTodo("77777777-7777-4777-8777-777777777777", "low", {
+      sort_order: 8,
+      today_date: "2026-09-14",
+      today_sort_order: 1,
+    });
+    const highTieLast = makeTodo("99999999-9999-4999-8999-999999999999", "high", {
+      sort_order: 1,
+    });
+    const highTieFirst = makeTodo("88888888-8888-4888-8888-888888888888", "high", {
+      sort_order: 1,
+    });
+    const highLast = makeTodo(HIGH_ID, "high", { sort_order: 2 });
+    mocks.listRowsMock.mockResolvedValue([
+      todaySecond,
+      highTieLast,
+      highLast,
+      movingToday,
+      highTieFirst,
+      todayFirst,
+    ]);
+    mocks.maybeSingleMock.mockResolvedValueOnce({
+      data: { ...movingToday, priority: "high", today_date: null, today_sort_order: null },
+      error: null,
+    });
+
+    await moveTodoRecordToSectionEnd(TODO_ID, "high");
+
+    expect(mocks.rpcMock).toHaveBeenCalledWith(
+      "move_todo_between_sections",
+      expect.objectContaining({
+        p_source_ids: [todayFirst.id, todaySecond.id],
+        p_target_ids: [highTieFirst.id, highTieLast.id, highLast.id, TODO_ID],
+      }),
+    );
   });
 });
