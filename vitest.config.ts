@@ -23,7 +23,7 @@ export default mergeConfig(
               tsconfigPaths({ projects: ["./tsconfig.json"] }),
               tanstackStart({
                 router: {
-                  routeFileIgnorePattern: "\\.functions\\.ts$",
+                  routeFileIgnorePattern: "\\.(?:domain|functions|schemas)\\.ts$",
                 },
               }),
             ],

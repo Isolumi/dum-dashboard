@@ -1,8 +1,35 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { rpcMock } = vi.hoisted(() => ({
-  rpcMock: vi.fn(),
+const {
+  createTodoRecordMock,
+  deleteTodoRecordMock,
+  getTodoRecordMock,
+  listTodoRecordsMock,
+  moveTodoRecordMock,
+  reorderTodoRecordsMock,
+  updateTodoRecordMock,
+} = vi.hoisted(() => ({
+  createTodoRecordMock: vi.fn(),
+  deleteTodoRecordMock: vi.fn(),
+  getTodoRecordMock: vi.fn(),
+  listTodoRecordsMock: vi.fn(),
+  moveTodoRecordMock: vi.fn(),
+  reorderTodoRecordsMock: vi.fn(),
+  updateTodoRecordMock: vi.fn(),
 }));
+
+const todoRecord = {
+  created_at: "2026-09-14T12:00:00.000Z",
+  due_date: null,
+  due_date_has_time: false,
+  id: "550e8400-e29b-41d4-a716-446655440000",
+  name: "Test todo",
+  priority: "low" as const,
+  sort_order: 0,
+  status: "not_started" as const,
+  today_date: null,
+  today_sort_order: null,
+};
 
 vi.mock("@tanstack/react-start", () => ({
   createServerFn: vi.fn(() => {
@@ -27,16 +54,26 @@ vi.mock("#/lib/server-auth", () => ({
   noStore: vi.fn(),
 }));
 
-vi.mock("#/lib/supabase-admin", () => ({
-  getSupabaseAdmin: vi.fn(() => ({ rpc: rpcMock })),
+vi.mock("./todo.domain", () => ({
+  createTodoRecord: createTodoRecordMock,
+  deleteTodoRecord: deleteTodoRecordMock,
+  getTodoRecord: getTodoRecordMock,
+  listTodoRecords: listTodoRecordsMock,
+  moveTodoRecord: moveTodoRecordMock,
+  reorderTodoRecords: reorderTodoRecordsMock,
+  updateTodoRecord: updateTodoRecordMock,
 }));
 
 const {
   assertTodoMutationRequest,
+  createTodo,
   CreateTodoSchema,
   CreateTodoInputSchema,
+  deleteTodo,
   DeleteTodoSchema,
+  getTodo,
   GetTodoSchema,
+  getTodos,
   GetTodosInputSchema,
   moveTodo,
   MoveTodoInputSchema,
@@ -44,9 +81,10 @@ const {
   normalizeUpdateTodoFields,
   reorderTodos,
   ReorderTodosSchema,
+  updateTodo,
   UpdateTodoSchema,
 } = await import("./todos.functions");
-const { assertSameOrigin } = await import("#/lib/server-auth");
+const { assertSameOrigin, getOwnerUser, noStore } = await import("#/lib/server-auth");
 
 const TODO_ID = "550e8400-e29b-41d4-a716-446655440000";
 const SECOND_TODO_ID = "11111111-1111-4111-8111-111111111111";
@@ -54,6 +92,13 @@ const LOW_TODO_ID = "22222222-2222-4222-8222-222222222222";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  createTodoRecordMock.mockResolvedValue(todoRecord);
+  deleteTodoRecordMock.mockResolvedValue(todoRecord);
+  getTodoRecordMock.mockResolvedValue(todoRecord);
+  listTodoRecordsMock.mockResolvedValue([]);
+  moveTodoRecordMock.mockResolvedValue(undefined);
+  reorderTodoRecordsMock.mockResolvedValue(undefined);
+  updateTodoRecordMock.mockResolvedValue(todoRecord);
 });
 
 describe("CreateTodoSchema", () => {
@@ -347,9 +392,7 @@ describe("ReorderTodosSchema", () => {
 });
 
 describe("reorderTodos", () => {
-  it("calls one stale-state-validating atomic database RPC", async () => {
-    rpcMock.mockResolvedValueOnce({ data: null, error: null });
-
+  it("checks the mutation boundary before it calls the shared domain", async () => {
     await expect(
       reorderTodos({
         data: {
@@ -360,17 +403,19 @@ describe("reorderTodos", () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(rpcMock).toHaveBeenCalledOnce();
-    expect(rpcMock).toHaveBeenCalledWith("reorder_todo_section_atomically", {
-      p_section: "today",
-      p_expected_ids: [TODO_ID, SECOND_TODO_ID],
-      p_ordered_ids: [SECOND_TODO_ID, TODO_ID],
+    expect(reorderTodoRecordsMock).toHaveBeenCalledWith({
+      section: "today",
+      expected_ids: [TODO_ID, SECOND_TODO_ID],
+      ordered_ids: [SECOND_TODO_ID, TODO_ID],
     });
     expect(assertSameOrigin).toHaveBeenCalledOnce();
+    expect(vi.mocked(assertSameOrigin).mock.invocationCallOrder[0]).toBeLessThan(
+      reorderTodoRecordsMock.mock.invocationCallOrder[0],
+    );
   });
 
-  it("reports an atomic database reorder failure", async () => {
-    rpcMock.mockResolvedValueOnce({ data: null, error: { message: "stale Todo order" } });
+  it("preserves a domain reorder failure", async () => {
+    reorderTodoRecordsMock.mockRejectedValueOnce(new Error("Todo changed; retry the request"));
 
     await expect(
       reorderTodos({
@@ -380,7 +425,7 @@ describe("reorderTodos", () => {
           ordered_ids: [SECOND_TODO_ID, TODO_ID],
         },
       }),
-    ).rejects.toThrow("Failed to reorder todos: stale Todo order");
+    ).rejects.toThrow("Todo changed; retry the request");
   });
 });
 
@@ -414,9 +459,7 @@ describe("MoveTodoInputSchema", () => {
 });
 
 describe("moveTodo", () => {
-  it("validates the move and calls the atomic database RPC once", async () => {
-    rpcMock.mockResolvedValueOnce({ data: null, error: null });
-
+  it("checks the mutation boundary before it calls the shared domain", async () => {
     await expect(
       moveTodo({
         data: {
@@ -428,18 +471,20 @@ describe("moveTodo", () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(rpcMock).toHaveBeenCalledOnce();
-    expect(rpcMock).toHaveBeenCalledWith("move_todo_between_sections", {
-      p_todo_id: TODO_ID,
-      p_target_section: "today",
-      p_source_ids: [SECOND_TODO_ID],
-      p_target_ids: [TODO_ID, LOW_TODO_ID],
+    expect(moveTodoRecordMock).toHaveBeenCalledWith({
+      id: TODO_ID,
+      target_section: "today",
+      source_ids: [SECOND_TODO_ID],
+      target_ids: [TODO_ID, LOW_TODO_ID],
     });
     expect(assertSameOrigin).toHaveBeenCalledOnce();
+    expect(vi.mocked(assertSameOrigin).mock.invocationCallOrder[0]).toBeLessThan(
+      moveTodoRecordMock.mock.invocationCallOrder[0],
+    );
   });
 
-  it("reports an atomic database move failure", async () => {
-    rpcMock.mockResolvedValueOnce({ data: null, error: { message: "stale Todo order" } });
+  it("preserves a domain move failure", async () => {
+    moveTodoRecordMock.mockRejectedValueOnce(new Error("Todo changed; retry the request"));
 
     await expect(
       moveTodo({
@@ -450,7 +495,56 @@ describe("moveTodo", () => {
           target_ids: [TODO_ID, LOW_TODO_ID],
         },
       }),
-    ).rejects.toThrow("Failed to move todo: stale Todo order");
+    ).rejects.toThrow("Todo changed; retry the request");
+  });
+});
+
+describe("thin browser todo functions", () => {
+  it("checks the owner before it lists records through the domain", async () => {
+    await expect(getTodos()).resolves.toEqual([]);
+
+    expect(noStore).toHaveBeenCalledOnce();
+    expect(getOwnerUser).toHaveBeenCalledOnce();
+    expect(listTodoRecordsMock).toHaveBeenCalledOnce();
+    expect(vi.mocked(getOwnerUser).mock.invocationCallOrder[0]).toBeLessThan(
+      listTodoRecordsMock.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("checks the owner before it gets a record through the domain", async () => {
+    await expect(getTodo({ data: { id: TODO_ID } })).resolves.toEqual(todoRecord);
+
+    expect(getOwnerUser).toHaveBeenCalledOnce();
+    expect(getTodoRecordMock).toHaveBeenCalledWith(TODO_ID);
+    expect(vi.mocked(getOwnerUser).mock.invocationCallOrder[0]).toBeLessThan(
+      getTodoRecordMock.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("checks the mutation boundary before create, update, and delete domain calls", async () => {
+    await expect(createTodo({ data: { name: "New todo" } })).resolves.toEqual(todoRecord);
+    await expect(updateTodo({ data: { id: TODO_ID, name: "Renamed todo" } })).resolves.toEqual(
+      todoRecord,
+    );
+    await expect(deleteTodo({ data: { id: TODO_ID } })).resolves.toBeUndefined();
+
+    expect(assertSameOrigin).toHaveBeenCalledTimes(3);
+    expect(createTodoRecordMock).toHaveBeenCalledWith({
+      name: "New todo",
+      priority: "low",
+      status: "not_started",
+    });
+    expect(updateTodoRecordMock).toHaveBeenCalledWith({ id: TODO_ID, name: "Renamed todo" });
+    expect(deleteTodoRecordMock).toHaveBeenCalledWith(TODO_ID);
+    expect(vi.mocked(assertSameOrigin).mock.invocationCallOrder[0]).toBeLessThan(
+      createTodoRecordMock.mock.invocationCallOrder[0],
+    );
+    expect(vi.mocked(assertSameOrigin).mock.invocationCallOrder[1]).toBeLessThan(
+      updateTodoRecordMock.mock.invocationCallOrder[0],
+    );
+    expect(vi.mocked(assertSameOrigin).mock.invocationCallOrder[2]).toBeLessThan(
+      deleteTodoRecordMock.mock.invocationCallOrder[0],
+    );
   });
 });
 
