@@ -93,4 +93,21 @@ describe("PrioritySection", () => {
 
     expect(dndTestState.useDroppable).toHaveBeenCalledWith({ id: "priority-high-end" });
   });
+
+  it("keeps an empty section visible and available as a drop target", () => {
+    render(
+      <PrioritySection
+        compact
+        priority="today"
+        label="Today"
+        todos={[]}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Today")).not.toBeNull();
+    expect(screen.getByText("No items")).not.toBeNull();
+    expect(dndTestState.useDroppable).toHaveBeenCalledWith({ id: "section-today" });
+  });
 });
