@@ -23,6 +23,14 @@ describe("ListTodosQuerySchema", () => {
     ).toEqual({ query: "hydro", section: "today", status: "all", limit: 10 });
   });
 
+  it.each(["a", "a".repeat(100)])("accepts inclusive query boundary %s", (query) => {
+    expect(ListTodosQuerySchema.safeParse({ query }).success).toBe(true);
+  });
+
+  it.each([1, 50])("accepts inclusive limit boundary %i", (limit) => {
+    expect(ListTodosQuerySchema.safeParse({ limit }).success).toBe(true);
+  });
+
   it("rejects invalid query and limit boundaries", () => {
     expect(ListTodosQuerySchema.safeParse({ query: "   " }).success).toBe(false);
     expect(ListTodosQuerySchema.safeParse({ query: "a".repeat(101) }).success).toBe(false);
@@ -62,6 +70,19 @@ describe("CreateToolTodoSchema", () => {
     ).toBe(false);
   });
 
+  it.each(["not_started", "started", "complete"] as const)("accepts the %s status", (status) => {
+    expect(CreateToolTodoSchema.parse({ name: "Pay hydro", status })).toEqual({
+      name: "Pay hydro",
+      status,
+    });
+  });
+
+  it("rejects an unsupported status", () => {
+    expect(CreateToolTodoSchema.safeParse({ name: "Pay hydro", status: "done" }).success).toBe(
+      false,
+    );
+  });
+
   it("rejects unknown fields", () => {
     expect(CreateToolTodoSchema.safeParse({ name: "Pay hydro", priority: "high" }).success).toBe(
       false,
@@ -90,6 +111,14 @@ describe("UpdateToolTodoSchema", () => {
     });
     expect(UpdateToolTodoSchema.safeParse({ priority: "high" }).success).toBe(false);
     expect(UpdateToolTodoSchema.safeParse({ due_date: "September 30" }).success).toBe(false);
+  });
+
+  it.each(["not_started", "started", "complete"] as const)("accepts the %s status", (status) => {
+    expect(UpdateToolTodoSchema.parse({ status })).toEqual({ status });
+  });
+
+  it("rejects an unsupported status", () => {
+    expect(UpdateToolTodoSchema.safeParse({ status: "done" }).success).toBe(false);
   });
 });
 

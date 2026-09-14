@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { assertValidToolTokenConfig, hasValidToolBearer } from "./tool-api-auth";
 
 const TOKEN = "0123456789abcdef0123456789abcdef";
+const SAME_LENGTH_WRONG_TOKEN = "0123456789abcdef0123456789abcdee";
 
 describe("tool API bearer authentication", () => {
   it.each([undefined, "", "Basic abc", "Bearer", "Bearer wrong"])("rejects %s", (authorization) => {
@@ -19,6 +20,30 @@ describe("tool API bearer authentication", () => {
     });
 
     expect(hasValidToolBearer(request, TOKEN)).toBe(true);
+  });
+
+  it("rejects an incorrect bearer token with the same UTF-8 byte length", () => {
+    expect(Buffer.byteLength(TOKEN, "utf8")).toBe(32);
+    expect(Buffer.byteLength(SAME_LENGTH_WRONG_TOKEN, "utf8")).toBe(32);
+    expect(SAME_LENGTH_WRONG_TOKEN).not.toBe(TOKEN);
+
+    const request = new Request("http://dumq/api/tools/todos", {
+      headers: { authorization: `Bearer ${SAME_LENGTH_WRONG_TOKEN}` },
+    });
+
+    expect(hasValidToolBearer(request, TOKEN)).toBe(false);
+  });
+
+  it.each([
+    ["a lowercase scheme", `bearer ${TOKEN}`],
+    ["two spaces after the scheme", `Bearer  ${TOKEN}`],
+    ["leading horizontal whitespace before the token", `Bearer \t${TOKEN}`],
+  ])("rejects malformed bearer grammar with %s", (_case, authorization) => {
+    const request = new Request("http://dumq/api/tools/todos", {
+      headers: { authorization },
+    });
+
+    expect(hasValidToolBearer(request, TOKEN)).toBe(false);
   });
 
   it("rejects a UTF-8 byte-length mismatch without throwing", () => {
