@@ -113,19 +113,30 @@ function PrioritySectionComponent({
 
       {/* Todo rows */}
       <SortableContext items={todoIds} strategy={verticalListSortingStrategy}>
-        <div role="list">
-          {todos.map((todo) => (
-            <SortableTodoRow
-              key={todo.id}
-              todo={todo}
-              onUpdate={onUpdate}
-              onDelete={onDelete}
-              compact={compact}
-              isPending={isPending?.(todo.id)}
-              dragDisabled={hasPendingTodo}
-            />
-          ))}
-        </div>
+        {todos.length === 0 ? (
+          <p
+            className={cn(
+              "flex min-h-11 items-center text-sm text-muted-foreground",
+              compact ? "px-5" : "px-4",
+            )}
+          >
+            No items
+          </p>
+        ) : (
+          <div role="list">
+            {todos.map((todo) => (
+              <SortableTodoRow
+                key={todo.id}
+                todo={todo}
+                onUpdate={onUpdate}
+                onDelete={onDelete}
+                compact={compact}
+                isPending={isPending?.(todo.id)}
+                dragDisabled={hasPendingTodo}
+              />
+            ))}
+          </div>
+        )}
         {todos.length > 0 && (
           <div
             ref={setTrailingDropTargetRef}
