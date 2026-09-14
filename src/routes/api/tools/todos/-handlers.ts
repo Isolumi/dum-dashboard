@@ -95,12 +95,31 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): ParseResult<T> {
     : { success: false, response: invalidRequest() };
 }
 
+function hasJsonContentType(request: Request): boolean {
+  const contentType = request.headers.get("content-type");
+  const mediaType = contentType?.split(";", 1)[0]?.trim().toLowerCase();
+  return mediaType === "application/json";
+}
+
 async function parseJson<T>(schema: z.ZodType<T>, request: Request): Promise<ParseResult<T>> {
+  if (!hasJsonContentType(request)) {
+    return { success: false, response: invalidRequest() };
+  }
+
   try {
     return parse(schema, await request.json());
   } catch {
     return { success: false, response: invalidRequest() };
   }
+}
+
+function hasRepeatedQueryParameter(searchParams: URLSearchParams): boolean {
+  const seen = new Set<string>();
+  for (const key of searchParams.keys()) {
+    if (seen.has(key)) return true;
+    seen.add(key);
+  }
+  return false;
 }
 
 export function createTodoToolHandlers(options: {
@@ -120,10 +139,9 @@ export function createTodoToolHandlers(options: {
       const unauthorized = authorize(request);
       if (unauthorized) return unauthorized;
 
-      const parsed = parse(
-        ListTodosQuerySchema,
-        Object.fromEntries(new URL(request.url).searchParams),
-      );
+      const searchParams = new URL(request.url).searchParams;
+      if (hasRepeatedQueryParameter(searchParams)) return invalidRequest();
+      const parsed = parse(ListTodosQuerySchema, Object.fromEntries(searchParams));
       if (!parsed.success) return parsed.response;
 
       try {

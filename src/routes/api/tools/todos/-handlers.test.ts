@@ -34,7 +34,7 @@ function authorizedRequest(path: string, init: RequestInit = {}): Request {
 function jsonRequest(path: string, body: unknown, method = "POST"): Request {
   return authorizedRequest(path, {
     body: JSON.stringify(body),
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json; charset=utf-8" },
     method,
   });
 }
@@ -56,6 +56,33 @@ const domain = {
 };
 
 const handlers = createTodoToolHandlers({ token: TOKEN, domain });
+
+const jsonMutationCases = [
+  {
+    body: { name: "Pay hydro" },
+    domainOperation: domain.createTodoRecord,
+    invoke: (request: Request) => handlers.create(request),
+    method: "POST",
+    name: "create",
+    path: "/api/tools/todos",
+  },
+  {
+    body: { name: "Pay hydro bill" },
+    domainOperation: domain.updateTodoRecord,
+    invoke: (request: Request) => handlers.update(request, TODO_ID),
+    method: "PATCH",
+    name: "update",
+    path: `/api/tools/todos/${TODO_ID}`,
+  },
+  {
+    body: { section: "today" },
+    domainOperation: domain.moveTodoRecordToSectionEnd,
+    invoke: (request: Request) => handlers.move(request, TODO_ID),
+    method: "POST",
+    name: "move",
+    path: `/api/tools/todos/${TODO_ID}/move`,
+  },
+] as const;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -138,6 +165,20 @@ describe("createTodoToolHandlers", () => {
   });
 
   it.each([
+    ["query", "query=hydro&query=rent"],
+    ["section", "section=high&section=low"],
+    ["status", "status=incomplete&status=all"],
+    ["limit", "limit=10&limit=20"],
+  ])("rejects a repeated %s query parameter", async (_name, queryString) => {
+    const response = await handlers.list(authorizedRequest(`/api/tools/todos?${queryString}`));
+
+    await expectJson(response, 400, {
+      error: { code: "invalid_request", message: "Invalid request" },
+    });
+    expect(domain.listTodoRecords).not.toHaveBeenCalled();
+  });
+
+  it.each([
     ["get", () => handlers.get(authorizedRequest("/api/tools/todos/bad"), "bad")],
     [
       "update",
@@ -164,7 +205,11 @@ describe("createTodoToolHandlers", () => {
       "create",
       () =>
         handlers.create(
-          authorizedRequest("/api/tools/todos", { body: "not-json", method: "POST" }),
+          authorizedRequest("/api/tools/todos", {
+            body: "not-json",
+            headers: { "content-type": "application/json" },
+            method: "POST",
+          }),
         ),
     ],
     [
@@ -173,6 +218,7 @@ describe("createTodoToolHandlers", () => {
         handlers.update(
           authorizedRequest(`/api/tools/todos/${TODO_ID}`, {
             body: "not-json",
+            headers: { "content-type": "application/json" },
             method: "PATCH",
           }),
           TODO_ID,
@@ -184,6 +230,7 @@ describe("createTodoToolHandlers", () => {
         handlers.move(
           authorizedRequest(`/api/tools/todos/${TODO_ID}/move`, {
             body: "not-json",
+            headers: { "content-type": "application/json" },
             method: "POST",
           }),
           TODO_ID,
@@ -198,6 +245,29 @@ describe("createTodoToolHandlers", () => {
     expect(Object.values(domain).every((operation) => operation.mock.calls.length === 0)).toBe(
       true,
     );
+  });
+
+  describe.each(jsonMutationCases)("$name JSON media type", (mutation) => {
+    it.each([
+      ["missing", undefined],
+      ["text/plain", "text/plain"],
+    ])("rejects a %s Content-Type before body parsing or domain calls", async (_name, value) => {
+      const request = authorizedRequest(mutation.path, {
+        body: JSON.stringify(mutation.body),
+        headers: value ? { "content-type": value } : undefined,
+        method: mutation.method,
+      });
+      if (!value) request.headers.delete("content-type");
+      const jsonSpy = vi.spyOn(request, "json");
+
+      const response = await mutation.invoke(request);
+
+      await expectJson(response, 400, {
+        error: { code: "invalid_request", message: "Invalid request" },
+      });
+      expect(jsonSpy).not.toHaveBeenCalled();
+      expect(mutation.domainOperation).not.toHaveBeenCalled();
+    });
   });
 
   it.each([
