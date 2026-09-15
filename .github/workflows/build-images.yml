@@ -68,6 +68,9 @@ jobs:
       - name: Verify camera secret and network boundaries
         run: bash scripts/check-camera-manifests.sh
 
+      - name: Verify DumQ tool API secret boundary
+        run: bash scripts/check-tool-api-manifests.sh
+
   build-and-push:
     if: github.event_name == 'push'
     needs: verify

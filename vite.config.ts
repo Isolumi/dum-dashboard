@@ -16,7 +16,7 @@ const config = defineConfig(({ mode }) => ({
     tailwindcss(),
     tanstackStart({
       router: {
-        routeFileIgnorePattern: "\\.functions\\.ts$",
+        routeFileIgnorePattern: "\\.(?:domain|functions|schemas)\\.ts$",
       },
     }),
     nitro({ preset: "node-server", serverDir: true }),

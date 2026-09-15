@@ -9,6 +9,7 @@ resources:
   - certificate.yml
   - ingress.yml
   - monies-infisical.yml
+  - tool-api-infisical.yml
   - network-policy.yml
 images:
   - name: ghcr.io/isolumi/dum-dashboard
