@@ -112,6 +112,19 @@ spec:
         - port: 3000
           protocol: TCP`;
 
+const additionalIngressPolicy = (podSelector: string): string => `
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dashboard-broad-ingress
+  namespace: dum-dashboard
+spec:
+  podSelector: ${podSelector}
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}`;
+
 const appendDocument = async (path: string, document: string): Promise<void> => {
   const original = await readFile(path, "utf8");
   await writeFile(path, `${original}\n---\n${document.trim()}\n`);
@@ -710,5 +723,76 @@ describe("DumQ NetworkPolicy manifest guard mutations", () => {
     const result = runCheckerScript(fixture);
 
     expect(result.status, checkerOutput(result)).not.toBe(0);
+  });
+
+  test.each([
+    [
+      "the exact dashboard labels",
+      `
+    matchLabels:
+      app.kubernetes.io/name: dum-dashboard
+      app.kubernetes.io/component: dashboard`,
+    ],
+    [
+      "a partial dashboard label set",
+      `
+    matchLabels:
+      app.kubernetes.io/name: dum-dashboard`,
+    ],
+    ["an empty selector", "{}"],
+    [
+      "a matching In expression",
+      `
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - dum-dashboard`,
+    ],
+    [
+      "a matching Exists expression",
+      `
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: Exists`,
+    ],
+    [
+      "a matching NotIn expression",
+      `
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: NotIn
+        values:
+          - camera-stream`,
+    ],
+    [
+      "a matching DoesNotExist expression",
+      `
+    matchExpressions:
+      - key: app.kubernetes.io/instance
+        operator: DoesNotExist`,
+    ],
+  ])(
+    "rejects a second ingress policy selecting the dashboard with %s",
+    async (_label, selector) => {
+      await appendDocument(fixture.overlayRenderedPath, additionalIngressPolicy(selector));
+
+      const result = runCheckerScript(fixture);
+
+      expect(result.status, checkerOutput(result)).not.toBe(0);
+    },
+  );
+
+  test("accepts an additional ingress policy that selects another pod", async () => {
+    await appendDocument(
+      fixture.overlayRenderedPath,
+      additionalIngressPolicy(`
+    matchLabels:
+      app.kubernetes.io/name: go2rtc`),
+    );
+
+    const result = runCheckerScript(fixture);
+
+    expect(result.status, checkerOutput(result)).toBe(0);
   });
 });

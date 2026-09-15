@@ -76,19 +76,23 @@ const overlayRenderedPath = process.argv[2];
 const documents = parseAllDocuments(readFileSync(overlayRenderedPath, "utf8"))
   .map((document) => document.toJSON())
   .filter(Boolean);
-const policies = documents.filter(
+const approvedPolicies = documents.filter(
   (document) =>
     document.kind === "NetworkPolicy" &&
     document.metadata?.name === "dum-dashboard-traefik-only",
 );
 
-if (policies.length !== 1) {
+if (approvedPolicies.length !== 1) {
   throw new Error(
-    `Expected one NetworkPolicy/dum-dashboard-traefik-only; found ${policies.length}.`,
+    `Expected one NetworkPolicy/dum-dashboard-traefik-only; found ${approvedPolicies.length}.`,
   );
 }
 
-const policy = policies[0];
+const policy = approvedPolicies[0];
+const dashboardLabels = {
+  "app.kubernetes.io/name": "dum-dashboard",
+  "app.kubernetes.io/component": "dashboard",
+};
 const expectedSpec = {
   podSelector: {
     matchLabels: {
@@ -143,6 +147,48 @@ const normalizeSpec = (spec) => {
   return canonicalize(normalized);
 };
 
+const selectorMatchesLabels = (selector, labels) => {
+  if (selector === null || typeof selector !== "object" || Array.isArray(selector)) return false;
+
+  const matchLabels = selector.matchLabels ?? {};
+  if (matchLabels === null || typeof matchLabels !== "object" || Array.isArray(matchLabels)) {
+    return false;
+  }
+  if (!Object.entries(matchLabels).every(([key, value]) => labels[key] === value)) return false;
+
+  const expressions = selector.matchExpressions ?? [];
+  if (!Array.isArray(expressions)) return false;
+  return expressions.every((expression) => {
+    if (expression === null || typeof expression !== "object" || Array.isArray(expression)) {
+      return false;
+    }
+
+    const key = expression.key;
+    const operator = expression.operator;
+    const values = Array.isArray(expression.values) ? expression.values : [];
+    const hasLabel = typeof key === "string" && Object.hasOwn(labels, key);
+    const labelValue = hasLabel ? labels[key] : undefined;
+
+    switch (operator) {
+      case "In":
+        return hasLabel && values.includes(labelValue);
+      case "NotIn":
+        return !hasLabel || !values.includes(labelValue);
+      case "Exists":
+        return hasLabel;
+      case "DoesNotExist":
+        return !hasLabel;
+      default:
+        return false;
+    }
+  });
+};
+
+const governsIngress = (networkPolicy) => {
+  const policyTypes = networkPolicy.spec?.policyTypes;
+  return !Array.isArray(policyTypes) || policyTypes.includes("Ingress");
+};
+
 if (
   policy.apiVersion !== "networking.k8s.io/v1" ||
   policy.metadata?.namespace !== "dum-dashboard" ||
@@ -150,6 +196,23 @@ if (
 ) {
   throw new Error(
     "NetworkPolicy/dum-dashboard-traefik-only does not match the approved rendered ingress contract.",
+  );
+}
+
+const dashboardIngressPolicies = documents.filter(
+  (document) =>
+    document.kind === "NetworkPolicy" &&
+    document.metadata?.namespace === "dum-dashboard" &&
+    governsIngress(document) &&
+    selectorMatchesLabels(document.spec?.podSelector, dashboardLabels),
+);
+
+if (dashboardIngressPolicies.length !== 1 || dashboardIngressPolicies[0] !== policy) {
+  const policyNames = dashboardIngressPolicies.map(
+    (document) => document.metadata?.name ?? "unnamed",
+  );
+  throw new Error(
+    `Only NetworkPolicy/dum-dashboard-traefik-only may select the dashboard for ingress; found ${policyNames.join(", ")}.`,
   );
 }
 
