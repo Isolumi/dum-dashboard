@@ -65,6 +65,29 @@ const appendRenderedManifest = async (fixture: Fixture, manifest: string): Promi
   await writeFile(fixture.normalRenderedPath, `${original}\n${manifest}\n`);
 };
 
+const appendIngressPolicy = async (
+  fixture: Fixture,
+  name: string,
+  selector: string,
+): Promise<void> => {
+  await appendRenderedManifest(
+    fixture,
+    `---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ${name}
+  namespace: dum-dashboard
+spec:
+  podSelector:
+${selector}
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}`,
+  );
+};
+
 const runChecker = (fixture: Fixture) =>
   spawnSync("bash", [checkerPath], {
     cwd: repoRoot,
@@ -230,5 +253,58 @@ spec:
     const result = runChecker(fixture);
 
     expect(result.status, checkerOutput(result)).not.toBe(0);
+  });
+
+  test.each([
+    [
+      "the dashboard part-of label",
+      `    matchLabels:
+      app.kubernetes.io/part-of: dum-dashboard`,
+    ],
+    [
+      "the dashboard component label",
+      `    matchLabels:
+      app.kubernetes.io/component: dashboard`,
+    ],
+    [
+      "the dashboard name label",
+      `    matchLabels:
+      app.kubernetes.io/name: dum-dashboard`,
+    ],
+    [
+      "a dashboard part-of expression",
+      `    matchExpressions:
+      - key: app.kubernetes.io/part-of
+        operator: In
+        values: [dum-dashboard]`,
+    ],
+    [
+      "an unknown label that cannot prove separation",
+      `    matchLabels:
+      example.test/workload: unknown`,
+    ],
+  ])("rejects an additional ingress policy selected by %s", async (label, selector) => {
+    await appendIngressPolicy(
+      fixture,
+      `dashboard-selector-${label.replaceAll(" ", "-")}`,
+      selector,
+    );
+
+    const result = runChecker(fixture);
+
+    expect(result.status, checkerOutput(result)).not.toBe(0);
+  });
+
+  test("allows an additional ingress policy with a known unrelated selector", async () => {
+    await appendIngressPolicy(
+      fixture,
+      "go2rtc-only-ingress",
+      `    matchLabels:
+      app.kubernetes.io/name: go2rtc`,
+    );
+
+    const result = runChecker(fixture);
+
+    expect(result.status, checkerOutput(result)).toBe(0);
   });
 });

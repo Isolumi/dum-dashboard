@@ -88,43 +88,63 @@ bun --eval '
     }
     return canonicalize(normalized);
   };
-  const selectorMatchesLabels = (selector, labels) => {
-    if (selector === null || typeof selector !== "object" || Array.isArray(selector)) {
+  const selectorCanMatchLabels = (selector, labels) => {
+    if (selector === null || typeof selector !== "object" || Array.isArray(selector)) return true;
+    if (
+      Object.keys(selector).some(
+        (key) => key !== "matchLabels" && key !== "matchExpressions",
+      )
+    ) {
+      return true;
+    }
+    const matchLabels = selector.matchLabels;
+    if (
+      matchLabels !== undefined &&
+      (matchLabels === null || typeof matchLabels !== "object" || Array.isArray(matchLabels))
+    ) {
+      return true;
+    }
+    if (
+      matchLabels &&
+      Object.entries(matchLabels).some(
+        ([key, expected]) =>
+          typeof expected !== "string" ||
+          (Object.hasOwn(labels, key) && labels[key] !== expected),
+      )
+    ) {
       return false;
     }
-
-    const matchLabels = selector.matchLabels ?? {};
-    if (matchLabels === null || typeof matchLabels !== "object" || Array.isArray(matchLabels)) {
-      return false;
-    }
-    if (!Object.entries(matchLabels).every(([key, value]) => labels[key] === value)) return false;
-
-    const expressions = selector.matchExpressions ?? [];
-    if (!Array.isArray(expressions)) return false;
-    return expressions.every((expression) => {
+    if (selector.matchExpressions === undefined) return true;
+    if (!Array.isArray(selector.matchExpressions)) return true;
+    for (const expression of selector.matchExpressions) {
       if (expression === null || typeof expression !== "object" || Array.isArray(expression)) {
-        return false;
+        return true;
       }
-
       const key = expression.key;
       const operator = expression.operator;
-      const values = Array.isArray(expression.values) ? expression.values : [];
-      const hasLabel = typeof key === "string" && Object.hasOwn(labels, key);
-      const labelValue = hasLabel ? labels[key] : undefined;
-
-      switch (operator) {
-        case "In":
-          return hasLabel && values.includes(labelValue);
-        case "NotIn":
-          return !hasLabel || !values.includes(labelValue);
-        case "Exists":
-          return hasLabel;
-        case "DoesNotExist":
-          return !hasLabel;
-        default:
-          return false;
+      const values = expression.values;
+      if (typeof key !== "string" || typeof operator !== "string") return true;
+      const dashboardValue = labels[key];
+      if (operator === "In") {
+        if (!Array.isArray(values) || !values.every((entry) => typeof entry === "string")) {
+          return true;
+        }
+        if (dashboardValue !== undefined && !values.includes(dashboardValue)) return false;
+      } else if (operator === "NotIn") {
+        if (!Array.isArray(values) || !values.every((entry) => typeof entry === "string")) {
+          return true;
+        }
+        if (dashboardValue !== undefined && values.includes(dashboardValue)) return false;
+      } else if (operator === "Exists") {
+        if (dashboardValue === undefined || values !== undefined) return true;
+      } else if (operator === "DoesNotExist") {
+        if (dashboardValue !== undefined) return false;
+        if (values !== undefined) return true;
+      } else {
+        return true;
       }
-    });
+    }
+    return true;
   };
   const governsIngress = (networkPolicy) => {
     const policyTypes = networkPolicy.spec?.policyTypes;
@@ -198,12 +218,24 @@ bun --eval '
     fail(`Expected one NetworkPolicy/dum-dashboard-traefik-only; found ${dashboardPolicies.length}.`);
   }
   const dashboardPolicy = dashboardPolicies[0];
-  const dashboardLabels = {
+  const dashboardDeployment = find(normal, "Deployment", "dum-dashboard");
+  const dashboardPodLabels = dashboardDeployment?.spec?.template?.metadata?.labels;
+  if (
+    dashboardDeployment?.metadata?.namespace !== "dum-dashboard" ||
+    dashboardPodLabels === null ||
+    typeof dashboardPodLabels !== "object" ||
+    Array.isArray(dashboardPodLabels) ||
+    Object.keys(dashboardPodLabels).length === 0 ||
+    Object.values(dashboardPodLabels).some((value) => typeof value !== "string")
+  ) {
+    fail("Dashboard overlap checks require the complete rendered dashboard pod labels.");
+  }
+  const expectedDashboardSelectorLabels = {
     "app.kubernetes.io/name": "dum-dashboard",
     "app.kubernetes.io/component": "dashboard",
   };
   const expectedDashboardPolicySpec = {
-    podSelector: { matchLabels: dashboardLabels },
+    podSelector: { matchLabels: expectedDashboardSelectorLabels },
     policyTypes: ["Ingress"],
     ingress: [
       {
@@ -243,7 +275,7 @@ bun --eval '
       document?.kind === "NetworkPolicy" &&
       document?.metadata?.namespace === "dum-dashboard" &&
       governsIngress(document) &&
-      selectorMatchesLabels(document?.spec?.podSelector, dashboardLabels),
+      selectorCanMatchLabels(document?.spec?.podSelector, dashboardPodLabels),
   );
   if (dashboardIngressPolicies.length !== 1 || dashboardIngressPolicies[0] !== dashboardPolicy) {
     fail("Only NetworkPolicy/dum-dashboard-traefik-only may select dashboard pods for ingress.");
