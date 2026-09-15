@@ -86,9 +86,11 @@ const query = {
   },
 };
 
+mocks.fromMock.mockImplementation(() => query);
+
 vi.mock("#/lib/supabase-admin", () => ({
   getSupabaseAdmin: vi.fn(() => ({
-    from: mocks.fromMock.mockImplementation(() => query),
+    from: mocks.fromMock,
     rpc: mocks.rpcMock,
   })),
 }));
@@ -144,8 +146,24 @@ function projectedTodo(todo: Todo): TodoDeleteSnapshot {
   };
 }
 
+function isolatedDeleteQuery(result: { data: Todo | null; error: null }) {
+  const builder = {
+    delete: vi.fn(),
+    eq: vi.fn(),
+    is: vi.fn(),
+    maybeSingle: vi.fn().mockResolvedValue(result),
+    select: vi.fn(),
+  };
+  builder.delete.mockReturnValue(builder);
+  builder.eq.mockReturnValue(builder);
+  builder.is.mockReturnValue(builder);
+  builder.select.mockReturnValue(builder);
+  return builder;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.fromMock.mockImplementation(() => query);
   mocks.listRowsMock.mockResolvedValue([]);
   mocks.maybeSingleMock.mockResolvedValue({ data: null, error: null });
   mocks.singleMock.mockResolvedValue({ data: null, error: null });
@@ -378,15 +396,21 @@ describe("todo record operations", () => {
           status: "started",
         }),
       );
-      mocks.maybeSingleMock.mockResolvedValueOnce({
+      const deleteQuery = isolatedDeleteQuery({
         data: makeTodo(TODO_ID, section),
         error: null,
       });
+      const otherQuery = isolatedDeleteQuery({ data: null, error: null });
+      let fromCall = 0;
+      mocks.fromMock.mockImplementation(
+        () => (fromCall++ === 0 ? deleteQuery : otherQuery) as never,
+      );
 
       await deleteTodoRecordIfUnchanged(TODO_ID, expected);
 
-      expect(mocks.deleteMock).toHaveBeenCalledOnce();
-      expect(mocks.eqMock.mock.calls).toEqual([
+      expect(mocks.fromMock).toHaveBeenCalledTimes(1);
+      expect(deleteQuery.delete).toHaveBeenCalledOnce();
+      expect(deleteQuery.eq.mock.calls).toEqual([
         ["id", TODO_ID],
         ["name", `Delete ${section}`],
         ["status", "started"],
@@ -395,11 +419,20 @@ describe("todo record operations", () => {
         ["priority", section],
         ["created_at", "2026-09-14T12:00:00.000Z"],
       ]);
-      expect(mocks.isMock.mock.calls).toEqual([
+      expect(deleteQuery.is.mock.calls).toEqual([
         ["due_date", null],
         ["today_date", null],
         ["today_sort_order", null],
       ]);
+      expect(deleteQuery.select).toHaveBeenCalledWith(
+        "id,name,status,priority,due_date,due_date_has_time,sort_order,today_date,today_sort_order,created_at",
+      );
+      expect(deleteQuery.maybeSingle).toHaveBeenCalledOnce();
+      expect(otherQuery.delete).not.toHaveBeenCalled();
+      expect(otherQuery.eq).not.toHaveBeenCalled();
+      expect(otherQuery.is).not.toHaveBeenCalled();
+      expect(otherQuery.select).not.toHaveBeenCalled();
+      expect(otherQuery.maybeSingle).not.toHaveBeenCalled();
     },
   );
 
@@ -414,11 +447,16 @@ describe("todo record operations", () => {
       today_sort_order: 2,
     });
     const expected = projectedTodo(todayTodo);
-    mocks.maybeSingleMock.mockResolvedValueOnce({ data: todayTodo, error: null });
+    const deleteQuery = isolatedDeleteQuery({ data: todayTodo, error: null });
+    const otherQuery = isolatedDeleteQuery({ data: null, error: null });
+    let fromCall = 0;
+    mocks.fromMock.mockImplementation(() => (fromCall++ === 0 ? deleteQuery : otherQuery) as never);
 
     await deleteTodoRecordIfUnchanged(TODO_ID, expected);
 
-    expect(mocks.eqMock.mock.calls).toEqual([
+    expect(mocks.fromMock).toHaveBeenCalledTimes(1);
+    expect(deleteQuery.delete).toHaveBeenCalledOnce();
+    expect(deleteQuery.eq.mock.calls).toEqual([
       ["id", TODO_ID],
       ["name", "Today task"],
       ["status", "complete"],
@@ -429,8 +467,17 @@ describe("todo record operations", () => {
       ["today_sort_order", 2],
       ["created_at", "2026-09-14T12:00:00.000Z"],
     ]);
-    expect(mocks.eqMock).not.toHaveBeenCalledWith("priority", expect.anything());
-    expect(mocks.isMock).not.toHaveBeenCalled();
+    expect(deleteQuery.eq).not.toHaveBeenCalledWith("priority", expect.anything());
+    expect(deleteQuery.is).not.toHaveBeenCalled();
+    expect(deleteQuery.select).toHaveBeenCalledWith(
+      "id,name,status,priority,due_date,due_date_has_time,sort_order,today_date,today_sort_order,created_at",
+    );
+    expect(deleteQuery.maybeSingle).toHaveBeenCalledOnce();
+    expect(otherQuery.delete).not.toHaveBeenCalled();
+    expect(otherQuery.eq).not.toHaveBeenCalled();
+    expect(otherQuery.is).not.toHaveBeenCalled();
+    expect(otherQuery.select).not.toHaveBeenCalled();
+    expect(otherQuery.maybeSingle).not.toHaveBeenCalled();
   });
 
   it("maps a zero-row conditional delete to conflict", async () => {

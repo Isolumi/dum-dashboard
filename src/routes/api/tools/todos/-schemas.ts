@@ -6,7 +6,12 @@ import {
   TodoStatusFilterSchema,
 } from "#/routes/todos/todo.schemas";
 
-const TodoNameSchema = z.string().trim().min(1).max(200);
+const TodoInputNameSchema = z.string().trim().min(1).max(200);
+const TodoSnapshotNameSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((name) => name.trim().length > 0, { message: "Todo name cannot be blank" });
 const TodoStatusSchema = z.enum(["not_started", "started", "complete"] as const);
 
 export const ListTodosQuerySchema = z.strictObject({
@@ -17,7 +22,7 @@ export const ListTodosQuerySchema = z.strictObject({
 });
 
 export const CreateToolTodoSchema = z.strictObject({
-  name: TodoNameSchema,
+  name: TodoInputNameSchema,
   status: TodoStatusSchema.default("not_started"),
   due_date: TodoDueDateSchema.nullable().optional(),
   due_date_has_time: z.boolean().optional(),
@@ -25,7 +30,7 @@ export const CreateToolTodoSchema = z.strictObject({
 
 export const UpdateToolTodoSchema = z
   .strictObject({
-    name: TodoNameSchema.optional(),
+    name: TodoInputNameSchema.optional(),
     status: TodoStatusSchema.optional(),
     due_date: TodoDueDateSchema.nullable().optional(),
     due_date_has_time: z.boolean().optional(),
@@ -41,7 +46,7 @@ export const MoveToolTodoSchema = z.strictObject({
 export const DeleteToolTodoSchema = z
   .strictObject({
     id: z.string().uuid(),
-    name: TodoNameSchema,
+    name: TodoSnapshotNameSchema,
     section: TodoSectionSchema,
     status: TodoStatusSchema,
     due_date: TodoDueDateSchema.nullable(),

@@ -62,6 +62,10 @@ describe("ListTodosQuerySchema", () => {
 });
 
 describe("CreateToolTodoSchema", () => {
+  it("normalizes surrounding whitespace in an input name", () => {
+    expect(CreateToolTodoSchema.parse({ name: "  Pay hydro  " }).name).toBe("Pay hydro");
+  });
+
   it("defaults a new todo to not_started", () => {
     expect(CreateToolTodoSchema.parse({ name: "Pay hydro" })).toEqual({
       name: "Pay hydro",
@@ -149,6 +153,12 @@ describe("MoveToolTodoSchema", () => {
 });
 
 describe("DeleteToolTodoSchema", () => {
+  it("preserves surrounding whitespace in a saved snapshot name", () => {
+    const snapshot = { ...DELETE_SNAPSHOT, name: "  Pay hydro  " };
+
+    expect(DeleteToolTodoSchema.parse(snapshot).name).toBe("  Pay hydro  ");
+  });
+
   it("requires the complete expected projected todo snapshot", () => {
     expect(DeleteToolTodoSchema.parse(DELETE_SNAPSHOT)).toEqual(DELETE_SNAPSHOT);
     expect(

@@ -472,6 +472,14 @@ describe("createTodoToolHandlers", () => {
     await expectJson(response, 200, { deleted: { id: OTHER_ID } });
   });
 
+  it("passes a saved snapshot name to conditional delete without normalization", async () => {
+    const expected = projectedTodo(makeTodo({ name: "  Pay hydro  " }));
+
+    await handlers.delete(jsonRequest(`/api/tools/todos/${TODO_ID}`, expected, "DELETE"), TODO_ID);
+
+    expect(domain.deleteTodoRecordIfUnchanged).toHaveBeenCalledWith(TODO_ID, expected);
+  });
+
   it("requires the DELETE snapshot body", async () => {
     const request = authorizedRequest(`/api/tools/todos/${TODO_ID}`, { method: "DELETE" });
     request.headers.delete("content-type");
