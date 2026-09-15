@@ -50,6 +50,12 @@ spec:
             matchLabels:
               app.kubernetes.io/instance: traefik-kube-system
               app.kubernetes.io/name: traefik
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uwumi
+          podSelector:
+            matchLabels:
+              app: dumq-mcp
       ports:
         - port: 3000
           protocol: TCP

@@ -50,6 +50,12 @@ spec:
                 name: dum-dashboard-secrets
             - secretRef:
                 name: dum-dashboard-monies-secrets
+          env:
+            - name: DUMQ_TOOL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: dum-dashboard-tool-secrets
+                  key: DUMQ_TOOL_TOKEN
           readinessProbe:
             httpGet:
               path: /

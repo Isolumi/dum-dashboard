@@ -116,6 +116,12 @@ spec:
             matchLabels:
               app.kubernetes.io/instance: traefik-kube-system
               app.kubernetes.io/name: traefik
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uwumi
+          podSelector:
+            matchLabels:
+              app: dumq-mcp
       ports:
         - protocol: TCP
           port: 3000
@@ -194,6 +200,16 @@ const appendRenderedManifest = async (fixture: Fixture, mutation: string): Promi
   await writeFile(fixture.renderedPath, `${original}\n${mutation}\n`);
 };
 
+const replaceRenderedManifest = async (
+  fixture: Fixture,
+  from: string,
+  to: string,
+): Promise<void> => {
+  const original = await readFile(fixture.renderedPath, "utf8");
+  if (!original.includes(from)) throw new Error(`Rendered fixture does not contain ${from}`);
+  await writeFile(fixture.renderedPath, original.replace(from, to));
+};
+
 const createBuiltArtifact = async (
   fixture: Fixture,
   name: string,
@@ -226,6 +242,111 @@ afterEach(async () => {
 });
 
 describe("Monies client-secret guard mutations", () => {
+  test("accepts the exact current dashboard ingress contract", () => {
+    expect(() => runChecker(fixture)).not.toThrow();
+  });
+
+  test("accepts the approved ingress peers in either order", async () => {
+    await replaceRenderedManifest(
+      fixture,
+      `        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: traefik-kube-system
+              app.kubernetes.io/name: traefik
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uwumi
+          podSelector:
+            matchLabels:
+              app: dumq-mcp`,
+      `        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uwumi
+          podSelector:
+            matchLabels:
+              app: dumq-mcp
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: traefik-kube-system
+              app.kubernetes.io/name: traefik`,
+    );
+
+    expect(() => runChecker(fixture)).not.toThrow();
+  });
+
+  test.each([
+    [
+      "a missing DumQ MCP peer",
+      `        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uwumi
+          podSelector:
+            matchLabels:
+              app: dumq-mcp`,
+      "",
+    ],
+    [
+      "an additional peer",
+      "      ports:",
+      `        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: other
+          podSelector:
+            matchLabels:
+              app: other
+      ports:`,
+    ],
+    [
+      "a widened DumQ MCP namespace selector",
+      `        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uwumi`,
+      "        - namespaceSelector: {}",
+    ],
+    [
+      "a changed DumQ MCP namespace selector",
+      "kubernetes.io/metadata.name: uwumi",
+      "kubernetes.io/metadata.name: default",
+    ],
+    [
+      "a widened DumQ MCP pod selector",
+      `          podSelector:
+            matchLabels:
+              app: dumq-mcp`,
+      "          podSelector: {}",
+    ],
+    ["a changed DumQ MCP pod selector", "app: dumq-mcp", "app: uwumi"],
+  ])("rejects %s", async (_label, from, to) => {
+    await replaceRenderedManifest(fixture, from, to);
+
+    expect(() => runChecker(fixture)).toThrow("dashboard ingress");
+  });
+
+  test("rejects an additional ingress policy that selects dashboard pods", async () => {
+    await appendRenderedManifest(
+      fixture,
+      `---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dashboard-broad-ingress
+  namespace: dum-dashboard
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - {}`,
+    );
+
+    expect(() => runChecker(fixture)).toThrow("dashboard ingress policy");
+  });
+
   test("uses an isolated Git fixture instead of the dashboard checkout", async () => {
     expect(fixture.root).not.toBe(process.cwd());
     const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
