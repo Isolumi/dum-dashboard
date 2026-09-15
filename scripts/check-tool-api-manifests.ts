@@ -45,70 +45,82 @@ const findOneDocument = (documents: Document[], kind: string, name: string): Doc
   return matches[0] ?? fail(`Missing ${kind}/${name}.`);
 };
 
-const podSpecFor = (document: Document): Document | undefined => {
-  if (document.kind === "Pod") return asRecord(document.spec);
-  if (document.kind === "CronJob") {
-    return asRecord(valueAt(document, "spec", "jobTemplate", "spec", "template", "spec"));
-  }
-  if (
-    ["DaemonSet", "Deployment", "Job", "ReplicaSet", "StatefulSet"].includes(String(document.kind))
-  ) {
-    return asRecord(valueAt(document, "spec", "template", "spec"));
-  }
-  return undefined;
-};
-
-const containersFor = (document: Document): Document[] => {
-  const podSpec = podSpecFor(document);
-  if (!podSpec) return [];
-  return ["initContainers", "containers", "ephemeralContainers"].flatMap((field) =>
-    asArray(podSpec[field])
-      .map(asRecord)
-      .filter((container): container is Document => container !== undefined),
-  );
-};
-
-const tokenEntries = (container: Document): Document[] =>
-  asArray(container.env)
+const podSpecsFor = (document: Document): Document[] => {
+  const candidates = [
+    document.kind === "Pod" ? document.spec : undefined,
+    document.kind === "PodTemplate" ? valueAt(document, "template", "spec") : undefined,
+    valueAt(document, "spec", "template", "spec"),
+    valueAt(document, "spec", "jobTemplate", "spec", "template", "spec"),
+  ];
+  return candidates
     .map(asRecord)
-    .filter((entry): entry is Document => entry?.name === tokenName);
+    .filter((podSpec): podSpec is Document => podSpec !== undefined)
+    .filter((podSpec, index, podSpecs) => podSpecs.indexOf(podSpec) === index);
+};
 
-const referencesToolSecret = (container: Document): boolean => {
-  const explicitReference = asArray(container.env).some(
-    (entry) => valueAt(entry, "valueFrom", "secretKeyRef", "name") === secretName,
+type ContainerLocation = {
+  container: Document;
+  document: Document;
+  field: string;
+};
+
+const containerLocationsFor = (document: Document): ContainerLocation[] => {
+  return podSpecsFor(document).flatMap((podSpec) =>
+    ["initContainers", "containers", "ephemeralContainers"].flatMap((field) =>
+      asArray(podSpec[field])
+        .map(asRecord)
+        .filter((container): container is Document => container !== undefined)
+        .map((container) => ({ container, document, field })),
+    ),
   );
-  const bulkReference = asArray(container.envFrom).some(
-    (entry) => valueAt(entry, "secretRef", "name") === secretName,
+};
+
+type EnvironmentLocation = ContainerLocation & {
+  entry: Document;
+};
+
+const environmentLocations = (documents: Document[]): EnvironmentLocation[] =>
+  documents.flatMap((document) =>
+    containerLocationsFor(document).flatMap((location) =>
+      asArray(location.container.env)
+        .map(asRecord)
+        .filter((entry): entry is Document => entry !== undefined)
+        .map((entry) => ({ ...location, entry })),
+    ),
   );
-  return explicitReference || bulkReference;
+
+const secretKeyRefFor = (entry: Document): Document | undefined =>
+  asRecord(valueAt(entry, "valueFrom", "secretKeyRef"));
+
+const isToolTokenReference = (entry: Document): boolean => {
+  const reference = secretKeyRefFor(entry);
+  return reference?.name === secretName || reference?.key === tokenName;
 };
 
 const podReferencesToolSecretVolume = (document: Document): boolean => {
-  const podSpec = podSpecFor(document);
-  if (!podSpec) return false;
-
-  return asArray(podSpec.volumes).some((volume) => {
-    if (valueAt(volume, "secret", "secretName") === secretName) return true;
-    return asArray(valueAt(volume, "projected", "sources")).some(
-      (source) => valueAt(source, "secret", "name") === secretName,
-    );
-  });
+  return podSpecsFor(document).some((podSpec) =>
+    asArray(podSpec.volumes).some((volume) => {
+      if (valueAt(volume, "secret", "secretName") === secretName) return true;
+      return asArray(valueAt(volume, "projected", "sources")).some(
+        (source) => valueAt(source, "secret", "name") === secretName,
+      );
+    }),
+  );
 };
 
 const assertNoLiteralToken = (documents: Document[], renderedText: string): void => {
-  for (const document of documents) {
-    for (const container of containersFor(document)) {
-      for (const entry of tokenEntries(container)) {
-        if (Object.hasOwn(entry, "value")) {
-          fail(`${tokenName} must not have a literal value in a workload.`);
-        }
-      }
+  for (const { entry } of environmentLocations(documents)) {
+    if (entry.name === tokenName && Object.hasOwn(entry, "value")) {
+      fail(`${tokenName} must not have a literal value in a workload.`);
     }
+  }
 
+  for (const document of documents) {
     if (document.kind === "ConfigMap" || document.kind === "Secret") {
-      const data = asRecord(document.data);
-      const stringData = asRecord(document.stringData);
-      if (Object.hasOwn(data ?? {}, tokenName) || Object.hasOwn(stringData ?? {}, tokenName)) {
+      const containsToken = ["data", "stringData", "binaryData"].some((field) =>
+        Object.hasOwn(asRecord(document[field]) ?? {}, tokenName),
+      );
+      if (containsToken) {
         fail(`${tokenName} must not be committed in a ConfigMap or Kubernetes Secret.`);
       }
     }
@@ -121,21 +133,41 @@ const assertNoLiteralToken = (documents: Document[], renderedText: string): void
 
 const assertDashboardSecretBoundary = (documents: Document[], renderName: string): void => {
   const deployment = findOneDocument(documents, "Deployment", "dum-dashboard");
-  const dashboardContainers = containersFor(deployment).filter(
-    (container) => container.name === "dashboard",
-  );
+  const dashboardPodSpec =
+    asRecord(valueAt(deployment, "spec", "template", "spec")) ??
+    fail(`${renderName}: Deployment/dum-dashboard must contain spec.template.spec.`);
+  const dashboardContainers = asArray(dashboardPodSpec.containers)
+    .map(asRecord)
+    .filter((container): container is Document => container !== undefined)
+    .filter((container) => container.name === "dashboard");
   if (dashboardContainers.length !== 1) {
-    fail(`${renderName}: expected one dashboard container.`);
+    fail(`${renderName}: expected one normal dashboard container.`);
   }
 
   const dashboard = dashboardContainers[0] ?? fail(`${renderName}: dashboard container missing.`);
-  const entries = tokenEntries(dashboard);
-  if (entries.length !== 1) {
-    fail(`${renderName}: dashboard must have one explicit ${tokenName} environment entry.`);
+  const environment = environmentLocations(documents);
+  const tokenNameEntries = environment.filter(({ entry }) => entry.name === tokenName);
+  const toolTokenReferences = environment.filter(({ entry }) => isToolTokenReference(entry));
+
+  if (tokenNameEntries.length !== 1) {
+    fail(`${renderName}: exactly one ${tokenName} environment entry is required.`);
+  }
+  if (toolTokenReferences.length !== 1) {
+    fail(`${renderName}: exactly one tool-token secretKeyRef is required.`);
   }
 
-  const tokenEnv = entries[0] ?? fail(`${renderName}: ${tokenName} entry missing.`);
+  const tokenLocation = tokenNameEntries[0] ?? fail(`${renderName}: ${tokenName} entry missing.`);
+  const referenceLocation =
+    toolTokenReferences[0] ?? fail(`${renderName}: tool-token secretKeyRef missing.`);
+  if (tokenLocation.entry !== referenceLocation.entry) {
+    fail(`${renderName}: ${tokenName} and the tool-token secretKeyRef must be one entry.`);
+  }
+
+  const tokenEnv = tokenLocation.entry;
   if (
+    tokenLocation.document !== deployment ||
+    tokenLocation.container !== dashboard ||
+    tokenLocation.field !== "containers" ||
     valueAt(tokenEnv, "valueFrom", "secretKeyRef", "name") !== secretName ||
     valueAt(tokenEnv, "valueFrom", "secretKeyRef", "key") !== tokenName ||
     Object.hasOwn(tokenEnv, "value")
@@ -143,23 +175,20 @@ const assertDashboardSecretBoundary = (documents: Document[], renderName: string
     fail(`${renderName}: ${tokenName} must use the exact dedicated secretKeyRef.`);
   }
 
-  if (
-    asArray(dashboard.envFrom).some((entry) => valueAt(entry, "secretRef", "name") === secretName)
-  ) {
-    fail(`${renderName}: the tool Secret must not be loaded through envFrom.`);
-  }
-
   for (const document of documents) {
     if (podReferencesToolSecretVolume(document)) {
       const workloadName = String(valueAt(document, "metadata", "name") ?? "unknown");
       fail(`${renderName}: ${workloadName} must not mount the tool Secret as a volume.`);
     }
-    for (const container of containersFor(document)) {
-      const isDashboard = document === deployment && container === dashboard;
-      if (!isDashboard && (tokenEntries(container).length > 0 || referencesToolSecret(container))) {
+    for (const { container } of containerLocationsFor(document)) {
+      if (
+        asArray(container.envFrom).some(
+          (entry) => valueAt(entry, "secretRef", "name") === secretName,
+        )
+      ) {
         const workloadName = String(valueAt(document, "metadata", "name") ?? "unknown");
         const containerName = String(container.name ?? "unknown");
-        fail(`${renderName}: ${workloadName}/${containerName} must not receive the tool Secret.`);
+        fail(`${renderName}: ${workloadName}/${containerName} must not load the tool Secret.`);
       }
     }
   }
@@ -173,6 +202,7 @@ const assertInfisicalContract = (documents: Document[]): void => {
   const target = targets[0];
 
   if (
+    toolSecret.apiVersion !== "secrets.infisical.com/v1beta1" ||
     valueAt(toolSecret, "metadata", "namespace") !== "dum-dashboard" ||
     valueAt(toolSecret, "spec", "infisicalAuthRef", "name") !== authName ||
     valueAt(toolSecret, "spec", "infisicalAuthRef", "namespace") !== "dum-dashboard" ||
