@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -78,6 +79,39 @@ spec:
                 port:
                   number: 3000`;
 
+const dashboardNetworkPolicy = `
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dum-dashboard-traefik-only
+  namespace: dum-dashboard
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: dum-dashboard
+      app.kubernetes.io/component: dashboard
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: traefik-kube-system
+              app.kubernetes.io/name: traefik
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uwumi
+          podSelector:
+            matchLabels:
+              app: dumq-mcp
+      ports:
+        - port: 3000
+          protocol: TCP`;
+
 const appendDocument = async (path: string, document: string): Promise<void> => {
   const original = await readFile(path, "utf8");
   await writeFile(path, `${original}\n---\n${document.trim()}\n`);
@@ -99,7 +133,10 @@ const replaceInBothRenders = async (fixture: Fixture, from: string, to: string):
 const setDeploymentInBothRenders = async (fixture: Fixture, deployment: string): Promise<void> => {
   await Promise.all([
     writeFile(fixture.baseRenderedPath, deployment),
-    writeFile(fixture.overlayRenderedPath, `${deployment}${toolSecret}${rootIngress}`),
+    writeFile(
+      fixture.overlayRenderedPath,
+      `${deployment}${toolSecret}${rootIngress}${dashboardNetworkPolicy}`,
+    ),
   ]);
 };
 
@@ -123,6 +160,22 @@ const runChecker = (fixture: Fixture): void =>
 const expectRejected = (fixture: Fixture): void => {
   expect(() => runChecker(fixture)).toThrow();
 };
+
+const runCheckerScript = (fixture: Fixture) =>
+  spawnSync(
+    "bash",
+    [
+      join(process.cwd(), "scripts/check-tool-api-manifests.sh"),
+      "--base-rendered",
+      fixture.baseRenderedPath,
+      "--overlay-rendered",
+      fixture.overlayRenderedPath,
+    ],
+    { encoding: "utf8" },
+  );
+
+const checkerOutput = (result: ReturnType<typeof runCheckerScript>): string =>
+  [result.stdout, result.stderr].filter(Boolean).join("\n");
 
 let fixture: Fixture;
 
@@ -549,5 +602,113 @@ spec:
     );
 
     expectRejected(fixture);
+  });
+});
+
+describe("DumQ NetworkPolicy manifest guard mutations", () => {
+  test("accepts only the approved rendered ingress contract", () => {
+    const result = runCheckerScript(fixture);
+
+    expect(result.status, checkerOutput(result)).toBe(0);
+  });
+
+  test.each([
+    [
+      "missing Uwumi namespace selector",
+      `        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uwumi
+          podSelector:
+            matchLabels:
+              app: dumq-mcp`,
+      `        - podSelector:
+            matchLabels:
+              app: dumq-mcp`,
+    ],
+    ["unstable Uwumi namespace label", "kubernetes.io/metadata.name: uwumi", "name: uwumi"],
+    [
+      "all namespaces",
+      `        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uwumi`,
+      "        - namespaceSelector: {}",
+    ],
+    [
+      "missing DumQ MCP pod selector",
+      `          podSelector:
+            matchLabels:
+              app: dumq-mcp
+      ports:`,
+      "      ports:",
+    ],
+    [
+      "all pods in Uwumi",
+      `          podSelector:
+            matchLabels:
+              app: dumq-mcp`,
+      "          podSelector: {}",
+    ],
+    ["wrong DumQ MCP pod label", "app: dumq-mcp", "app: uwumi"],
+    [
+      "expression-based DumQ MCP pod selector",
+      `          podSelector:
+            matchLabels:
+              app: dumq-mcp`,
+      `          podSelector:
+            matchExpressions:
+              - key: app
+                operator: Exists`,
+    ],
+    [
+      "namespace and pod selectors split into separate peers",
+      `        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uwumi
+          podSelector:
+            matchLabels:
+              app: dumq-mcp`,
+      `        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uwumi
+        - podSelector:
+            matchLabels:
+              app: dumq-mcp`,
+    ],
+    [
+      "extra broad peer",
+      `          podSelector:
+            matchLabels:
+              app: dumq-mcp
+      ports:`,
+      `          podSelector:
+            matchLabels:
+              app: dumq-mcp
+        - namespaceSelector: {}
+      ports:`,
+    ],
+    ["wrong dashboard port", "        - port: 3000", "        - port: 3001"],
+    ["wrong dashboard protocol", "          protocol: TCP", "          protocol: UDP"],
+    [
+      "changed Traefik peer",
+      "app.kubernetes.io/instance: traefik-kube-system",
+      "app.kubernetes.io/instance: traefik",
+    ],
+    [
+      "new egress isolation",
+      `  policyTypes:
+    - Ingress
+  ingress:`,
+      `  policyTypes:
+    - Ingress
+    - Egress
+  egress: []
+  ingress:`,
+    ],
+  ])("rejects %s", async (_label, from, to) => {
+    await replaceInFile(fixture.overlayRenderedPath, from, to);
+
+    const result = runCheckerScript(fixture);
+
+    expect(result.status, checkerOutput(result)).not.toBe(0);
   });
 });
