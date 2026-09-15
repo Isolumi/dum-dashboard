@@ -13,6 +13,6 @@ resources:
   - network-policy.yml
 images:
   - name: ghcr.io/isolumi/dum-dashboard
-    newTag: 6d9bb5bfcd9fcc94fd9cebe3442b2ae0ab049acb
+    newTag: ecba25fe47ec838ed8d7181909e8d7f4dcb2f386
   - name: ghcr.io/isolumi/homelab-gateway
-    newTag: 6d9bb5bfcd9fcc94fd9cebe3442b2ae0ab049acb
+    newTag: ecba25fe47ec838ed8d7181909e8d7f4dcb2f386
