@@ -29,6 +29,11 @@ metadata:
   namespace: dum-dashboard
 spec:
   template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dum-dashboard
+        app.kubernetes.io/component: dashboard
+        app.kubernetes.io/part-of: dum-dashboard
     spec:
 ${podSpec}`;
 
@@ -745,6 +750,21 @@ describe("DumQ NetworkPolicy manifest guard mutations", () => {
       `
     matchExpressions:
       - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - dum-dashboard`,
+    ],
+    [
+      "the dashboard part-of label",
+      `
+    matchLabels:
+      app.kubernetes.io/part-of: dum-dashboard`,
+    ],
+    [
+      "a matching dashboard part-of expression",
+      `
+    matchExpressions:
+      - key: app.kubernetes.io/part-of
         operator: In
         values:
           - dum-dashboard`,
