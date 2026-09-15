@@ -70,6 +70,66 @@ bun --eval '
   const sorted = (values) => [...values].sort();
   const same = (actual, expected) =>
     JSON.stringify(sorted(actual)) === JSON.stringify(sorted(expected));
+  const canonicalize = (value) => {
+    if (Array.isArray(value)) return value.map(canonicalize);
+    if (value === null || typeof value !== "object") return value;
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, canonicalize(child)]),
+    );
+  };
+  const normalizeNetworkPolicySpec = (spec) => {
+    const normalized = structuredClone(spec);
+    for (const ingress of normalized?.ingress ?? []) {
+      ingress.from?.sort((left, right) =>
+        JSON.stringify(canonicalize(left)).localeCompare(JSON.stringify(canonicalize(right))),
+      );
+    }
+    return canonicalize(normalized);
+  };
+  const selectorMatchesLabels = (selector, labels) => {
+    if (selector === null || typeof selector !== "object" || Array.isArray(selector)) {
+      return false;
+    }
+
+    const matchLabels = selector.matchLabels ?? {};
+    if (matchLabels === null || typeof matchLabels !== "object" || Array.isArray(matchLabels)) {
+      return false;
+    }
+    if (!Object.entries(matchLabels).every(([key, value]) => labels[key] === value)) return false;
+
+    const expressions = selector.matchExpressions ?? [];
+    if (!Array.isArray(expressions)) return false;
+    return expressions.every((expression) => {
+      if (expression === null || typeof expression !== "object" || Array.isArray(expression)) {
+        return false;
+      }
+
+      const key = expression.key;
+      const operator = expression.operator;
+      const values = Array.isArray(expression.values) ? expression.values : [];
+      const hasLabel = typeof key === "string" && Object.hasOwn(labels, key);
+      const labelValue = hasLabel ? labels[key] : undefined;
+
+      switch (operator) {
+        case "In":
+          return hasLabel && values.includes(labelValue);
+        case "NotIn":
+          return !hasLabel || !values.includes(labelValue);
+        case "Exists":
+          return hasLabel;
+        case "DoesNotExist":
+          return !hasLabel;
+        default:
+          return false;
+      }
+    });
+  };
+  const governsIngress = (networkPolicy) => {
+    const policyTypes = networkPolicy.spec?.policyTypes;
+    return !Array.isArray(policyTypes) || policyTypes.includes("Ingress");
+  };
   const assertExactRule = (rules, { apiGroups, resources, verbs, resourceNames }) => {
     const match = rules.find(
       (rule) =>
@@ -129,18 +189,64 @@ bun --eval '
   ) {
     fail("Dashboard Ingress and Certificate must use only the approved host and TLS Secret.");
   }
-  const dashboardPolicy = find(normal, "NetworkPolicy", "dum-dashboard-traefik-only");
-  const dashboardIngress = dashboardPolicy?.spec?.ingress ?? [];
-  const dashboardSource = dashboardIngress[0]?.from?.[0];
+  const dashboardPolicies = normal.filter(
+    (document) =>
+      document?.kind === "NetworkPolicy" &&
+      document?.metadata?.name === "dum-dashboard-traefik-only",
+  );
+  if (dashboardPolicies.length !== 1) {
+    fail(`Expected one NetworkPolicy/dum-dashboard-traefik-only; found ${dashboardPolicies.length}.`);
+  }
+  const dashboardPolicy = dashboardPolicies[0];
+  const dashboardLabels = {
+    "app.kubernetes.io/name": "dum-dashboard",
+    "app.kubernetes.io/component": "dashboard",
+  };
+  const expectedDashboardPolicySpec = {
+    podSelector: { matchLabels: dashboardLabels },
+    policyTypes: ["Ingress"],
+    ingress: [
+      {
+        from: [
+          {
+            namespaceSelector: {
+              matchLabels: { "kubernetes.io/metadata.name": "kube-system" },
+            },
+            podSelector: {
+              matchLabels: {
+                "app.kubernetes.io/instance": "traefik-kube-system",
+                "app.kubernetes.io/name": "traefik",
+              },
+            },
+          },
+          {
+            namespaceSelector: {
+              matchLabels: { "kubernetes.io/metadata.name": "uwumi" },
+            },
+            podSelector: { matchLabels: { app: "dumq-mcp" } },
+          },
+        ],
+        ports: [{ port: 3000, protocol: "TCP" }],
+      },
+    ],
+  };
   if (
-    dashboardIngress.length !== 1 ||
-    dashboardIngress[0]?.from?.length !== 1 ||
-    dashboardSource?.namespaceSelector?.matchLabels?.["kubernetes.io/metadata.name"] !==
-      "kube-system" ||
-    dashboardSource?.podSelector?.matchLabels?.["app.kubernetes.io/name"] !== "traefik" ||
-    dashboardIngress[0]?.ports?.[0]?.port !== 3000
+    dashboardPolicy?.apiVersion !== "networking.k8s.io/v1" ||
+    dashboardPolicy?.metadata?.namespace !== "dum-dashboard" ||
+    JSON.stringify(normalizeNetworkPolicySpec(dashboardPolicy?.spec)) !==
+      JSON.stringify(normalizeNetworkPolicySpec(expectedDashboardPolicySpec))
   ) {
-    fail("Dashboard ingress must be restricted to Traefik in kube-system on port 3000.");
+    fail("Dashboard ingress must match the exact Traefik and DumQ MCP contract on TCP 3000.");
+  }
+  const dashboardIngressPolicies = normal.filter(
+    (document) =>
+      document?.kind === "NetworkPolicy" &&
+      document?.metadata?.namespace === "dum-dashboard" &&
+      governsIngress(document) &&
+      selectorMatchesLabels(document?.spec?.podSelector, dashboardLabels),
+  );
+  if (dashboardIngressPolicies.length !== 1 || dashboardIngressPolicies[0] !== dashboardPolicy) {
+    fail("Only NetworkPolicy/dum-dashboard-traefik-only may select dashboard pods for ingress.");
   }
   const normalAllowedKinds = new Set([
     "/ConfigMap",

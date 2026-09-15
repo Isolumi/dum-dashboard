@@ -44,6 +44,21 @@ const canonical = (value: unknown): unknown => {
 const same = (actual: unknown, expected: unknown): boolean =>
   JSON.stringify(canonical(actual)) === JSON.stringify(canonical(expected));
 
+const normalizeNetworkPolicySpec = (spec: unknown): unknown => {
+  const normalized = structuredClone(spec);
+  const value = asRecord(normalized);
+  if (!value || !Array.isArray(value.ingress)) return canonical(normalized);
+
+  for (const ingress of value.ingress) {
+    const rule = asRecord(ingress);
+    if (!rule || !Array.isArray(rule.from)) continue;
+    rule.from.sort((left, right) =>
+      JSON.stringify(canonical(left)).localeCompare(JSON.stringify(canonical(right))),
+    );
+  }
+  return canonical(normalized);
+};
+
 const hasLabels = (
   actual: Record<string, string> | undefined,
   expected: Record<string, string>,
@@ -94,6 +109,12 @@ const selectorCanMatchDashboard = (selector: unknown): boolean => {
     }
   }
   return true;
+};
+
+const governsIngress = (networkPolicy: Record<string, unknown>): boolean => {
+  const spec = asRecord(networkPolicy.spec);
+  const policyTypes = spec?.policyTypes;
+  return !Array.isArray(policyTypes) || policyTypes.includes("Ingress");
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
@@ -395,27 +416,59 @@ const checkRenderedManifestContract = ({ repoRoot, renderedPath }: CheckOptions)
     fail("Infisical must sync only the approved prod /dashboard path into the Monies Secret.");
   }
 
-  const dashboardPolicy = findDocument(documents, "NetworkPolicy", "dum-dashboard-traefik-only");
-  const dashboardIngress = dashboardPolicy?.spec?.ingress ?? [];
-  const dashboardSource = dashboardIngress[0]?.from?.[0];
-  const dashboardPorts = dashboardIngress[0]?.ports ?? [];
+  const dashboardPolicies = documents.filter(
+    (document) =>
+      document.kind === "NetworkPolicy" && document.metadata?.name === "dum-dashboard-traefik-only",
+  );
+  if (dashboardPolicies.length !== 1) {
+    fail(`Expected one dashboard ingress policy; found ${dashboardPolicies.length}.`);
+  }
+  const dashboardPolicy = dashboardPolicies[0];
+  const expectedDashboardPolicySpec = {
+    podSelector: { matchLabels: expectedDashboardLabels },
+    policyTypes: ["Ingress"],
+    ingress: [
+      {
+        from: [
+          {
+            namespaceSelector: {
+              matchLabels: { "kubernetes.io/metadata.name": "kube-system" },
+            },
+            podSelector: {
+              matchLabels: {
+                "app.kubernetes.io/instance": "traefik-kube-system",
+                "app.kubernetes.io/name": "traefik",
+              },
+            },
+          },
+          {
+            namespaceSelector: {
+              matchLabels: { "kubernetes.io/metadata.name": "uwumi" },
+            },
+            podSelector: { matchLabels: { app: "dumq-mcp" } },
+          },
+        ],
+        ports: [{ port: 3000, protocol: "TCP" }],
+      },
+    ],
+  };
   if (
-    !same(dashboardPolicy?.spec?.podSelector?.matchLabels, expectedDashboardLabels) ||
-    !same(dashboardPolicy?.spec?.policyTypes, ["Ingress"]) ||
-    dashboardIngress.length !== 1 ||
-    dashboardIngress[0]?.from?.length !== 1 ||
-    !same(dashboardSource?.namespaceSelector?.matchLabels, {
-      "kubernetes.io/metadata.name": "kube-system",
-    }) ||
-    !same(dashboardSource?.podSelector?.matchLabels, {
-      "app.kubernetes.io/instance": "traefik-kube-system",
-      "app.kubernetes.io/name": "traefik",
-    }) ||
-    dashboardPorts.length !== 1 ||
-    dashboardPorts[0]?.port !== 3000 ||
-    dashboardPorts[0]?.protocol !== "TCP"
+    dashboardPolicy?.apiVersion !== "networking.k8s.io/v1" ||
+    dashboardPolicy?.metadata?.namespace !== "dum-dashboard" ||
+    JSON.stringify(normalizeNetworkPolicySpec(dashboardPolicy?.spec)) !==
+      JSON.stringify(normalizeNetworkPolicySpec(expectedDashboardPolicySpec))
   ) {
-    fail("The existing Traefik-only dashboard ingress boundary changed.");
+    fail("The dashboard ingress boundary must match the exact Traefik and DumQ MCP contract.");
+  }
+  const dashboardIngressPolicies = documents.filter(
+    (document) =>
+      document.kind === "NetworkPolicy" &&
+      document.metadata?.namespace === "dum-dashboard" &&
+      governsIngress(document) &&
+      selectorCanMatchDashboard(document.spec?.podSelector),
+  );
+  if (dashboardIngressPolicies.length !== 1 || dashboardIngressPolicies[0] !== dashboardPolicy) {
+    fail("Only the approved dashboard ingress policy may select dashboard pods.");
   }
   for (const policy of documents.filter((document) => document.kind === "NetworkPolicy")) {
     if (
