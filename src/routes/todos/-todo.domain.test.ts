@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Todo } from "#/lib/database.types";
+import type { TodoDeleteSnapshot } from "./todo.domain";
 
 const mocks = vi.hoisted(() => ({
   deleteMock: vi.fn(),
@@ -103,6 +104,7 @@ const {
   TodoDomainError,
   createTodoRecord,
   deleteTodoRecord,
+  deleteTodoRecordIfUnchanged,
   getTodoRecord,
   listTodoRecords,
   moveTodoRecord,
@@ -133,6 +135,14 @@ function makeTodo(id: string, priority: Todo["priority"], overrides: Partial<Tod
 
 const highTodo = makeTodo(HIGH_ID, "high");
 const lowTodo = makeTodo(TODO_ID, "low");
+
+function projectedTodo(todo: Todo): TodoDeleteSnapshot {
+  const { priority: _priority, ...projected } = todo;
+  return {
+    ...projected,
+    section: todo.today_date !== null ? "today" : todo.priority,
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -355,6 +365,80 @@ describe("todo record operations", () => {
     await expect(deleteTodoRecord(TODO_ID)).rejects.toMatchObject({
       code: "not_found",
       message: "Todo not found",
+    });
+  });
+
+  it.each(["high", "low"] as const)(
+    "conditionally deletes a %s todo with every projected field and null-safe filters",
+    async (section) => {
+      const expected = projectedTodo(
+        makeTodo(TODO_ID, section, {
+          name: `Delete ${section}`,
+          sort_order: 7,
+          status: "started",
+        }),
+      );
+      mocks.maybeSingleMock.mockResolvedValueOnce({
+        data: makeTodo(TODO_ID, section),
+        error: null,
+      });
+
+      await deleteTodoRecordIfUnchanged(TODO_ID, expected);
+
+      expect(mocks.deleteMock).toHaveBeenCalledOnce();
+      expect(mocks.eqMock.mock.calls).toEqual([
+        ["id", TODO_ID],
+        ["name", `Delete ${section}`],
+        ["status", "started"],
+        ["due_date_has_time", false],
+        ["sort_order", 7],
+        ["priority", section],
+        ["created_at", "2026-09-14T12:00:00.000Z"],
+      ]);
+      expect(mocks.isMock.mock.calls).toEqual([
+        ["due_date", null],
+        ["today_date", null],
+        ["today_sort_order", null],
+      ]);
+    },
+  );
+
+  it("conditionally deletes a Today todo without filtering an unexposed priority", async () => {
+    const todayTodo = makeTodo(TODO_ID, "high", {
+      due_date: "2026-09-20T09:30:00-04:00",
+      due_date_has_time: true,
+      name: "Today task",
+      sort_order: 8,
+      status: "complete",
+      today_date: "2026-09-15",
+      today_sort_order: 2,
+    });
+    const expected = projectedTodo(todayTodo);
+    mocks.maybeSingleMock.mockResolvedValueOnce({ data: todayTodo, error: null });
+
+    await deleteTodoRecordIfUnchanged(TODO_ID, expected);
+
+    expect(mocks.eqMock.mock.calls).toEqual([
+      ["id", TODO_ID],
+      ["name", "Today task"],
+      ["status", "complete"],
+      ["due_date", "2026-09-20T09:30:00-04:00"],
+      ["due_date_has_time", true],
+      ["sort_order", 8],
+      ["today_date", "2026-09-15"],
+      ["today_sort_order", 2],
+      ["created_at", "2026-09-14T12:00:00.000Z"],
+    ]);
+    expect(mocks.eqMock).not.toHaveBeenCalledWith("priority", expect.anything());
+    expect(mocks.isMock).not.toHaveBeenCalled();
+  });
+
+  it("maps a zero-row conditional delete to conflict", async () => {
+    await expect(
+      deleteTodoRecordIfUnchanged(TODO_ID, projectedTodo(lowTodo)),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      message: "Todo changed; retry the request",
     });
   });
 

@@ -5,7 +5,7 @@ import { assertValidToolTokenConfig, hasValidToolBearer } from "#/lib/tool-api-a
 import {
   TodoDomainError,
   type createTodoRecord,
-  type deleteTodoRecord,
+  type deleteTodoRecordIfUnchanged,
   type getTodoRecord,
   type listTodoRecords,
   type moveTodoRecordToSectionEnd,
@@ -14,6 +14,7 @@ import {
 import { GetTodoSchema } from "#/routes/todos/todo.schemas";
 import {
   CreateToolTodoSchema,
+  DeleteToolTodoSchema,
   ListTodosQuerySchema,
   MoveToolTodoSchema,
   UpdateToolTodoSchema,
@@ -21,7 +22,7 @@ import {
 
 type TodoToolDomain = {
   createTodoRecord: typeof createTodoRecord;
-  deleteTodoRecord: typeof deleteTodoRecord;
+  deleteTodoRecordIfUnchanged: typeof deleteTodoRecordIfUnchanged;
   getTodoRecord: typeof getTodoRecord;
   listTodoRecords: typeof listTodoRecords;
   moveTodoRecordToSectionEnd: typeof moveTodoRecordToSectionEnd;
@@ -226,11 +227,18 @@ export function createTodoToolHandlers(options: {
       const unauthorized = authorize(request);
       if (unauthorized) return unauthorized;
 
-      const parsed = parse(GetTodoSchema, { id });
-      if (!parsed.success) return parsed.response;
+      const parsedId = parse(GetTodoSchema, { id });
+      if (!parsedId.success) return parsedId.response;
+      const parsedBody = await parseJson(DeleteToolTodoSchema, request);
+      if (!parsedBody.success || parsedBody.data.id !== parsedId.data.id) {
+        return invalidRequest();
+      }
 
       try {
-        const todo = await options.domain.deleteTodoRecord(parsed.data.id);
+        const todo = await options.domain.deleteTodoRecordIfUnchanged(
+          parsedId.data.id,
+          parsedBody.data,
+        );
         return json({ deleted: { id: todo.id } });
       } catch (error) {
         return toolError(error);

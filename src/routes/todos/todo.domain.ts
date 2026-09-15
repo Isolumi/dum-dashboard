@@ -16,6 +16,19 @@ import {
 
 export type TodoDomainErrorCode = "not_found" | "conflict" | "database_unavailable";
 
+export type TodoDeleteSnapshot = {
+  id: string;
+  name: string;
+  section: TodoSection;
+  status: Todo["status"];
+  due_date: string | null;
+  due_date_has_time: boolean;
+  sort_order: number;
+  today_date: string | null;
+  today_sort_order: number | null;
+  created_at: string;
+};
+
 export class TodoDomainError extends Error {
   constructor(public readonly code: TodoDomainErrorCode) {
     super(
@@ -124,6 +137,50 @@ export async function deleteTodoRecord(id: string): Promise<Todo> {
     .maybeSingle();
   if (error) throwDatabaseError(error);
   return requireTodo(data);
+}
+
+export async function deleteTodoRecordIfUnchanged(
+  id: string,
+  expected: TodoDeleteSnapshot,
+): Promise<Todo> {
+  if (expected.id !== id) throw new TodoDomainError("conflict");
+
+  let query = getSupabaseAdmin()
+    .from("todos")
+    .delete()
+    .eq("id", id)
+    .eq("name", expected.name)
+    .eq("status", expected.status);
+
+  query =
+    expected.due_date === null
+      ? query.is("due_date", null)
+      : query.eq("due_date", expected.due_date);
+  query = query
+    .eq("due_date_has_time", expected.due_date_has_time)
+    .eq("sort_order", expected.sort_order);
+
+  if (expected.section === "today") {
+    query =
+      expected.today_date === null
+        ? query.is("today_date", null)
+        : query.eq("today_date", expected.today_date);
+  } else {
+    query = query.is("today_date", null).eq("priority", expected.section);
+  }
+
+  query =
+    expected.today_sort_order === null
+      ? query.is("today_sort_order", null)
+      : query.eq("today_sort_order", expected.today_sort_order);
+
+  const { data, error } = await query
+    .eq("created_at", expected.created_at)
+    .select(TODO_COLUMNS)
+    .maybeSingle();
+  if (error) throwDatabaseError(error);
+  if (!data) throw new TodoDomainError("conflict");
+  return data;
 }
 
 export async function reorderTodoRecords(input: z.infer<typeof ReorderTodosSchema>): Promise<void> {

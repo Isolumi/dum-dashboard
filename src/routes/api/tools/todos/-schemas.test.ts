@@ -2,10 +2,25 @@ import { describe, expect, it } from "vitest";
 
 import {
   CreateToolTodoSchema,
+  DeleteToolTodoSchema,
   ListTodosQuerySchema,
   MoveToolTodoSchema,
   UpdateToolTodoSchema,
 } from "./-schemas";
+
+const TODO_ID = "550e8400-e29b-41d4-a716-446655440000";
+const DELETE_SNAPSHOT = {
+  id: TODO_ID,
+  name: "Pay hydro",
+  section: "low",
+  status: "not_started",
+  due_date: null,
+  due_date_has_time: false,
+  sort_order: 4,
+  today_date: null,
+  today_sort_order: null,
+  created_at: "2026-09-14T12:00:00.000Z",
+} as const;
 
 describe("ListTodosQuerySchema", () => {
   it("defaults to incomplete todos with a limit of 50", () => {
@@ -130,5 +145,42 @@ describe("MoveToolTodoSchema", () => {
   it("rejects unsupported sections and unknown fields", () => {
     expect(MoveToolTodoSchema.safeParse({ section: "medium" }).success).toBe(false);
     expect(MoveToolTodoSchema.safeParse({ section: "today", position: 1 }).success).toBe(false);
+  });
+});
+
+describe("DeleteToolTodoSchema", () => {
+  it("requires the complete expected projected todo snapshot", () => {
+    expect(DeleteToolTodoSchema.parse(DELETE_SNAPSHOT)).toEqual(DELETE_SNAPSHOT);
+    expect(
+      DeleteToolTodoSchema.safeParse({
+        id: TODO_ID,
+        name: "Pay hydro",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects unknown snapshot fields", () => {
+    expect(
+      DeleteToolTodoSchema.safeParse({
+        ...DELETE_SNAPSHOT,
+        priority: "low",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires section and Today date semantics to agree", () => {
+    expect(
+      DeleteToolTodoSchema.safeParse({
+        ...DELETE_SNAPSHOT,
+        section: "today",
+      }).success,
+    ).toBe(false);
+    expect(
+      DeleteToolTodoSchema.safeParse({
+        ...DELETE_SNAPSHOT,
+        section: "high",
+        today_date: "2026-09-15",
+      }).success,
+    ).toBe(false);
   });
 });

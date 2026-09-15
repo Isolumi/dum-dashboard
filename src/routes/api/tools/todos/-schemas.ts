@@ -37,3 +37,33 @@ export const UpdateToolTodoSchema = z
 export const MoveToolTodoSchema = z.strictObject({
   section: TodoSectionSchema,
 });
+
+export const DeleteToolTodoSchema = z
+  .strictObject({
+    id: z.string().uuid(),
+    name: TodoNameSchema,
+    section: TodoSectionSchema,
+    status: TodoStatusSchema,
+    due_date: TodoDueDateSchema.nullable(),
+    due_date_has_time: z.boolean(),
+    sort_order: z.number().int().nonnegative(),
+    today_date: z.string().date().nullable(),
+    today_sort_order: z.number().int().nonnegative().nullable(),
+    created_at: z.string().datetime({ offset: true }),
+  })
+  .superRefine((snapshot, context) => {
+    if (snapshot.section === "today" && snapshot.today_date === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Today Todo snapshot requires a Today date",
+        path: ["today_date"],
+      });
+    }
+    if (snapshot.section !== "today" && snapshot.today_date !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Priority Todo snapshot cannot have a Today date",
+        path: ["today_date"],
+      });
+    }
+  });

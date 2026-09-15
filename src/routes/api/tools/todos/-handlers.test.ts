@@ -25,6 +25,21 @@ function makeTodo(overrides: Partial<Todo> = {}): Todo {
   };
 }
 
+function projectedTodo(todo = makeTodo()) {
+  return {
+    id: todo.id,
+    name: todo.name,
+    section: todo.today_date !== null ? ("today" as const) : todo.priority,
+    status: todo.status,
+    due_date: todo.due_date,
+    due_date_has_time: todo.due_date_has_time,
+    sort_order: todo.sort_order,
+    today_date: todo.today_date,
+    today_sort_order: todo.today_sort_order,
+    created_at: todo.created_at,
+  };
+}
+
 function authorizedRequest(path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${TOKEN}`);
@@ -49,6 +64,7 @@ async function expectJson(response: Response, status: number, body: unknown): Pr
 const domain = {
   createTodoRecord: vi.fn(),
   deleteTodoRecord: vi.fn(),
+  deleteTodoRecordIfUnchanged: vi.fn(),
   getTodoRecord: vi.fn(),
   listTodoRecords: vi.fn(),
   moveTodoRecordToSectionEnd: vi.fn(),
@@ -82,12 +98,21 @@ const jsonMutationCases = [
     name: "move",
     path: `/api/tools/todos/${TODO_ID}/move`,
   },
+  {
+    body: projectedTodo(),
+    domainOperation: domain.deleteTodoRecordIfUnchanged,
+    invoke: (request: Request) => handlers.delete(request, TODO_ID),
+    method: "DELETE",
+    name: "delete",
+    path: `/api/tools/todos/${TODO_ID}`,
+  },
 ] as const;
 
 beforeEach(() => {
   vi.clearAllMocks();
   domain.createTodoRecord.mockResolvedValue(makeTodo());
   domain.deleteTodoRecord.mockResolvedValue(makeTodo());
+  domain.deleteTodoRecordIfUnchanged.mockResolvedValue(makeTodo());
   domain.getTodoRecord.mockResolvedValue(makeTodo());
   domain.listTodoRecords.mockResolvedValue([makeTodo()]);
   domain.moveTodoRecordToSectionEnd.mockResolvedValue(makeTodo());
@@ -236,6 +261,18 @@ describe("createTodoToolHandlers", () => {
           TODO_ID,
         ),
     ],
+    [
+      "delete",
+      () =>
+        handlers.delete(
+          authorizedRequest(`/api/tools/todos/${TODO_ID}`, {
+            body: "not-json",
+            headers: { "content-type": "application/json" },
+            method: "DELETE",
+          }),
+          TODO_ID,
+        ),
+    ],
   ])("rejects malformed JSON for %s", async (_name, invoke) => {
     const response = await invoke();
 
@@ -281,6 +318,18 @@ describe("createTodoToolHandlers", () => {
       () =>
         handlers.move(
           jsonRequest(`/api/tools/todos/${TODO_ID}/move`, { section: "medium" }),
+          TODO_ID,
+        ),
+    ],
+    [
+      "delete",
+      () =>
+        handlers.delete(
+          jsonRequest(
+            `/api/tools/todos/${TODO_ID}`,
+            { ...projectedTodo(), priority: "low" },
+            "DELETE",
+          ),
           TODO_ID,
         ),
     ],
@@ -410,15 +459,47 @@ describe("createTodoToolHandlers", () => {
   );
 
   it("returns the stable ID of the deleted todo", async () => {
-    domain.deleteTodoRecord.mockResolvedValue(makeTodo({ id: OTHER_ID }));
+    const expected = projectedTodo();
+    domain.deleteTodoRecordIfUnchanged.mockResolvedValue(makeTodo({ id: OTHER_ID }));
 
     const response = await handlers.delete(
-      authorizedRequest(`/api/tools/todos/${TODO_ID}`),
+      jsonRequest(`/api/tools/todos/${TODO_ID}`, expected, "DELETE"),
       TODO_ID,
     );
 
-    expect(domain.deleteTodoRecord).toHaveBeenCalledWith(TODO_ID);
+    expect(domain.deleteTodoRecordIfUnchanged).toHaveBeenCalledWith(TODO_ID, expected);
+    expect(domain.deleteTodoRecord).not.toHaveBeenCalled();
     await expectJson(response, 200, { deleted: { id: OTHER_ID } });
+  });
+
+  it("requires the DELETE snapshot body", async () => {
+    const request = authorizedRequest(`/api/tools/todos/${TODO_ID}`, { method: "DELETE" });
+    request.headers.delete("content-type");
+
+    const response = await handlers.delete(request, TODO_ID);
+
+    await expectJson(response, 400, {
+      error: { code: "invalid_request", message: "Invalid request" },
+    });
+    expect(domain.deleteTodoRecordIfUnchanged).not.toHaveBeenCalled();
+    expect(domain.deleteTodoRecord).not.toHaveBeenCalled();
+  });
+
+  it("rejects a DELETE snapshot for a different stable ID", async () => {
+    const response = await handlers.delete(
+      jsonRequest(
+        `/api/tools/todos/${TODO_ID}`,
+        projectedTodo(makeTodo({ id: OTHER_ID })),
+        "DELETE",
+      ),
+      TODO_ID,
+    );
+
+    await expectJson(response, 400, {
+      error: { code: "invalid_request", message: "Invalid request" },
+    });
+    expect(domain.deleteTodoRecordIfUnchanged).not.toHaveBeenCalled();
+    expect(domain.deleteTodoRecord).not.toHaveBeenCalled();
   });
 
   it.each([
