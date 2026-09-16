@@ -1,11 +1,19 @@
 import type { ComponentType } from "react";
 import type { LucideIcon } from "lucide-react";
-import { CalendarDays, Camera, CheckSquare, Server, WalletCards } from "lucide-react";
+import {
+  BriefcaseBusiness,
+  CalendarDays,
+  Camera,
+  CheckSquare,
+  Server,
+  WalletCards,
+} from "lucide-react";
 import { TodoBentoCard } from "#/routes/_layout/todos/-TodoBentoCard";
 import { CalendarBentoCard } from "#/routes/_layout/calendar/-CalendarBentoCard";
 import { MoniesBentoCard } from "#/routes/_layout/monies/-MoniesBentoCard";
 import { HomelabBentoCard } from "#/routes/_layout/homelab/-HomelabBentoCard";
 import { CameraBentoCard } from "#/routes/_layout/cameras/-CameraBentoCard";
+import { JobsBentoCard } from "#/routes/_layout/jobs/-JobsBentoCard";
 import { getHomelabOverview } from "#/homelab/homelab.functions";
 
 export interface ToolEntry {
@@ -47,6 +55,13 @@ export const tools: ToolEntry[] = [
     route: "/monies",
     icon: WalletCards,
     BentoCard: MoniesBentoCard,
+  },
+  {
+    id: "jobs",
+    label: "Jobs",
+    route: "/jobs",
+    icon: BriefcaseBusiness,
+    BentoCard: JobsBentoCard,
   },
   {
     id: "homelab",
