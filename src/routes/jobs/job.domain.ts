@@ -37,12 +37,12 @@ export async function listJobRecords(limit = 100): Promise<Job[]> {
 export async function saveJobRecord(input: SaveJobInput): Promise<SaveJobResult> {
   const job = SaveJobSchema.parse(input);
   const admin = getSupabaseAdmin();
-  const { data: created, error: insertError } = await admin
+  const { data: created, error: upsertError } = await admin
     .from("jobs")
-    .insert(job, { onConflict: "url", ignoreDuplicates: true })
+    .upsert(job, { onConflict: "url", ignoreDuplicates: true })
     .select(JOB_COLUMNS)
     .maybeSingle();
-  if (insertError) throwDatabaseError(insertError);
+  if (upsertError) throwDatabaseError(upsertError);
   if (created) return { status: "created", job: created };
 
   const { data: existing, error: selectError } = await admin

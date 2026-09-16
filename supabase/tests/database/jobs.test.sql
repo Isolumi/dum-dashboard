@@ -24,7 +24,9 @@ select ok(
   'authenticated has no jobs access'
 );
 select ok(
-  has_table_privilege('service_role', 'public.jobs', 'select,insert,delete'),
+  has_table_privilege('service_role', 'public.jobs', 'select')
+  and has_table_privilege('service_role', 'public.jobs', 'insert')
+  and has_table_privilege('service_role', 'public.jobs', 'delete'),
   'service role has required jobs access'
 );
 select ok(

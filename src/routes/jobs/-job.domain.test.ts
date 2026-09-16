@@ -12,6 +12,7 @@ const mocks = {
   maybeSingleMock: vi.fn(),
   orderMock: vi.fn(),
   selectMock: vi.fn(),
+  upsertMock: vi.fn(),
 };
 
 const query = {
@@ -23,8 +24,8 @@ const query = {
     mocks.eqMock(column, value);
     return query;
   },
-  insert(value: unknown, options: unknown) {
-    mocks.insertMock(value, options);
+  insert(value: unknown) {
+    mocks.insertMock(value);
     return query;
   },
   limit(value: number) {
@@ -40,6 +41,10 @@ const query = {
   },
   select(columns: string) {
     mocks.selectMock(columns);
+    return query;
+  },
+  upsert(value: unknown, options: { ignoreDuplicates: boolean; onConflict: string }) {
+    mocks.upsertMock(value, options);
     return query;
   },
   // oxlint-disable-next-line unicorn/no-thenable -- Supabase query builders are thenable.
@@ -129,15 +134,16 @@ describe("saveJobRecord", () => {
     url: "https://jobs.example/point72?team=quant&source=discord",
   };
 
-  it("returns a created job from a conflict-safe insert", async () => {
+  it("returns a created job from a conflict-safe upsert", async () => {
     mocks.maybeSingleMock.mockResolvedValueOnce({ data: newest, error: null });
 
     await expect(saveJobRecord(input)).resolves.toEqual({ status: "created", job: newest });
 
-    expect(mocks.insertMock).toHaveBeenCalledWith(input, {
+    expect(mocks.upsertMock).toHaveBeenCalledWith(input, {
       ignoreDuplicates: true,
       onConflict: "url",
     });
+    expect(mocks.insertMock).not.toHaveBeenCalled();
   });
 
   it("returns the existing job for the exact trimmed duplicate URL", async () => {
@@ -153,10 +159,11 @@ describe("saveJobRecord", () => {
       }),
     ).resolves.toEqual({ status: "already_saved", job: oldest });
 
-    expect(mocks.insertMock).toHaveBeenCalledWith(input, {
+    expect(mocks.upsertMock).toHaveBeenCalledWith(input, {
       ignoreDuplicates: true,
       onConflict: "url",
     });
+    expect(mocks.insertMock).not.toHaveBeenCalled();
     expect(mocks.eqMock).toHaveBeenCalledWith("url", input.url);
   });
 
@@ -171,11 +178,12 @@ describe("saveJobRecord", () => {
       { status: "already_saved", job: newest },
     ]);
 
-    expect(mocks.insertMock).toHaveBeenCalledTimes(2);
+    expect(mocks.upsertMock).toHaveBeenCalledTimes(2);
+    expect(mocks.insertMock).not.toHaveBeenCalled();
     expect(mocks.eqMock).toHaveBeenCalledWith("url", input.url);
   });
 
-  it("maps an insert failure to database_unavailable", async () => {
+  it("maps an upsert failure to database_unavailable", async () => {
     mocks.maybeSingleMock.mockResolvedValueOnce({
       data: null,
       error: { code: "XX000", message: "private insert detail" },
