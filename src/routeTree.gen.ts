@@ -20,6 +20,7 @@ import { Route as LayoutCamerasIndexRouteImport } from './routes/_layout/cameras
 import { Route as LayoutCalendarIndexRouteImport } from './routes/_layout/calendar/index'
 import { Route as CalendarOauthCallbackRouteImport } from './routes/calendar/oauth/callback'
 import { Route as ApiToolsTodosRouteImport } from './routes/api/tools/todos'
+import { Route as ApiToolsJobsRouteImport } from './routes/api/tools/jobs'
 import { Route as LayoutHomelabServicesRouteImport } from './routes/_layout/homelab/services'
 import { Route as LayoutHomelabDeploymentsRouteImport } from './routes/_layout/homelab/deployments'
 import { Route as LayoutHomelabClusterRouteImport } from './routes/_layout/homelab/cluster'
@@ -81,6 +82,11 @@ const ApiToolsTodosRoute = ApiToolsTodosRouteImport.update({
   path: '/api/tools/todos',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiToolsJobsRoute = ApiToolsJobsRouteImport.update({
+  id: '/api/tools/jobs',
+  path: '/api/tools/jobs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LayoutHomelabServicesRoute = LayoutHomelabServicesRouteImport.update({
   id: '/services',
   path: '/services',
@@ -121,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/homelab/cluster': typeof LayoutHomelabClusterRoute
   '/homelab/deployments': typeof LayoutHomelabDeploymentsRoute
   '/homelab/services': typeof LayoutHomelabServicesRoute
+  '/api/tools/jobs': typeof ApiToolsJobsRoute
   '/api/tools/todos': typeof ApiToolsTodosRouteWithChildren
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/calendar/': typeof LayoutCalendarIndexRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByTo {
   '/homelab/cluster': typeof LayoutHomelabClusterRoute
   '/homelab/deployments': typeof LayoutHomelabDeploymentsRoute
   '/homelab/services': typeof LayoutHomelabServicesRoute
+  '/api/tools/jobs': typeof ApiToolsJobsRoute
   '/api/tools/todos': typeof ApiToolsTodosRouteWithChildren
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/calendar': typeof LayoutCalendarIndexRoute
@@ -158,6 +166,7 @@ export interface FileRoutesById {
   '/_layout/homelab/cluster': typeof LayoutHomelabClusterRoute
   '/_layout/homelab/deployments': typeof LayoutHomelabDeploymentsRoute
   '/_layout/homelab/services': typeof LayoutHomelabServicesRoute
+  '/api/tools/jobs': typeof ApiToolsJobsRoute
   '/api/tools/todos': typeof ApiToolsTodosRouteWithChildren
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
   '/_layout/calendar/': typeof LayoutCalendarIndexRoute
@@ -178,6 +187,7 @@ export interface FileRouteTypes {
     | '/homelab/cluster'
     | '/homelab/deployments'
     | '/homelab/services'
+    | '/api/tools/jobs'
     | '/api/tools/todos'
     | '/calendar/oauth/callback'
     | '/calendar/'
@@ -195,6 +205,7 @@ export interface FileRouteTypes {
     | '/homelab/cluster'
     | '/homelab/deployments'
     | '/homelab/services'
+    | '/api/tools/jobs'
     | '/api/tools/todos'
     | '/calendar/oauth/callback'
     | '/calendar'
@@ -214,6 +225,7 @@ export interface FileRouteTypes {
     | '/_layout/homelab/cluster'
     | '/_layout/homelab/deployments'
     | '/_layout/homelab/services'
+    | '/api/tools/jobs'
     | '/api/tools/todos'
     | '/calendar/oauth/callback'
     | '/_layout/calendar/'
@@ -228,6 +240,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   LayoutRoute: typeof LayoutRouteWithChildren
+  ApiToolsJobsRoute: typeof ApiToolsJobsRoute
   ApiToolsTodosRoute: typeof ApiToolsTodosRouteWithChildren
   CalendarOauthCallbackRoute: typeof CalendarOauthCallbackRoute
   ApiHomelabLogsNamespacePodRoute: typeof ApiHomelabLogsNamespacePodRoute
@@ -310,6 +323,13 @@ declare module '@tanstack/react-router' {
       path: '/api/tools/todos'
       fullPath: '/api/tools/todos'
       preLoaderRoute: typeof ApiToolsTodosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/tools/jobs': {
+      id: '/api/tools/jobs'
+      path: '/api/tools/jobs'
+      fullPath: '/api/tools/jobs'
+      preLoaderRoute: typeof ApiToolsJobsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_layout/homelab/services': {
@@ -423,6 +443,7 @@ const ApiToolsTodosRouteWithChildren = ApiToolsTodosRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   LayoutRoute: LayoutRouteWithChildren,
+  ApiToolsJobsRoute: ApiToolsJobsRoute,
   ApiToolsTodosRoute: ApiToolsTodosRouteWithChildren,
   CalendarOauthCallbackRoute: CalendarOauthCallbackRoute,
   ApiHomelabLogsNamespacePodRoute: ApiHomelabLogsNamespacePodRoute,
