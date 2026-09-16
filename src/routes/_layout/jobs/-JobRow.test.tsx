@@ -76,6 +76,16 @@ describe("JobRow", () => {
     expect(link.getAttribute("rel")).toBe("noreferrer");
   });
 
+  it.each([
+    ["JavaScript", "javascript:alert('unsafe')"],
+    ["data", "data:text/html,unsafe"],
+    ["malformed", "not a valid URL"],
+  ])("does not render the Open action for a %s URL", (_label, url) => {
+    render(<JobRow job={{ ...job, url }} onDelete={vi.fn(async () => true)} />);
+
+    expect(screen.queryByRole("link", { name: `Open ${job.title} at ${job.company}` })).toBeNull();
+  });
+
   it("uses an explicit delete confirmation with cancel and delete actions", async () => {
     const onDelete = vi.fn(async () => true);
     render(<JobRow job={job} onDelete={onDelete} />);

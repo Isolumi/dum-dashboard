@@ -24,9 +24,19 @@ function formatSavedDate(value: string): string {
     .replace(/\bPM\b/, "p.m.");
 }
 
+function getSafeJobUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export function JobRow({ job, onDelete }: JobRowProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const safeJobUrl = getSafeJobUrl(job.url);
 
   async function confirmDelete(): Promise<void> {
     if (deleting) return;
@@ -50,16 +60,18 @@ export function JobRow({ job, onDelete }: JobRowProps) {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <a
-            href={job.url}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Open ${job.title} at ${job.company}`}
-            className={buttonVariants({ variant: "outline", className: "min-h-11 px-3" })}
-          >
-            <ExternalLink data-icon="inline-start" />
-            Open
-          </a>
+          {safeJobUrl ? (
+            <a
+              href={safeJobUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Open ${job.title} at ${job.company}`}
+              className={buttonVariants({ variant: "outline", className: "min-h-11 px-3" })}
+            >
+              <ExternalLink data-icon="inline-start" />
+              Open
+            </a>
+          ) : null}
           <Button
             type="button"
             variant="ghost"

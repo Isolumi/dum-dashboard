@@ -77,12 +77,14 @@ describe("getJobs", () => {
 });
 
 describe("deleteJob", () => {
-  it("checks same origin before deleting a validated job ID", async () => {
+  it("checks owner authentication and same origin before deleting a validated job ID", async () => {
     await expect(deleteJob({ data: { id: newest.id } })).resolves.toBeUndefined();
 
     expect(noStore).toHaveBeenCalledOnce();
+    expect(getOwnerUser).toHaveBeenCalledOnce();
     expect(assertSameOrigin).toHaveBeenCalledOnce();
     expect(mocks.deleteJobRecord).toHaveBeenCalledWith(newest.id);
+    expect(firstCallOrder(getOwnerUser)).toBeLessThan(firstCallOrder(mocks.deleteJobRecord));
     expect(firstCallOrder(assertSameOrigin)).toBeLessThan(firstCallOrder(mocks.deleteJobRecord));
   });
 

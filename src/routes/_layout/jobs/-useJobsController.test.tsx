@@ -120,6 +120,28 @@ describe("useJobsController", () => {
     });
   });
 
+  it("does not let the first poll overlap a slow initial request", async () => {
+    vi.useFakeTimers();
+    const initialRequest = deferred<Job[]>();
+    getJobsMock.mockReturnValueOnce(initialRequest.promise);
+    const { result } = renderHook(() => useJobsController());
+
+    expect(getJobsMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(10_000);
+      await Promise.resolve();
+    });
+
+    expect(getJobsMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      initialRequest.resolve([newestHigherId]);
+      await initialRequest.promise;
+    });
+    expect(result.current.jobs).toEqual([newestHigherId]);
+  });
+
   it("keeps a valid empty state visible during a background refresh", async () => {
     vi.useFakeTimers();
     const pendingRefresh = deferred<Job[]>();
@@ -169,26 +191,20 @@ describe("useJobsController", () => {
     expect(result.current.loadError).toMatch(/could not refresh saved jobs/i);
   });
 
-  it("does not let an older refresh overwrite a newer result", async () => {
-    const first = deferred<Job[]>();
-    const second = deferred<Job[]>();
-    getJobsMock.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+  it("shares one pending request between initial and manual refresh callers", async () => {
+    const initialRequest = deferred<Job[]>();
+    getJobsMock.mockReturnValueOnce(initialRequest.promise);
     const { result } = renderHook(() => useJobsController());
 
-    let newerRefresh!: Promise<void>;
+    let manualRefresh!: Promise<void>;
     act(() => {
-      newerRefresh = result.current.refresh();
+      manualRefresh = result.current.refresh();
     });
+    expect(getJobsMock).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      second.resolve([newestHigherId]);
-      await newerRefresh;
-    });
-    expect(result.current.jobs).toEqual([newestHigherId]);
-
-    await act(async () => {
-      first.resolve([older]);
-      await first.promise;
+      initialRequest.resolve([newestHigherId]);
+      await manualRefresh;
     });
     expect(result.current.jobs).toEqual([newestHigherId]);
   });
@@ -233,5 +249,62 @@ describe("useJobsController", () => {
     expect(result.current.jobs).toBe(previousArray);
     expect(result.current.mutationError).toMatch(/could not delete saved job/i);
     expect(result.current.pendingIds.has(newestHigherId.id)).toBe(false);
+  });
+
+  it("keeps a successful concurrent delete removed when the other delete fails", async () => {
+    const firstDelete = deferred<void>();
+    const secondDelete = deferred<void>();
+    getJobsMock.mockResolvedValueOnce([newestHigherId, older]);
+    deleteJobMock
+      .mockReturnValueOnce(firstDelete.promise)
+      .mockReturnValueOnce(secondDelete.promise);
+    const { result } = renderHook(() => useJobsController());
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+
+    let failedRemoval!: Promise<boolean>;
+    let successfulRemoval!: Promise<boolean>;
+    act(() => {
+      failedRemoval = result.current.remove(newestHigherId.id);
+      successfulRemoval = result.current.remove(older.id);
+    });
+    expect(result.current.jobs).toEqual([]);
+
+    await act(async () => {
+      secondDelete.resolve();
+      await successfulRemoval;
+      firstDelete.reject(new Error("offline"));
+      await failedRemoval;
+    });
+
+    expect(result.current.jobs).toEqual([newestHigherId]);
+    expect(result.current.pendingIds.size).toBe(0);
+  });
+
+  it("restores a failed concurrent delete without restoring the successful delete", async () => {
+    const firstDelete = deferred<void>();
+    const secondDelete = deferred<void>();
+    getJobsMock.mockResolvedValueOnce([newestHigherId, older]);
+    deleteJobMock
+      .mockReturnValueOnce(firstDelete.promise)
+      .mockReturnValueOnce(secondDelete.promise);
+    const { result } = renderHook(() => useJobsController());
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+
+    let successfulRemoval!: Promise<boolean>;
+    let failedRemoval!: Promise<boolean>;
+    act(() => {
+      successfulRemoval = result.current.remove(newestHigherId.id);
+      failedRemoval = result.current.remove(older.id);
+    });
+
+    await act(async () => {
+      firstDelete.resolve();
+      await successfulRemoval;
+      secondDelete.reject(new Error("offline"));
+      await failedRemoval;
+    });
+
+    expect(result.current.jobs).toEqual([older]);
+    expect(result.current.pendingIds.size).toBe(0);
   });
 });

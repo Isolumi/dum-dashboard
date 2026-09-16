@@ -16,6 +16,7 @@ export const deleteJob = createServerFn({ method: "POST" })
   .inputValidator(zodValidator(DeleteJobSchema))
   .handler(async ({ data }): Promise<void> => {
     noStore();
+    getOwnerUser();
     assertSameOrigin();
     await deleteJobRecord(data.id);
   });

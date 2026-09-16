@@ -33,6 +33,7 @@ export function useJobsController(): JobsController {
   const jobsRef = useRef<Job[]>([]);
   const hasLoadedRef = useRef(false);
   const pendingIdsRef = useRef(new Set<string>());
+  const refreshPendingRef = useRef<Promise<void> | null>(null);
   const requestSequenceRef = useRef(0);
 
   const replaceJobs = useCallback((next: Job[]) => {
@@ -40,23 +41,31 @@ export function useJobsController(): JobsController {
     setJobs(next);
   }, []);
 
-  const refresh = useCallback(async (): Promise<void> => {
+  const refresh = useCallback((): Promise<void> => {
+    if (refreshPendingRef.current) return refreshPendingRef.current;
+
     const requestSequence = ++requestSequenceRef.current;
+    let request: Promise<void>;
+    request = (async () => {
+      try {
+        const fresh = await getJobs();
+        if (requestSequence !== requestSequenceRef.current) return;
 
-    try {
-      const fresh = await getJobs();
-      if (requestSequence !== requestSequenceRef.current) return;
-
-      const visibleJobs = sortJobs(fresh).filter((job) => !pendingIdsRef.current.has(job.id));
-      hasLoadedRef.current = true;
-      replaceJobs(visibleJobs);
-      setLoadError(null);
-      setStatus("ready");
-    } catch {
-      if (requestSequence !== requestSequenceRef.current) return;
-      setLoadError(LOAD_ERROR);
-      setStatus(hasLoadedRef.current ? "ready" : "error");
-    }
+        const visibleJobs = sortJobs(fresh).filter((job) => !pendingIdsRef.current.has(job.id));
+        hasLoadedRef.current = true;
+        replaceJobs(visibleJobs);
+        setLoadError(null);
+        setStatus("ready");
+      } catch {
+        if (requestSequence !== requestSequenceRef.current) return;
+        setLoadError(LOAD_ERROR);
+        setStatus(hasLoadedRef.current ? "ready" : "error");
+      }
+    })().finally(() => {
+      if (refreshPendingRef.current === request) refreshPendingRef.current = null;
+    });
+    refreshPendingRef.current = request;
+    return request;
   }, [replaceJobs]);
 
   useEffect(() => {
@@ -69,19 +78,25 @@ export function useJobsController(): JobsController {
     async (id: string): Promise<boolean> => {
       if (pendingIdsRef.current.has(id)) return false;
       const previous = jobsRef.current;
-      if (!previous.some((job) => job.id === id)) return false;
+      const removedJob = previous.find((job) => job.id === id);
+      if (!removedJob) return false;
 
       requestSequenceRef.current += 1;
       pendingIdsRef.current.add(id);
       setPendingIds(new Set(pendingIdsRef.current));
       setMutationError(null);
-      replaceJobs(previous.filter((job) => job.id !== id));
+      const optimistic = previous.filter((job) => job.id !== id);
+      replaceJobs(optimistic);
 
       try {
         await deleteJob({ data: { id } });
         return true;
       } catch {
-        replaceJobs(previous);
+        if (jobsRef.current === optimistic) {
+          replaceJobs(previous);
+        } else if (!jobsRef.current.some((job) => job.id === id)) {
+          replaceJobs(sortJobs([...jobsRef.current, removedJob]));
+        }
         setMutationError(DELETE_ERROR);
         return false;
       } finally {
