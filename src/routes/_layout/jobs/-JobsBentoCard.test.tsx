@@ -111,6 +111,31 @@ describe("JobsBentoCard", () => {
     expect(newestLink.getAttribute("rel")).toBe("noreferrer");
   });
 
+  it("does not make javascript, data, or malformed saved URLs clickable", async () => {
+    vi.mocked(getJobs).mockResolvedValue([
+      makeJob("77777777-7777-4777-8777-777777777777", "2026-09-15T17:00:00.000Z", {
+        title: "JavaScript URL",
+        url: "javascript:alert(1)",
+      }),
+      makeJob("88888888-8888-4888-8888-888888888888", "2026-09-15T16:00:00.000Z", {
+        title: "Data URL",
+        url: "data:text/html,unsafe",
+      }),
+      makeJob("99999999-9999-4999-8999-999999999999", "2026-09-15T15:00:00.000Z", {
+        title: "Malformed URL",
+        url: "not a URL",
+      }),
+    ]);
+
+    render(<JobsBentoCard tool={mockTool} data={null} />);
+
+    await waitFor(() => expect(screen.getByText("JavaScript URL")).toBeTruthy());
+    expect(screen.getByText("Data URL")).toBeTruthy();
+    expect(screen.getByText("Malformed URL")).toBeTruthy();
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Jobs" }).getAttribute("href")).toBe("/jobs");
+  });
+
   it("truncates long company names and job titles inside compact rows", async () => {
     const longTitle = "Senior distributed systems engineer for low-latency trading infrastructure";
     const longCompany = "A very long company name that must stay inside the compact card";

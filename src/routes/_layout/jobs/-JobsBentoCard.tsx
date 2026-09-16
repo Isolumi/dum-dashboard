@@ -21,6 +21,15 @@ function newestJobs(jobs: Job[]): Job[] {
     .slice(0, MAX_JOBS);
 }
 
+function getSafeJobUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export function JobsBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry; data: unknown }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [status, setStatus] = useState<BentoStatus>("loading");
@@ -93,20 +102,33 @@ export function JobsBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry; d
 
       {status === "ready" && jobs.length > 0 ? (
         <ul className="mt-2 flex flex-col">
-          {jobs.map((job) => (
-            <li key={job.id} className="min-w-0 border-b border-border/40 last:border-0">
-              <a
-                href={job.url}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={`${job.company} — ${job.title}`}
-                className="block min-w-0 rounded-sm py-1.5 outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
-              >
+          {jobs.map((job) => {
+            const safeJobUrl = getSafeJobUrl(job.url);
+            const content = (
+              <>
                 <span className="block truncate text-xs text-muted-foreground">{job.company}</span>
                 <span className="line-clamp-2 text-sm leading-5 font-medium">{job.title}</span>
-              </a>
-            </li>
-          ))}
+              </>
+            );
+
+            return (
+              <li key={job.id} className="min-w-0 border-b border-border/40 last:border-0">
+                {safeJobUrl ? (
+                  <a
+                    href={safeJobUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`${job.company} — ${job.title}`}
+                    className="block min-w-0 rounded-sm py-1.5 outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {content}
+                  </a>
+                ) : (
+                  <div className="min-w-0 py-1.5">{content}</div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </section>
