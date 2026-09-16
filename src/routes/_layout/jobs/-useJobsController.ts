@@ -90,6 +90,8 @@ export function useJobsController(): JobsController {
 
       try {
         await deleteJob({ data: { id } });
+        // Reads started before the delete finished can contain the removed row.
+        requestSequenceRef.current += 1;
         return true;
       } catch {
         if (jobsRef.current === optimistic) {
