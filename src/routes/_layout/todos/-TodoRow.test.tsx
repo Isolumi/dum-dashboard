@@ -121,8 +121,12 @@ describe("TodoRow", () => {
     expect(screen.queryAllByRole("button", { name: /^change/i })).toHaveLength(0);
   });
 
-  it("shows a subtle overdue state when a Today todo remains after its day", () => {
+  it.each([
+    ["full-page", false],
+    ["compact", true],
+  ])("shows a destructive overdue label in the %s row", (_layout, compact) => {
     renderTodoRow({
+      compact,
       todo: {
         ...highTodo,
         due_date: null,
@@ -132,8 +136,8 @@ describe("TodoRow", () => {
     });
 
     const overdue = screen.getByText("Overdue");
-    expect(overdue.className).toContain("text-muted-foreground");
-    expect(overdue.className).not.toContain("text-destructive");
+    expect(overdue.className).toContain("text-destructive");
+    expect(overdue.className).not.toContain("text-muted-foreground");
   });
 
   it("sends the selected due date when its date control is used", () => {
