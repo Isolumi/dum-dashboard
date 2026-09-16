@@ -3,7 +3,8 @@ import { tools } from "#/tools/registry";
 
 const SIDE_TOOL_RANK: Record<string, number> = {
   monies: 0,
-  homelab: 1,
+  jobs: 1,
+  homelab: 2,
   cameras: Number.POSITIVE_INFINITY,
 };
 

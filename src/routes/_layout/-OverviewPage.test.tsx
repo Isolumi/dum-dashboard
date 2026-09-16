@@ -11,13 +11,16 @@ import {
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Camera } from "lucide-react";
+import { BriefcaseBusiness, Camera } from "lucide-react";
 
-const { getCalendarEventsMock, getHomelabOverviewMock, getTodosMock } = vi.hoisted(() => ({
-  getCalendarEventsMock: vi.fn(),
-  getHomelabOverviewMock: vi.fn(),
-  getTodosMock: vi.fn(),
-}));
+const { getCalendarEventsMock, getHomelabOverviewMock, getJobsMock, getTodosMock } = vi.hoisted(
+  () => ({
+    getCalendarEventsMock: vi.fn(),
+    getHomelabOverviewMock: vi.fn(),
+    getJobsMock: vi.fn(),
+    getTodosMock: vi.fn(),
+  }),
+);
 
 vi.mock("#/homelab/homelab.functions", () => ({
   getHomelabOverview: getHomelabOverviewMock,
@@ -29,6 +32,10 @@ vi.mock("#/routes/todos/todos.functions", () => ({
 
 vi.mock("#/routes/_layout/calendar/-calendar.functions", () => ({
   getCalendarEvents: getCalendarEventsMock,
+}));
+
+vi.mock("#/routes/jobs/jobs.functions", () => ({
+  getJobs: getJobsMock,
 }));
 
 class FakeCameraStreamElement extends HTMLElement {
@@ -51,7 +58,7 @@ const { Route } = await import("./index");
 
 async function renderInsideLayout(content: ReactNode) {
   const rootRoute = createRootRoute({ component: () => <main>{content}</main> });
-  const routes = ["todos", "cameras", "calendar", "homelab"].map((path) =>
+  const routes = ["todos", "cameras", "calendar", "jobs", "homelab"].map((path) =>
     createRoute({ getParentRoute: () => rootRoute, path }),
   );
   const router = createRouter({
@@ -66,6 +73,7 @@ async function renderInsideLayout(content: ReactNode) {
 beforeEach(() => {
   getTodosMock.mockResolvedValue([]);
   getCalendarEventsMock.mockResolvedValue({ status: "ready", events: [] });
+  getJobsMock.mockResolvedValue([]);
   getHomelabOverviewMock.mockReturnValue(new Promise(() => undefined));
 });
 
@@ -84,6 +92,15 @@ describe("main dashboard composition", () => {
       label: "Cameras",
       route: "/cameras",
       icon: Camera,
+    });
+  });
+
+  it("registers the Jobs tool for sidebar and overview use", () => {
+    expect(tools.find((tool) => tool.id === "jobs")).toMatchObject({
+      id: "jobs",
+      label: "Jobs",
+      route: "/jobs",
+      icon: BriefcaseBusiness,
     });
   });
 
@@ -125,7 +142,7 @@ describe("main dashboard composition", () => {
     expect(todoCard.parentElement?.className).toContain("items-start");
   });
 
-  it("stacks Calendar after Todos and orders Monies, Homelab, then Camera in the side column", async () => {
+  it("stacks Calendar after Todos and orders Monies, Jobs, Homelab, then Camera in the side column", async () => {
     vi.spyOn(Route, "useLoaderData").mockReturnValue({});
     const OverviewPage = Route.options.component as ComponentType;
 
@@ -135,6 +152,7 @@ describe("main dashboard composition", () => {
     const calendarCard = screen.getByRole("link", { name: "Open Calendar tool" });
     const cameraCard = screen.getByRole("region", { name: "Camera" }).closest("a");
     const moniesCard = screen.getByRole("link", { name: "Open Monies tool" });
+    const jobsCard = screen.getByRole("region", { name: "Jobs" });
     const homelabCard = screen.getByRole("link", { name: "Open Homelab overview" });
     if (!cameraCard) throw new Error("Camera card link is missing");
 
@@ -144,9 +162,13 @@ describe("main dashboard composition", () => {
     ).toBeTruthy();
     expect(cameraCard.parentElement).not.toBe(todoCard.parentElement);
     expect(cameraCard.parentElement).toBe(moniesCard.parentElement);
-    expect(moniesCard.parentElement).toBe(homelabCard.parentElement);
+    expect(moniesCard.parentElement).toBe(jobsCard.parentElement);
+    expect(jobsCard.parentElement).toBe(homelabCard.parentElement);
     expect(
-      moniesCard.compareDocumentPosition(homelabCard) & Node.DOCUMENT_POSITION_FOLLOWING,
+      moniesCard.compareDocumentPosition(jobsCard) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      jobsCard.compareDocumentPosition(homelabCard) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
       homelabCard.compareDocumentPosition(cameraCard) & Node.DOCUMENT_POSITION_FOLLOWING,
