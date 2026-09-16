@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { BriefcaseBusiness } from "lucide-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,9 +23,10 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("#/routes/jobs/jobs.functions", () => ({
   getJobs: vi.fn(),
+  deleteJob: vi.fn(),
 }));
 
-const { getJobs } = await import("#/routes/jobs/jobs.functions");
+const { getJobs, deleteJob } = await import("#/routes/jobs/jobs.functions");
 const { JobsBentoCard } = await import("./-JobsBentoCard");
 const { tools } = await import("#/tools/registry");
 
@@ -71,6 +72,7 @@ const tiedHigherId = makeJob("44444444-4444-4444-8444-444444444444", "2026-09-15
 
 beforeEach(() => {
   vi.mocked(getJobs).mockResolvedValue([]);
+  vi.mocked(deleteJob).mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -80,6 +82,34 @@ afterEach(() => {
 });
 
 describe("JobsBentoCard", () => {
+  it("removes a job immediately without a dialog and shows the next saved job", async () => {
+    vi.mocked(getJobs).mockResolvedValue([oldest, third, tiedLowerId, tiedHigherId]);
+    const request = deferred<void>();
+    vi.mocked(deleteJob).mockReturnValueOnce(request.promise);
+    render(<JobsBentoCard tool={mockTool} data={null} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Newest" }));
+
+    expect(screen.queryByText("Newest")).toBeNull();
+    expect(screen.getByText("Fourth newest")).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(deleteJob).toHaveBeenCalledExactlyOnceWith({ data: { id: tiedHigherId.id } });
+    await act(async () => request.resolve());
+    expect(screen.queryByText("Newest")).toBeNull();
+  });
+
+  it("restores a job and shows a safe error when deletion fails", async () => {
+    vi.mocked(getJobs).mockResolvedValue([tiedHigherId]);
+    vi.mocked(deleteJob).mockRejectedValueOnce(new Error("private database details"));
+    render(<JobsBentoCard tool={mockTool} data={null} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Newest" }));
+
+    expect(await screen.findByText("Newest")).toBeTruthy();
+    expect((await screen.findByRole("alert")).textContent).toMatch(/could not delete/i);
+    expect(screen.queryByText(/private database details/i)).toBeNull();
+  });
+
   it("shows exactly the newest three jobs in saved-at and ID descending order", async () => {
     vi.mocked(getJobs).mockResolvedValue([oldest, tiedLowerId, third, tiedHigherId]);
 

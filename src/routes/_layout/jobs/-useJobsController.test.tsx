@@ -80,6 +80,37 @@ afterEach(() => {
 });
 
 describe("useJobsController", () => {
+  it("ignores a stale poll that returns after a pending deletion succeeds", async () => {
+    const pendingDelete = deferred<void>();
+    const pendingRefresh = deferred<Job[]>();
+    getJobsMock
+      .mockResolvedValueOnce([newestHigherId, older])
+      .mockReturnValueOnce(pendingRefresh.promise);
+    deleteJobMock.mockReturnValueOnce(pendingDelete.promise);
+    const { result } = renderHook(() => useJobsController());
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+
+    let deletion!: Promise<boolean>;
+    let refresh!: Promise<void>;
+    act(() => {
+      deletion = result.current.remove(newestHigherId.id);
+    });
+    act(() => {
+      refresh = result.current.refresh();
+    });
+    await act(async () => {
+      pendingDelete.resolve();
+      await deletion;
+    });
+    await act(async () => {
+      pendingRefresh.resolve([newestHigherId, older]);
+      await refresh;
+    });
+
+    expect(result.current.jobs).toEqual([older]);
+    expect(result.current.pendingIds.size).toBe(0);
+  });
+
   it("loads jobs in saved-at and ID descending order", async () => {
     getJobsMock.mockResolvedValueOnce([older, newestLowerId, newestHigherId]);
     const { result } = renderHook(() => useJobsController());

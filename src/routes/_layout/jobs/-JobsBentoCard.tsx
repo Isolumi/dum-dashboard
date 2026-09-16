@@ -1,25 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Trash2 } from "lucide-react";
 
+import { Button } from "#/components/ui/button";
 import { Skeleton } from "#/components/ui/skeleton";
-import { usePollingRefresh } from "#/hooks/usePollingRefresh";
-import type { Job } from "#/lib/database.types";
-import { getJobs } from "#/routes/jobs/jobs.functions";
 import type { ToolEntry } from "#/tools/registry";
+import { useJobsController } from "./-useJobsController";
 
 const MAX_JOBS = 3;
-const REFRESH_INTERVAL_MS = 10_000;
-
-type BentoStatus = "loading" | "ready" | "error";
-
-function newestJobs(jobs: Job[]): Job[] {
-  return [...jobs]
-    .sort(
-      (left, right) =>
-        right.saved_at.localeCompare(left.saved_at) || right.id.localeCompare(left.id),
-    )
-    .slice(0, MAX_JOBS);
-}
 
 function getSafeJobUrl(value: string): string | null {
   try {
@@ -31,45 +18,8 @@ function getSafeJobUrl(value: string): string | null {
 }
 
 export function JobsBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry; data: unknown }) {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [status, setStatus] = useState<BentoStatus>("loading");
-  const mountedRef = useRef(false);
-  const hasLoadedRef = useRef(false);
-  const refreshPendingRef = useRef<Promise<void> | null>(null);
-
-  const refresh = useCallback((): Promise<void> => {
-    if (refreshPendingRef.current) return refreshPendingRef.current;
-
-    let request: Promise<void>;
-    request = (async () => {
-      try {
-        const freshJobs = await getJobs();
-        if (!mountedRef.current) return;
-
-        setJobs(newestJobs(freshJobs));
-        hasLoadedRef.current = true;
-        setStatus("ready");
-      } catch {
-        if (!mountedRef.current || hasLoadedRef.current) return;
-        setStatus("error");
-      }
-    })().finally(() => {
-      if (refreshPendingRef.current === request) refreshPendingRef.current = null;
-    });
-    refreshPendingRef.current = request;
-    return request;
-  }, []);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    void refresh();
-
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [refresh]);
-
-  usePollingRefresh(refresh, REFRESH_INTERVAL_MS, { skipWhilePending: true });
+  const { jobs: savedJobs, status, mutationError, remove } = useJobsController();
+  const jobs = savedJobs.slice(0, MAX_JOBS);
 
   return (
     <section aria-label="Jobs" className="rounded-lg border border-border bg-card p-4">
@@ -112,24 +62,42 @@ export function JobsBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry; d
             );
 
             return (
-              <li key={job.id} className="min-w-0 border-b border-border/40 last:border-0">
+              <li
+                key={job.id}
+                className="group flex min-w-0 items-center gap-1 border-b border-border/40 last:border-0"
+              >
                 {safeJobUrl ? (
                   <a
                     href={safeJobUrl}
                     target="_blank"
                     rel="noreferrer"
                     aria-label={`${job.company} — ${job.title}`}
-                    className="block min-w-0 rounded-sm py-1.5 outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+                    className="block min-w-0 flex-1 rounded-sm py-1.5 outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {content}
                   </a>
                 ) : (
-                  <div className="min-w-0 py-1.5">{content}</div>
+                  <div className="min-w-0 flex-1 py-1.5">{content}</div>
                 )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Delete ${job.title}`}
+                  className="size-8 shrink-0 text-muted-foreground hover:text-destructive focus-visible:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:opacity-100"
+                  onClick={() => void remove(job.id)}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
               </li>
             );
           })}
         </ul>
+      ) : null}
+      {mutationError ? (
+        <p role="alert" className="mt-2 text-xs text-destructive">
+          {mutationError}
+        </p>
       ) : null}
     </section>
   );
