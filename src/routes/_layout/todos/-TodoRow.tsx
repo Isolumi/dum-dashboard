@@ -193,7 +193,7 @@ function TodoRowComponent({
               todo.due_date && (isOverdue ? "text-destructive" : "text-muted-foreground"),
             )}
           >
-            {isTodayOverdue && <span className="text-xs text-muted-foreground">Overdue</span>}
+            {isTodayOverdue && <span className="text-xs text-destructive">Overdue</span>}
             <TodoDueDatePicker
               value={todo.due_date}
               onChange={(due_date, due_date_has_time) =>
@@ -225,7 +225,7 @@ function TodoRowComponent({
               todo.due_date && (isOverdue ? "text-destructive" : "text-muted-foreground"),
             )}
           >
-            {isTodayOverdue && <span className="text-xs text-muted-foreground">Overdue</span>}
+            {isTodayOverdue && <span className="text-xs text-destructive">Overdue</span>}
             <TodoDueDatePicker
               value={todo.due_date}
               onChange={(due_date, due_date_has_time) =>
