@@ -103,6 +103,30 @@ export type Database = {
           },
         ];
       };
+      jobs: {
+        Row: {
+          company: string;
+          id: string;
+          saved_at: string;
+          title: string;
+          url: string;
+        };
+        Insert: {
+          company: string;
+          id?: string;
+          saved_at?: string;
+          title: string;
+          url: string;
+        };
+        Update: {
+          company?: string;
+          id?: string;
+          saved_at?: string;
+          title?: string;
+          url?: string;
+        };
+        Relationships: [];
+      };
       ledgers: {
         Row: {
           amount: number;
@@ -392,6 +416,7 @@ export const Constants = {
 
 // --- Helper type aliases (added manually, not generated) ---
 export type Todo = Database["public"]["Tables"]["todos"]["Row"];
+export type Job = Database["public"]["Tables"]["jobs"]["Row"];
 export type TodoInsert = Database["public"]["Tables"]["todos"]["Insert"];
 export type TodoUpdate = Database["public"]["Tables"]["todos"]["Update"];
 export type TodoPriority = Database["public"]["Enums"]["todo_priority"];
