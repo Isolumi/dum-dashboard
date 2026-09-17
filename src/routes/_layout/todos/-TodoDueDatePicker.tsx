@@ -25,6 +25,7 @@ export interface TodoDueDatePickerProps {
   disabled?: boolean;
   hasTime?: boolean;
   showValue?: boolean;
+  emptyLabel?: React.ReactNode;
   presentation?: TodoDueDatePickerPresentation;
   now?: Date;
 }
@@ -117,6 +118,7 @@ export function TodoDueDatePicker({
   disabled = false,
   hasTime,
   showValue = true,
+  emptyLabel,
   presentation = "popover",
   now,
 }: TodoDueDatePickerProps) {
@@ -146,7 +148,8 @@ export function TodoDueDatePicker({
     ? formatTodoDueDateLabel(value, hasTime, now)
     : formatTodoDueDate(value, hasTime);
 
-  const compactIconOnly = compact && showValue && !value;
+  const displayContent = displayValue || emptyLabel;
+  const compactIconOnly = compact && showValue && !displayContent;
 
   function handleOpenChange(nextOpen: boolean) {
     resetDraft();
@@ -195,7 +198,7 @@ export function TodoDueDatePicker({
   }
 
   const triggerContents =
-    showValue && displayValue ? (
+    showValue && displayContent ? (
       <span
         className={cn(
           "min-w-0",
@@ -203,7 +206,7 @@ export function TodoDueDatePicker({
           compact ? "text-xs/4" : "text-sm/4",
         )}
       >
-        {displayValue}
+        {displayContent}
       </span>
     ) : (
       <CalendarIcon

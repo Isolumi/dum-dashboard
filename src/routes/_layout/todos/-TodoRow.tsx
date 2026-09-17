@@ -217,8 +217,15 @@ function TodoRowComponent({
               todo.due_date && dueDateColour,
             )}
           >
-            {isTodayOverdue && <span className="text-xs text-destructive">Overdue</span>}
+            {isTodayOverdue && todo.due_date && (
+              <span className="text-xs text-destructive">Overdue</span>
+            )}
             <TodoDueDatePicker
+              emptyLabel={
+                isTodayOverdue ? (
+                  <span className="text-xs text-destructive">Overdue</span>
+                ) : undefined
+              }
               value={todo.due_date}
               onChange={(due_date, due_date_has_time) =>
                 onUpdate({ id: todo.id, due_date, due_date_has_time })
@@ -250,8 +257,15 @@ function TodoRowComponent({
               todo.due_date && dueDateColour,
             )}
           >
-            {isTodayOverdue && <span className="text-xs text-destructive">Overdue</span>}
+            {isTodayOverdue && todo.due_date && (
+              <span className="text-xs text-destructive">Overdue</span>
+            )}
             <TodoDueDatePicker
+              emptyLabel={
+                isTodayOverdue ? (
+                  <span className="text-xs text-destructive">Overdue</span>
+                ) : undefined
+              }
               value={todo.due_date}
               onChange={(due_date, due_date_has_time) =>
                 onUpdate({ id: todo.id, due_date, due_date_has_time })
