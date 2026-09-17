@@ -28,9 +28,11 @@ function OverviewError() {
 }
 
 function OverviewPage() {
-  const primaryTools = tools.filter((tool) => tool.id === "todos" || tool.id === "calendar");
+  const primaryTools = tools.filter(
+    (tool) => tool.id === "todos" || tool.id === "calendar" || tool.id === "buy-list",
+  );
   const sideTools = tools
-    .filter((tool) => tool.id !== "todos" && tool.id !== "calendar")
+    .filter((tool) => tool.id !== "todos" && tool.id !== "calendar" && tool.id !== "buy-list")
     .sort((left, right) => (SIDE_TOOL_RANK[left.id] ?? 2) - (SIDE_TOOL_RANK[right.id] ?? 2));
   const toolData = Route.useLoaderData();
 

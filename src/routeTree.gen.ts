@@ -19,6 +19,7 @@ import { Route as LayoutJobsIndexRouteImport } from './routes/_layout/jobs/index
 import { Route as LayoutHomelabIndexRouteImport } from './routes/_layout/homelab/index'
 import { Route as LayoutCamerasIndexRouteImport } from './routes/_layout/cameras/index'
 import { Route as LayoutCalendarIndexRouteImport } from './routes/_layout/calendar/index'
+import { Route as LayoutBuyListIndexRouteImport } from './routes/_layout/buy-list/index'
 import { Route as CalendarOauthCallbackRouteImport } from './routes/calendar/oauth/callback'
 import { Route as ApiToolsTodosRouteImport } from './routes/api/tools/todos'
 import { Route as ApiToolsJobsRouteImport } from './routes/api/tools/jobs'
@@ -76,6 +77,11 @@ const LayoutCamerasIndexRoute = LayoutCamerasIndexRouteImport.update({
 const LayoutCalendarIndexRoute = LayoutCalendarIndexRouteImport.update({
   id: '/calendar/',
   path: '/calendar/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutBuyListIndexRoute = LayoutBuyListIndexRouteImport.update({
+  id: '/buy-list/',
+  path: '/buy-list/',
   getParentRoute: () => LayoutRoute,
 } as any)
 const CalendarOauthCallbackRoute = CalendarOauthCallbackRouteImport.update({
@@ -136,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/api/tools/jobs': typeof ApiToolsJobsRoute
   '/api/tools/todos': typeof ApiToolsTodosRouteWithChildren
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
+  '/buy-list/': typeof LayoutBuyListIndexRoute
   '/calendar/': typeof LayoutCalendarIndexRoute
   '/cameras/': typeof LayoutCamerasIndexRoute
   '/homelab/': typeof LayoutHomelabIndexRoute
@@ -155,6 +162,7 @@ export interface FileRoutesByTo {
   '/api/tools/jobs': typeof ApiToolsJobsRoute
   '/api/tools/todos': typeof ApiToolsTodosRouteWithChildren
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
+  '/buy-list': typeof LayoutBuyListIndexRoute
   '/calendar': typeof LayoutCalendarIndexRoute
   '/cameras': typeof LayoutCamerasIndexRoute
   '/homelab': typeof LayoutHomelabIndexRoute
@@ -177,6 +185,7 @@ export interface FileRoutesById {
   '/api/tools/jobs': typeof ApiToolsJobsRoute
   '/api/tools/todos': typeof ApiToolsTodosRouteWithChildren
   '/calendar/oauth/callback': typeof CalendarOauthCallbackRoute
+  '/_layout/buy-list/': typeof LayoutBuyListIndexRoute
   '/_layout/calendar/': typeof LayoutCalendarIndexRoute
   '/_layout/cameras/': typeof LayoutCamerasIndexRoute
   '/_layout/homelab/': typeof LayoutHomelabIndexRoute
@@ -199,6 +208,7 @@ export interface FileRouteTypes {
     | '/api/tools/jobs'
     | '/api/tools/todos'
     | '/calendar/oauth/callback'
+    | '/buy-list/'
     | '/calendar/'
     | '/cameras/'
     | '/homelab/'
@@ -218,6 +228,7 @@ export interface FileRouteTypes {
     | '/api/tools/jobs'
     | '/api/tools/todos'
     | '/calendar/oauth/callback'
+    | '/buy-list'
     | '/calendar'
     | '/cameras'
     | '/homelab'
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | '/api/tools/jobs'
     | '/api/tools/todos'
     | '/calendar/oauth/callback'
+    | '/_layout/buy-list/'
     | '/_layout/calendar/'
     | '/_layout/cameras/'
     | '/_layout/homelab/'
@@ -330,6 +342,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutCalendarIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/buy-list/': {
+      id: '/_layout/buy-list/'
+      path: '/buy-list'
+      fullPath: '/buy-list/'
+      preLoaderRoute: typeof LayoutBuyListIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/calendar/oauth/callback': {
       id: '/calendar/oauth/callback'
       path: '/calendar/oauth/callback'
@@ -417,6 +436,7 @@ interface LayoutRouteChildren {
   LayoutHomelabRouteRoute: typeof LayoutHomelabRouteRouteWithChildren
   LayoutDevColoursRoute: typeof LayoutDevColoursRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
+  LayoutBuyListIndexRoute: typeof LayoutBuyListIndexRoute
   LayoutCalendarIndexRoute: typeof LayoutCalendarIndexRoute
   LayoutCamerasIndexRoute: typeof LayoutCamerasIndexRoute
   LayoutJobsIndexRoute: typeof LayoutJobsIndexRoute
@@ -428,6 +448,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutHomelabRouteRoute: LayoutHomelabRouteRouteWithChildren,
   LayoutDevColoursRoute: LayoutDevColoursRoute,
   LayoutIndexRoute: LayoutIndexRoute,
+  LayoutBuyListIndexRoute: LayoutBuyListIndexRoute,
   LayoutCalendarIndexRoute: LayoutCalendarIndexRoute,
   LayoutCamerasIndexRoute: LayoutCamerasIndexRoute,
   LayoutJobsIndexRoute: LayoutJobsIndexRoute,
