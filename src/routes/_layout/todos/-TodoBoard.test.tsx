@@ -154,6 +154,22 @@ function makeTodo(id: string, priority: "high" | "low", sort_order: number) {
 
 describe("TodoBoard", () => {
   it.each(["compact", "full"] as const)(
+    "completes an unfinished todo in one click in %s",
+    (variant) => {
+      const todo = makeTodo("unfinished", "low", 0);
+      const controller = makeController({
+        todos: [todo],
+        grouped: { today: [], high: [], low: [todo] },
+      });
+      render(<TodoBoard controller={controller} variant={variant} />);
+      fireEvent.click(screen.getByRole("button", { name: 'Mark "unfinished" as complete' }));
+      expect(controller.update).toHaveBeenCalledExactlyOnceWith({
+        id: todo.id,
+        status: "complete",
+      });
+    },
+  );
+  it.each(["compact", "full"] as const)(
     "keeps automatic Today items fixed without disabling manual Today dragging in %s",
     (variant) => {
       const automatic = {
