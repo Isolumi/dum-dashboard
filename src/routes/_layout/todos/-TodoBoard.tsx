@@ -164,6 +164,7 @@ export function TodoBoard({ controller, variant }: TodoBoardProps): ReactElement
   function handleDragStart({ active }: DragStartEvent) {
     const id = String(active.id);
     if (!controller.todos.some((todo) => todo.id === id)) return;
+    if (controller.grouped.today.some((todo) => todo.id === id && !todo.today_date)) return;
 
     const initial = cloneGroups(controller.grouped);
     initialGroupsRef.current = initial;
@@ -290,6 +291,9 @@ export function TodoBoard({ controller, variant }: TodoBoardProps): ReactElement
                   onUpdate={controller.update}
                   onDelete={controller.remove}
                   isPending={(id) => controller.pendingIds.has(id)}
+                  isDragDisabled={(id) =>
+                    controller.grouped.today.some((todo) => todo.id === id && !todo.today_date)
+                  }
                   animateRemoval={!activeId}
                 />
               ))}
