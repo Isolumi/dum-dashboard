@@ -474,6 +474,8 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   const move = useCallback(
     (id: string, targetSection: TodoSection, targetIndex: number): Promise<void> => {
       if (blockedIdsRef.current.has(id)) return Promise.resolve();
+      // Preserve the displayed time through drag completion and queued writes.
+      const displayedAt = nowRef.current;
 
       return runOrderingMutation(async () => {
         if (blockedIdsRef.current.has(id)) return;
@@ -481,9 +483,9 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
         const previousTodos = todosRef.current;
         const movedTodo = previousTodos.find((todo) => todo.id === id);
         if (!movedTodo || movedTodo.status === "complete") return;
-        if (!movedTodo.today_date && isTodoDueSoon(movedTodo)) return;
+        if (!movedTodo.today_date && isTodoDueSoon(movedTodo, displayedAt)) return;
 
-        const groupedTodos = groupAndSortTodos(previousTodos, nowRef.current);
+        const groupedTodos = groupAndSortTodos(previousTodos, displayedAt);
         const sourceSection = movedTodo.today_date ? "today" : movedTodo.priority;
         if (sourceSection === targetSection) return;
 

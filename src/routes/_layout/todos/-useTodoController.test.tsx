@@ -68,6 +68,50 @@ afterEach(() => {
 });
 
 describe("useTodoController", () => {
+  it.each([false, true])(
+    "preserves a manual Today drop across the time boundary (queued: %s)",
+    async (queued) => {
+      vi.setSystemTime(new Date("2026-09-17T16:00:00Z"));
+      const moving = makeTodo({
+        id: "moving",
+        due_date: "2026-09-19T16:00:01Z",
+        due_date_has_time: true,
+      });
+      const other = makeTodo({ id: "other", priority: "low" });
+      const ordering = deferred<void>();
+      vi.mocked(reorderTodos).mockReturnValue(ordering.promise);
+      const { result } = renderHook(() => useTodoController([moving, other]));
+      act(() => result.current.setDragging(true));
+      let reorder: Promise<void> | undefined;
+      if (queued)
+        act(() => {
+          reorder = result.current.reorder("low", ["other"]);
+        });
+      vi.setSystemTime(new Date("2026-09-17T16:00:02Z"));
+      let move!: Promise<void>;
+      act(() => {
+        move = result.current.move("moving", "today", 0);
+      });
+      act(() => result.current.setDragging(false));
+      await act(async () => {
+        ordering.resolve();
+        await reorder;
+        await move;
+      });
+      expect(moveTodo).toHaveBeenCalledWith({
+        data: { id: "moving", target_section: "today", source_ids: [], target_ids: ["moving"] },
+      });
+      expect(result.current.todos.find((todo) => todo.id === "moving")?.today_date).toBe(
+        "2026-09-17",
+      );
+      const saved = result.current.todos.find((todo) => todo.id === "moving")!;
+      vi.mocked(updateTodo).mockResolvedValue({ ...saved, due_date: "2026-09-30T16:00:00Z" });
+      await act(async () =>
+        result.current.update({ id: "moving", due_date: "2026-09-30T16:00:00Z" }),
+      );
+      expect(result.current.grouped.today.map((todo) => todo.id)).toEqual(["moving"]);
+    },
+  );
   it("refreshes the time window on focus without a successful fetch", () => {
     vi.setSystemTime(new Date("2026-09-17T16:00:00Z"));
     const due = makeTodo({ due_date: "2026-09-19T17:00:00Z", due_date_has_time: true });
