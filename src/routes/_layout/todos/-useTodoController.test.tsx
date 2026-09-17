@@ -67,6 +67,152 @@ afterEach(() => {
 
 describe("useTodoController", () => {
   it.each(["today", "high", "low"] as const)(
+    "keeps equal-deadline drop placement in %s",
+    async (section) => {
+      const fields = section === "today" ? { today_date: "2026-09-16" } : { priority: section };
+      const later = makeTodo({
+        ...fields,
+        id: "later",
+        due_date: "2026-09-20",
+        sort_order: 0,
+        today_sort_order: 0,
+      });
+      const a = makeTodo({
+        ...fields,
+        id: "a",
+        due_date: "2026-09-17",
+        sort_order: 1,
+        today_sort_order: 1,
+      });
+      const b = makeTodo({
+        ...fields,
+        id: "b",
+        due_date: "2026-09-17",
+        sort_order: 2,
+        today_sort_order: 2,
+      });
+      const moved = makeTodo({
+        id: "moved",
+        priority: section === "high" ? "low" : "high",
+        due_date: "2026-09-17",
+      });
+      const { result } = renderHook(() => useTodoController([later, a, b, moved]));
+      await act(async () => result.current.move(moved.id, section, 2));
+      expect(result.current.grouped[section].map((todo) => todo.id)).toEqual([
+        "a",
+        "b",
+        "moved",
+        "later",
+      ]);
+      expect(
+        vi.mocked(moveTodo).mock.calls[0][0].data.target_ids.filter((id) => id !== "moved"),
+      ).toEqual(["later", "a", "b"]);
+    },
+  );
+  it.each(["today", "high", "low"] as const)(
+    "uses saved order for the %s reorder concurrency check",
+    async (section) => {
+      const fields = section === "today" ? { today_date: "2026-09-16" } : { priority: section };
+      const later = makeTodo({
+        ...fields,
+        id: "later",
+        due_date: "2026-09-20",
+        sort_order: 0,
+        today_sort_order: 0,
+      });
+      const earlier = makeTodo({
+        ...fields,
+        id: "earlier",
+        due_date: "2026-09-17",
+        sort_order: 1,
+        today_sort_order: 1,
+      });
+      vi.mocked(reorderTodos).mockImplementationOnce(async ({ data }) => {
+        if (data.expected_ids.join() !== "later,earlier") throw new Error("Todo order is stale");
+      });
+      const { result } = renderHook(() => useTodoController([later, earlier]));
+      await act(async () => result.current.reorder(section, ["earlier", "later"]));
+      expect(result.current.mutationError).toBeNull();
+      expect(
+        result.current.todos.find((todo) => todo.id === "earlier")?.[
+          section === "today" ? "today_sort_order" : "sort_order"
+        ],
+      ).toBe(0);
+    },
+  );
+
+  it.each(["today", "high", "low"] as const)(
+    "preserves saved source and target order when moving into %s",
+    async (targetSection) => {
+      const sourceSection = targetSection === "high" ? "low" : "high";
+      const targetFields =
+        targetSection === "today" ? { today_date: "2026-09-16" } : { priority: targetSection };
+      const moved = makeTodo({
+        id: "moved",
+        priority: sourceSection,
+        due_date: "2026-09-19",
+        sort_order: 2,
+      });
+      const sourceLater = makeTodo({
+        id: "source-later",
+        priority: sourceSection,
+        due_date: "2026-09-20",
+        sort_order: 0,
+      });
+      const sourceEarlier = makeTodo({
+        id: "source-earlier",
+        priority: sourceSection,
+        due_date: "2026-09-17",
+        sort_order: 1,
+      });
+      const undated = makeTodo({
+        ...targetFields,
+        id: "undated",
+        sort_order: 0,
+        today_sort_order: 0,
+      });
+      const targetLater = makeTodo({
+        ...targetFields,
+        id: "target-later",
+        due_date: "2026-09-20",
+        sort_order: 1,
+        today_sort_order: 1,
+      });
+      const targetEarlier = makeTodo({
+        ...targetFields,
+        id: "target-earlier",
+        due_date: "2026-09-17",
+        sort_order: 2,
+        today_sort_order: 2,
+      });
+      vi.mocked(moveTodo).mockImplementationOnce(async ({ data }) => {
+        if (
+          data.source_ids.join() !== "source-later,source-earlier" ||
+          data.target_ids.filter((id) => id !== "moved").join() !==
+            "undated,target-later,target-earlier"
+        )
+          throw new Error("Source or target Todo order is stale");
+      });
+      const { result } = renderHook(() =>
+        useTodoController([moved, sourceLater, sourceEarlier, undated, targetLater, targetEarlier]),
+      );
+      await act(async () => result.current.move(moved.id, targetSection, 1));
+      expect(result.current.mutationError).toBeNull();
+      expect(result.current.grouped[targetSection].map((todo) => todo.id)).toEqual([
+        "target-earlier",
+        "moved",
+        "target-later",
+        "undated",
+      ]);
+      expect(
+        result.current.todos.find((todo) => todo.id === "moved")?.[
+          targetSection === "today" ? "today_sort_order" : "sort_order"
+        ],
+      ).toBe(1);
+    },
+  );
+
+  it.each(["today", "high", "low"] as const)(
     "keeps a cross-section move in date order in %s",
     async (targetSection) => {
       const targetFields =

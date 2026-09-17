@@ -14,7 +14,7 @@ export const TODO_SECTION_LABELS: Record<TodoSection, string> = {
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-function dueDateSortValue(todo: Todo): number | null {
+export function dueDateSortValue(todo: Todo): number | null {
   if (!todo.due_date) return null;
 
   const timestamp = Date.parse(todo.due_date);
@@ -42,6 +42,24 @@ export function isTodoTodayOverdue(todo: Todo, now = new Date()): boolean {
   return Boolean(
     todo.today_date && todo.status !== "complete" && todo.today_date < getTorontoDateKey(now),
   );
+}
+
+// Match the database's concurrency checks, not the date-sorted display order.
+export function getTodosInSavedOrder(todos: Todo[], section: TodoSection): Todo[] {
+  return todos
+    .filter((todo) =>
+      section === "today"
+        ? Boolean(todo.today_date)
+        : !todo.today_date && todo.priority === section,
+    )
+    .sort((a, b) => {
+      const aOrder =
+        section === "today" ? (a.today_sort_order ?? Number.POSITIVE_INFINITY) : a.sort_order;
+      const bOrder =
+        section === "today" ? (b.today_sort_order ?? Number.POSITIVE_INFINITY) : b.sort_order;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.id.localeCompare(b.id);
+    });
 }
 
 export function groupAndSortTodos(todos: Todo[]): TodoGroups {
