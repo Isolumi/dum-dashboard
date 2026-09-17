@@ -31,7 +31,7 @@ describe("todo due date helpers", () => {
   it("keeps the local time in a relative label", () => {
     const value = new Date(2026, 7, 10, 15, 30).toISOString();
     expect(formatTodoDueDateLabel(value, true, new Date(2026, 7, 9, 12))).toBe(
-      "Due tomorrow, 3:30 PM",
+      "Due tomorrow, 15:30",
     );
   });
 
@@ -80,7 +80,18 @@ describe("todo due date helpers", () => {
   it("formats timestamp values with a local time", () => {
     const value = "2026-08-09T19:30:00.000Z";
 
-    expect(formatTodoDueDate(value)).toBe(format(new Date(value), "MMM d, h:mm a"));
+    expect(formatTodoDueDate(value)).toBe(format(new Date(value), "MMM d, HH:mm"));
+  });
+
+  it.each([
+    [0, "00:05"],
+    [12, "12:05"],
+    [23, "23:05"],
+  ])("uses 24-hour time at hour %s", (hour, expected) => {
+    const value = new Date(2026, 7, 9, hour, 5).toISOString();
+    expect(formatTodoDueDateLabel(value, true, new Date(2026, 7, 9, 12))).toBe(
+      `Due today, ${expected}`,
+    );
   });
 
   it("preserves a migrated date-only timestamp when metadata says it has no time", () => {

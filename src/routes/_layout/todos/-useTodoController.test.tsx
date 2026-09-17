@@ -66,6 +66,50 @@ afterEach(() => {
 });
 
 describe("useTodoController", () => {
+  it.each(["today", "high", "low"] as const)(
+    "keeps a cross-section move in date order in %s",
+    async (targetSection) => {
+      const targetFields =
+        targetSection === "today"
+          ? { today_date: "2026-09-16", priority: "low" as const }
+          : { priority: targetSection };
+      const moved = makeTodo({
+        id: "moved",
+        priority: targetSection === "high" ? "low" : "high",
+        due_date: "2026-09-20",
+      });
+      const earlier = makeTodo({ ...targetFields, id: "earlier", due_date: "2026-09-17" });
+      const undated = makeTodo({
+        ...targetFields,
+        id: "undated",
+        sort_order: 1,
+        today_sort_order: 1,
+      });
+      const pendingMove = deferred<void>();
+      vi.mocked(moveTodo).mockReturnValueOnce(pendingMove.promise);
+      const { result } = renderHook(() => useTodoController([moved, earlier, undated]));
+      let mutation!: Promise<void>;
+      act(() => {
+        mutation = result.current.move(moved.id, targetSection, 0);
+      });
+      expect(result.current.grouped[targetSection].map((todo) => todo.id)).toEqual([
+        "earlier",
+        "moved",
+        "undated",
+      ]);
+      await act(async () => {
+        pendingMove.resolve();
+        await mutation;
+      });
+      expect(result.current.grouped[targetSection].map((todo) => todo.id)).toEqual([
+        "earlier",
+        "moved",
+        "undated",
+      ]);
+      expect(result.current.mutationError).toBeNull();
+    },
+  );
+
   it("uses initial todos without showing a loading state", () => {
     const { result } = renderHook(() => useTodoController([highTodo]));
 
