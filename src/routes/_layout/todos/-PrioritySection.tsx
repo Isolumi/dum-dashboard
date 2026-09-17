@@ -1,7 +1,16 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useEffect } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import {
+  AnimatePresence,
+  LazyMotion,
+  domAnimation,
+  m,
+  usePresence,
+  usePresenceData,
+  useReducedMotion,
+} from "motion/react";
 
 import type { Todo } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
@@ -18,6 +27,7 @@ export interface PrioritySectionProps {
   onDelete: TodoRowProps["onDelete"];
   compact?: boolean;
   isPending?: (id: string) => boolean;
+  animateRemoval?: boolean;
 }
 
 const SECTION_LABEL_STYLES: Record<TodoSection, string> = {
@@ -26,7 +36,7 @@ const SECTION_LABEL_STYLES: Record<TodoSection, string> = {
   low: "text-muted-foreground",
 };
 
-function SortableTodoRow({
+function RegisteredTodoRow({
   todo,
   onUpdate,
   onDelete,
@@ -70,6 +80,35 @@ function SortableTodoRow({
   );
 }
 
+function AnimatedTodoRow(props: TodoRowProps) {
+  const [isPresent, safeToRemove] = usePresence();
+  const animateRemoval = usePresenceData() !== false;
+  const reducedMotion = useReducedMotion();
+  const skipExit = !animateRemoval || reducedMotion;
+  useEffect(() => {
+    if (!isPresent && skipExit) safeToRemove?.();
+  }, [isPresent, skipExit, safeToRemove]);
+  if (!isPresent && skipExit) return null;
+
+  return (
+    <m.div
+      initial={false}
+      animate={{ height: "auto", opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      onAnimationComplete={() => {
+        if (!isPresent) safeToRemove?.();
+      }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+      inert={!isPresent}
+      aria-hidden={!isPresent || undefined}
+      className={cn(!isPresent && "pointer-events-none overflow-hidden")}
+    >
+      {/* Unregister the sortable immediately; the exit copy is visual only. */}
+      {isPresent ? <RegisteredTodoRow {...props} /> : <TodoRow {...props} dragDisabled isPending />}
+    </m.div>
+  );
+}
+
 function PrioritySectionComponent({
   priority,
   label,
@@ -78,7 +117,9 @@ function PrioritySectionComponent({
   onDelete,
   compact = false,
   isPending,
+  animateRemoval = true,
 }: PrioritySectionProps) {
+  const reducedMotion = useReducedMotion();
   const todoIds = useMemo(() => todos.map((t) => t.id), [todos]);
   const hasPendingTodo = todos.some((todo) => isPending?.(todo.id));
   const { setNodeRef: setDroppableNodeRef } = useDroppable({
@@ -113,30 +154,36 @@ function PrioritySectionComponent({
 
       {/* Todo rows */}
       <SortableContext items={todoIds} strategy={verticalListSortingStrategy}>
-        {todos.length === 0 ? (
-          <p
-            className={cn(
-              "flex min-h-11 items-center text-sm text-muted-foreground",
-              compact ? "px-5" : "px-4",
+        <LazyMotion features={domAnimation}>
+          <div role="list" className="relative min-h-11">
+            {todos.length === 0 && (
+              <m.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: reducedMotion ? 0 : 0.1, delay: reducedMotion ? 0 : 0.18 }}
+                className={cn(
+                  "absolute inset-0 flex min-h-11 items-center text-sm text-muted-foreground",
+                  compact ? "px-5" : "px-4",
+                )}
+              >
+                No items
+              </m.p>
             )}
-          >
-            No items
-          </p>
-        ) : (
-          <div role="list">
-            {todos.map((todo) => (
-              <SortableTodoRow
-                key={todo.id}
-                todo={todo}
-                onUpdate={onUpdate}
-                onDelete={onDelete}
-                compact={compact}
-                isPending={isPending?.(todo.id)}
-                dragDisabled={hasPendingTodo}
-              />
-            ))}
+            <AnimatePresence initial={false} custom={animateRemoval}>
+              {todos.map((todo) => (
+                <AnimatedTodoRow
+                  key={todo.id}
+                  todo={todo}
+                  onUpdate={onUpdate}
+                  onDelete={onDelete}
+                  compact={compact}
+                  isPending={isPending?.(todo.id)}
+                  dragDisabled={hasPendingTodo}
+                />
+              ))}
+            </AnimatePresence>
           </div>
-        )}
+        </LazyMotion>
         {todos.length > 0 && (
           <div
             ref={setTrailingDropTargetRef}

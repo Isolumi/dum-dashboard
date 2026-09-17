@@ -65,6 +65,7 @@ export function getTodosInSavedOrder(todos: Todo[], section: TodoSection): Todo[
 export function groupAndSortTodos(todos: Todo[]): TodoGroups {
   const groups: TodoGroups = { today: [], high: [], low: [] };
   for (const todo of todos) {
+    if (todo.status === "complete") continue;
     groups[todo.today_date ? "today" : todo.priority].push(todo);
   }
   for (const key of TODO_SECTION_ORDER) {
@@ -81,9 +82,6 @@ export function groupAndSortTodos(todos: Todo[]): TodoGroups {
       const sortOrderDifference = aOrder - bOrder;
       if (sortOrderDifference !== 0) return sortOrderDifference;
 
-      const aComplete = a.status === "complete" ? 1 : 0;
-      const bComplete = b.status === "complete" ? 1 : 0;
-      if (aComplete !== bComplete) return aComplete - bComplete;
       return 0;
     });
   }

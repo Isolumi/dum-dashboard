@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 
 import type { Todo } from "#/lib/database.types";
 
@@ -36,6 +36,32 @@ const highTodo: Todo = {
 };
 
 describe("PrioritySection", () => {
+  it("removes drag previews without retaining a second copy", () => {
+    const props = {
+      priority: "high" as const,
+      label: "High",
+      onUpdate: vi.fn(),
+      onDelete: vi.fn(),
+      animateRemoval: false,
+    };
+    const { rerender } = render(<PrioritySection {...props} todos={[highTodo]} />);
+    rerender(<PrioritySection {...props} todos={[]} />);
+    expect(screen.queryByText("Deploy app")).toBeNull();
+  });
+  it("retains a removed row for its exit animation but prevents further interaction", async () => {
+    const props = {
+      priority: "high" as const,
+      label: "High",
+      onUpdate: vi.fn(),
+      onDelete: vi.fn(),
+    };
+    const { rerender } = render(<PrioritySection {...props} todos={[highTodo]} />);
+    rerender(<PrioritySection {...props} todos={[]} />);
+    const row = screen.getByText("Deploy app");
+    expect(row.closest("[inert]")).not.toBeNull();
+    await waitFor(() => expect(screen.queryByText("Deploy app")).toBeNull());
+    expect(screen.getByText("No items")).toBeTruthy();
+  });
   it("propagates compact presentation to its todo controls without rendering an add row", () => {
     const { container } = render(
       <PrioritySection
