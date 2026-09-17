@@ -112,7 +112,7 @@ describe("TodoRow", () => {
     complete.focus();
     fireEvent.click(complete);
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: /mark "next task" as started/i }),
+      screen.getByRole("button", { name: /mark "next task" as complete/i }),
     );
     expect(onUpdate).toHaveBeenCalledWith({ id: "todo-high", status: "complete" });
   });
@@ -178,12 +178,19 @@ describe("TodoRow", () => {
     fireEvent(window, new Event("focus"));
     expect(screen.getByText("Due today")).toBeTruthy();
   });
-  it("sends the next status when its status control is clicked", () => {
-    const { onUpdate } = renderTodoRow();
+  it.each(["not_started", "started"] as const)("completes a %s todo in one click", (status) => {
+    const { onUpdate } = renderTodoRow({ todo: { ...highTodo, status } });
 
-    fireEvent.click(screen.getByRole("button", { name: /mark "deploy app" as started/i }));
+    fireEvent.click(screen.getByRole("button", { name: /mark "deploy app" as complete/i }));
 
-    expect(onUpdate).toHaveBeenCalledWith({ id: "todo-high", status: "started" });
+    expect(onUpdate).toHaveBeenCalledExactlyOnceWith({ id: "todo-high", status: "complete" });
+  });
+
+  it("shows a legacy started todo as unfinished", () => {
+    renderTodoRow({ todo: { ...highTodo, status: "started" } });
+    const control = screen.getByRole("button", { name: /mark "deploy app" as complete/i });
+    expect(control.querySelector("svg")?.classList.contains("lucide-circle")).toBe(true);
+    expect(control.querySelector("svg")?.classList.contains("text-muted-foreground")).toBe(true);
   });
 
   it("sends the edited name when the row name is saved", () => {
@@ -324,7 +331,7 @@ describe("TodoRow", () => {
     expect(row.className).toContain("px-1");
     expect(row.className).toContain("motion-reduce:transition-none");
     expect(screen.getByRole("button", { name: "Deploy app" }).className).toContain("text-sm");
-    expect(screen.getByRole("button", { name: /mark "deploy app" as started/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /mark "deploy app" as complete/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /edit due date for "deploy app"/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /delete "deploy app"/i })).toBeTruthy();
     expect(dragControl).toBeTruthy();
@@ -337,7 +344,7 @@ describe("TodoRow", () => {
 
     const row = screen.getByRole("listitem");
     const nameControl = screen.getByRole("button", { name: "Deploy app" });
-    const statusControl = screen.getByRole("button", { name: /mark "deploy app" as started/i });
+    const statusControl = screen.getByRole("button", { name: /mark "deploy app" as complete/i });
     const dragControl = screen.getByRole("button", { name: /drag to move "deploy app"/i });
 
     expect(row.className).toContain("grid-cols-[1rem_2.75rem_minmax(0,1fr)_auto]");
@@ -401,7 +408,7 @@ describe("TodoRow", () => {
 
     const row = screen.getByRole("listitem");
     const dragControl = screen.getByRole("button", { name: /drag to move "deploy app"/i });
-    const statusControl = screen.getByRole("button", { name: /mark "deploy app" as started/i });
+    const statusControl = screen.getByRole("button", { name: /mark "deploy app" as complete/i });
 
     expect(row.className).toContain("flex gap-1 px-4");
     expect(dragControl.className).toContain("w-6");
@@ -418,7 +425,7 @@ describe("TodoRow", () => {
     expect(
       (
         screen.getByRole("button", {
-          name: /mark "deploy app" as started/i,
+          name: /mark "deploy app" as complete/i,
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);

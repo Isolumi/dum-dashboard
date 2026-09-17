@@ -79,7 +79,7 @@ describe("PrioritySection", () => {
     const row = screen.getByRole("listitem");
     const dragHandle = screen.getByRole("button", { name: /drag to move "deploy app"/i });
     const statusControl = screen.getByRole("button", {
-      name: /mark "deploy app" as started/i,
+      name: /mark "deploy app" as complete/i,
     });
 
     expect(screen.queryAllByRole("button", { name: /^change/i })).toHaveLength(0);

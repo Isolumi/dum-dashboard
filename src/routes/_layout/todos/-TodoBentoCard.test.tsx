@@ -294,16 +294,21 @@ describe("TodoBentoCard", () => {
     expectStillOnDashboard();
   });
 
-  it("cycles a todo status from the card without navigating", async () => {
+  it("archives a todo from the card in one click without navigating", async () => {
     const first = makeTodo();
     renderCard([first]);
 
-    fireEvent.click(screen.getByRole("button", { name: /mark "first task" as started/i }));
+    fireEvent.click(screen.getByRole("button", { name: /mark "first task" as complete/i }));
 
     await waitFor(() =>
-      expect(updateTodo).toHaveBeenCalledWith({ data: { id: first.id, status: "started" } }),
+      expect(updateTodo).toHaveBeenCalledExactlyOnceWith({
+        data: { id: first.id, status: "complete" },
+      }),
     );
-    expect(screen.getByRole("button", { name: /mark "first task" as complete/i })).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /mark "first task" as complete/i })).toBeNull(),
+    );
+    expect(screen.getByText("1 completed items in Archive")).toBeTruthy();
     expectStillOnDashboard();
   });
 
@@ -331,7 +336,7 @@ describe("TodoBentoCard", () => {
     const row = screen.getByRole("listitem");
     const dragHandle = within(row).getByRole("button", { name: /drag to move "first task"/i });
     const statusControl = within(row).getByRole("button", {
-      name: /mark "first task" as started/i,
+      name: /mark "first task" as complete/i,
     });
 
     expect(screen.queryAllByRole("button", { name: /^change/i })).toHaveLength(0);
