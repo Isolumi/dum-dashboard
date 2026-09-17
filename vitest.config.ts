@@ -38,6 +38,7 @@ export default mergeConfig(
               exclude: [
                 "src/homelab/-homelab.functions.test.ts",
                 "src/routes/jobs/-jobs.functions.test.ts",
+                "src/routes/buy-list/-buy-list.functions.test.ts",
                 "src/routes/monies/-monies.functions.test.ts",
                 "src/routes/todos/-todos.functions.test.ts",
               ],
@@ -63,6 +64,7 @@ export default mergeConfig(
             include: [
               "src/homelab/-homelab.functions.test.ts",
               "src/routes/jobs/-jobs.functions.test.ts",
+              "src/routes/buy-list/-buy-list.functions.test.ts",
               "src/routes/monies/-monies.functions.test.ts",
               "src/routes/todos/-todos.functions.test.ts",
             ],

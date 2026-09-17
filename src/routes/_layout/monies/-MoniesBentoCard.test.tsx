@@ -285,14 +285,16 @@ describe("MoniesBentoCard", () => {
 });
 
 describe("Monies tool registration", () => {
-  it("registers Monies after Calendar and before Jobs for overview and sidebar use", () => {
+  it("retains Monies before Jobs after the new Buy list registry entry", () => {
     const calendarIndex = tools.findIndex((tool) => tool.id === "calendar");
     const moniesIndex = tools.findIndex((tool) => tool.id === "monies");
     const jobsIndex = tools.findIndex((tool) => tool.id === "jobs");
     const homelabIndex = tools.findIndex((tool) => tool.id === "homelab");
     const monies = tools[moniesIndex];
 
-    expect(moniesIndex).toBe(calendarIndex + 1);
+    const buyListIndex = tools.findIndex((tool) => tool.id === "buy-list");
+    expect(buyListIndex).toBe(calendarIndex + 1);
+    expect(moniesIndex).toBe(buyListIndex + 1);
     expect(jobsIndex).toBe(moniesIndex + 1);
     expect(homelabIndex).toBe(jobsIndex + 1);
     expect(monies).toMatchObject({

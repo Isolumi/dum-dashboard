@@ -8,6 +8,12 @@ export type Database = {
   };
   public: {
     Tables: {
+      buy_list_items: {
+        Row: { id: string; name: string; created_at: string };
+        Insert: { id?: string; name: string; created_at?: string };
+        Update: { id?: string; name?: string; created_at?: string };
+        Relationships: [];
+      };
       calendar_connections: {
         Row: {
           created_at: string;
@@ -417,6 +423,7 @@ export const Constants = {
 // --- Helper type aliases (added manually, not generated) ---
 export type Todo = Database["public"]["Tables"]["todos"]["Row"];
 export type Job = Database["public"]["Tables"]["jobs"]["Row"];
+export type BuyListItem = Database["public"]["Tables"]["buy_list_items"]["Row"];
 export type TodoInsert = Database["public"]["Tables"]["todos"]["Insert"];
 export type TodoUpdate = Database["public"]["Tables"]["todos"]["Update"];
 export type TodoPriority = Database["public"]["Enums"]["todo_priority"];

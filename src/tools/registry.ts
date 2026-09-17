@@ -6,6 +6,7 @@ import {
   Camera,
   CheckSquare,
   Server,
+  ShoppingBag,
   WalletCards,
 } from "lucide-react";
 import { TodoBentoCard } from "#/routes/_layout/todos/-TodoBentoCard";
@@ -14,6 +15,7 @@ import { MoniesBentoCard } from "#/routes/_layout/monies/-MoniesBentoCard";
 import { HomelabBentoCard } from "#/routes/_layout/homelab/-HomelabBentoCard";
 import { CameraBentoCard } from "#/routes/_layout/cameras/-CameraBentoCard";
 import { JobsBentoCard } from "#/routes/_layout/jobs/-JobsBentoCard";
+import { BuyListBentoCard } from "#/routes/_layout/buy-list/-BuyListBentoCard";
 import { getHomelabOverview } from "#/homelab/homelab.functions";
 
 export interface ToolEntry {
@@ -48,6 +50,13 @@ export const tools: ToolEntry[] = [
     route: "/calendar",
     icon: CalendarDays,
     BentoCard: CalendarBentoCard,
+  },
+  {
+    id: "buy-list",
+    label: "Buy list",
+    route: "/buy-list",
+    icon: ShoppingBag,
+    BentoCard: BuyListBentoCard,
   },
   {
     id: "monies",
