@@ -66,6 +66,40 @@ afterEach(() => {
 });
 
 describe("useTodoController", () => {
+  it.each([true, false])(
+    "keeps pending ownership when completion and reorder overlap (reorder first: %s)",
+    async (reorderFirst) => {
+      const a = makeTodo({ id: "a", status: "started", sort_order: 0 });
+      const b = makeTodo({ id: "b", sort_order: 1 });
+      const c = makeTodo({ id: "c", sort_order: 2 });
+      const completion = deferred<Todo>();
+      const ordering = deferred<void>();
+      vi.mocked(updateTodo).mockReturnValue(completion.promise);
+      vi.mocked(reorderTodos).mockReturnValue(ordering.promise);
+      const { result } = renderHook(() => useTodoController([a, b, c]));
+      let save!: Promise<void>;
+      let reorder!: Promise<void>;
+      act(() => {
+        save = result.current.update({ id: "a", status: "complete" });
+      });
+      act(() => {
+        reorder = result.current.reorder("high", ["c", "b"]);
+      });
+      const finishSave = async () => {
+        completion.resolve({ ...a, status: "complete" });
+        await save;
+      };
+      const finishOrder = async () => {
+        ordering.resolve();
+        await reorder;
+      };
+      await act(reorderFirst ? finishOrder : finishSave);
+      expect(result.current.pendingIds.has("a")).toBe(true);
+      await act(reorderFirst ? finishSave : finishOrder);
+      expect(result.current.pendingIds.has("a")).toBe(false);
+      expect(result.current.todos.find((todo) => todo.id === "a")?.sort_order).toBe(2);
+    },
+  );
   it("prevents delete while completion is saving and clears pending after failure", async () => {
     const todo = makeTodo({ status: "started" });
     const save = deferred<Todo>();

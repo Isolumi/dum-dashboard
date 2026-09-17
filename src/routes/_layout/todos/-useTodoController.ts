@@ -90,6 +90,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(() => new Set());
   const todosRef = useRef(initialTodos ?? []);
   const pendingIdsRef = useRef(new Set<string>());
+  const updatingIdsRef = useRef(new Set<string>());
   const blockedIdsRef = useRef(new Set<string>());
   const mutationCountRef = useRef(0);
   const mutationRevisionRef = useRef(0);
@@ -111,23 +112,23 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   const markPending = useCallback((id: string) => {
     pendingIdsRef.current.add(id);
     blockedIdsRef.current.add(id);
-    setPendingIds(new Set(pendingIdsRef.current));
+    setPendingIds(new Set([...pendingIdsRef.current, ...updatingIdsRef.current]));
   }, []);
 
   const clearPending = useCallback((id: string) => {
     pendingIdsRef.current.delete(id);
     blockedIdsRef.current.delete(id);
-    setPendingIds(new Set(pendingIdsRef.current));
+    setPendingIds(new Set([...pendingIdsRef.current, ...updatingIdsRef.current]));
   }, []);
 
   const markPendingIds = useCallback((ids: string[]) => {
     for (const id of ids) pendingIdsRef.current.add(id);
-    setPendingIds(new Set(pendingIdsRef.current));
+    setPendingIds(new Set([...pendingIdsRef.current, ...updatingIdsRef.current]));
   }, []);
 
   const clearPendingIds = useCallback((ids: string[]) => {
     for (const id of ids) pendingIdsRef.current.delete(id);
-    setPendingIds(new Set(pendingIdsRef.current));
+    setPendingIds(new Set([...pendingIdsRef.current, ...updatingIdsRef.current]));
   }, []);
 
   const markBlockedPendingIds = useCallback((ids: string[]) => {
@@ -135,7 +136,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
       pendingIdsRef.current.add(id);
       blockedIdsRef.current.add(id);
     }
-    setPendingIds(new Set(pendingIdsRef.current));
+    setPendingIds(new Set([...pendingIdsRef.current, ...updatingIdsRef.current]));
   }, []);
 
   const clearBlockedPendingIds = useCallback((ids: string[]) => {
@@ -143,7 +144,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
       pendingIdsRef.current.delete(id);
       blockedIdsRef.current.delete(id);
     }
-    setPendingIds(new Set(pendingIdsRef.current));
+    setPendingIds(new Set([...pendingIdsRef.current, ...updatingIdsRef.current]));
   }, []);
 
   const runOrderingMutation = useCallback((mutation: () => Promise<void>): Promise<void> => {
@@ -283,7 +284,8 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
       }
       const version = (updateVersionsRef.current.get(fields.id) ?? 0) + 1;
       updateVersionsRef.current.set(fields.id, version);
-      markPendingIds([fields.id]);
+      updatingIdsRef.current.add(fields.id);
+      setPendingIds(new Set([...pendingIdsRef.current, ...updatingIdsRef.current]));
       beginMutation();
       replaceTodos((current) =>
         current.map((todo) => (todo.id === fields.id ? { ...todo, ...fields } : todo)),
@@ -302,7 +304,22 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
         updateCommittedRef.current.set(fields.id, getTodoUpdateState(updated));
         if (updateVersionsRef.current.get(fields.id) === version) {
           replaceTodos((current) =>
-            current.map((todo) => (todo.id === fields.id ? updated : todo)),
+            current.map((todo) =>
+              todo.id === fields.id
+                ? {
+                    ...updated,
+                    // A separate ordering write can finish before this response arrives.
+                    sort_order:
+                      todo.sort_order !== previous?.sort_order
+                        ? todo.sort_order
+                        : updated.sort_order,
+                    today_sort_order:
+                      todo.today_sort_order !== previous?.today_sort_order
+                        ? todo.today_sort_order
+                        : updated.today_sort_order,
+                  }
+                : todo,
+            ),
           );
         }
       } catch {
@@ -319,11 +336,12 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
           updateQueuesRef.current.delete(fields.id);
           updateVersionsRef.current.delete(fields.id);
           updateCommittedRef.current.delete(fields.id);
-          clearPendingIds([fields.id]);
+          updatingIdsRef.current.delete(fields.id);
+          setPendingIds(new Set([...pendingIdsRef.current, ...updatingIdsRef.current]));
         }
       }
     },
-    [beginMutation, endMutation, replaceTodos, markPendingIds, clearPendingIds],
+    [beginMutation, endMutation, replaceTodos],
   );
 
   const remove = useCallback(

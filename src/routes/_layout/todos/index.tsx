@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Archive } from "lucide-react";
 import { Button } from "#/components/ui/button";
 
@@ -34,19 +34,28 @@ function TodosLoading() {
 function TodosPage() {
   const controller = useTodoController();
   const [showArchive, setShowArchive] = useState(false);
+  const archiveButtonRef = useRef<HTMLButtonElement>(null);
   const archiveCount = controller.todos.filter((todo) => todo.status === "complete").length;
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">{showArchive ? "Archive" : "Todos"}</h1>
-        <Button variant="ghost" size="sm" onClick={() => setShowArchive(!showArchive)}>
+        <Button
+          ref={archiveButtonRef}
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowArchive(!showArchive)}
+        >
           {!showArchive && <Archive />}
           {showArchive ? "Back to todos" : `Archive (${archiveCount})`}
         </Button>
       </div>
       {showArchive ? (
-        <TodoArchive controller={controller} />
+        <TodoArchive
+          controller={controller}
+          onReturnFocus={() => archiveButtonRef.current?.focus({ preventScroll: true })}
+        />
       ) : (
         <TodoBoard controller={controller} variant="full" />
       )}

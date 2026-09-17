@@ -1,15 +1,26 @@
 import { RotateCcw, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { Alert, AlertDescription } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
 import { Skeleton } from "#/components/ui/skeleton";
 import type { TodoController } from "./-useTodoController";
 
-export function TodoArchive({ controller }: { controller: TodoController }) {
+export function TodoArchive({
+  controller,
+  onReturnFocus,
+}: {
+  controller: TodoController;
+  onReturnFocus?: () => void;
+}) {
+  const [announcement, setAnnouncement] = useState("");
   const completed = controller.todos.filter((todo) => todo.status === "complete");
   if (controller.status === "loading") return <Skeleton className="h-11 w-full" />;
 
   return (
     <section aria-label="Archived todos" className="flex flex-col gap-2">
+      <span role="status" className="sr-only">
+        {announcement}
+      </span>
       {controller.loadError && (
         <Alert variant="destructive">
           <AlertDescription className="flex items-center justify-between gap-3">
@@ -34,8 +45,26 @@ export function TodoArchive({ controller }: { controller: TodoController }) {
               size="icon-sm"
               aria-label={`Restore "${todo.name}"`}
               title="Restore"
+              data-todo-restore="true"
               disabled={controller.pendingIds.has(todo.id)}
-              onClick={() => void controller.update({ id: todo.id, status: "not_started" })}
+              onClick={(event) => {
+                if (document.activeElement === event.currentTarget) {
+                  const section = event.currentTarget.closest(
+                    'section[aria-label="Archived todos"]',
+                  );
+                  const controls = Array.from(
+                    section?.querySelectorAll<HTMLButtonElement>(
+                      '[data-todo-restore="true"]:not(:disabled)',
+                    ) ?? [],
+                  );
+                  const index = controls.indexOf(event.currentTarget);
+                  const next = controls[index + 1] ?? controls[index - 1];
+                  if (next) next.focus({ preventScroll: true });
+                  else onReturnFocus?.();
+                }
+                setAnnouncement(`Restoring ${todo.name}`);
+                void controller.update({ id: todo.id, status: "not_started" });
+              }}
             >
               <RotateCcw />
             </Button>
