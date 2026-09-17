@@ -11,7 +11,10 @@ import {
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BriefcaseBusiness, Camera } from "lucide-react";
+import { BriefcaseBusiness, Camera, ShoppingBag } from "lucide-react";
+
+const { getBuyListMock } = vi.hoisted(() => ({ getBuyListMock: vi.fn() }));
+vi.mock("#/routes/buy-list/buy-list.functions", () => ({ getBuyList: getBuyListMock }));
 
 const { getCalendarEventsMock, getHomelabOverviewMock, getJobsMock, getTodosMock } = vi.hoisted(
   () => ({
@@ -58,7 +61,7 @@ const { Route } = await import("./index");
 
 async function renderInsideLayout(content: ReactNode) {
   const rootRoute = createRootRoute({ component: () => <main>{content}</main> });
-  const routes = ["todos", "cameras", "calendar", "jobs", "homelab"].map((path) =>
+  const routes = ["todos", "cameras", "calendar", "buy-list", "jobs", "homelab"].map((path) =>
     createRoute({ getParentRoute: () => rootRoute, path }),
   );
   const router = createRouter({
@@ -71,6 +74,7 @@ async function renderInsideLayout(content: ReactNode) {
 }
 
 beforeEach(() => {
+  getBuyListMock.mockResolvedValue([]);
   getTodosMock.mockResolvedValue([]);
   getCalendarEventsMock.mockResolvedValue({ status: "ready", events: [] });
   getJobsMock.mockResolvedValue([]);
@@ -83,6 +87,25 @@ afterEach(() => {
 });
 
 describe("main dashboard composition", () => {
+  it("registers Buy list after Calendar for sidebar navigation", () => {
+    const calendarIndex = tools.findIndex((tool) => tool.id === "calendar");
+    expect(tools[calendarIndex + 1]).toMatchObject({
+      id: "buy-list",
+      label: "Buy list",
+      route: "/buy-list",
+      icon: ShoppingBag,
+    });
+  });
+  it("places Buy list below Calendar in the primary column", async () => {
+    vi.spyOn(Route, "useLoaderData").mockReturnValue({});
+    const OverviewPage = Route.options.component as ComponentType;
+    await renderInsideLayout(<OverviewPage />);
+    const calendar = screen.getByRole("link", { name: "Open Calendar tool" });
+    const buyList = screen.getByRole("region", { name: "Buy list" });
+    expect(buyList.parentElement).toBe(calendar.parentElement);
+    expect(calendar.nextElementSibling).toBe(buyList);
+    expect(screen.getByRole("link", { name: "Buy list" }).getAttribute("href")).toBe("/buy-list");
+  });
   it("keeps the clock out of the bento registry and retains the Cameras tool", () => {
     const cameraTool = tools.find((tool) => tool.id === "cameras");
 
