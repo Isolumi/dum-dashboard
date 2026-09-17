@@ -12,6 +12,7 @@ import { cn } from "#/lib/utils";
 import {
   DEFAULT_TODO_DUE_TIME,
   formatTodoDueDate,
+  formatTodoDueDateLabel,
   getTodoDueDateInputValues,
   toTodoDueDate,
 } from "./-todoDueDate";
@@ -25,6 +26,7 @@ export interface TodoDueDatePickerProps {
   hasTime?: boolean;
   showValue?: boolean;
   presentation?: TodoDueDatePickerPresentation;
+  now?: Date;
 }
 
 export type TodoDueDatePickerPresentation = "popover" | "dialog";
@@ -116,6 +118,7 @@ export function TodoDueDatePicker({
   hasTime,
   showValue = true,
   presentation = "popover",
+  now,
 }: TodoDueDatePickerProps) {
   const [open, setOpen] = useState(false);
   const [dateValue, setDateValue] = useState("");
@@ -139,7 +142,9 @@ export function TodoDueDatePicker({
     [dateValue],
   );
 
-  const displayValue = useMemo(() => formatTodoDueDate(value, hasTime), [hasTime, value]);
+  const displayValue = now
+    ? formatTodoDueDateLabel(value, hasTime, now)
+    : formatTodoDueDate(value, hasTime);
 
   const compactIconOnly = compact && showValue && !value;
 
@@ -191,7 +196,13 @@ export function TodoDueDatePicker({
 
   const triggerContents =
     showValue && displayValue ? (
-      <span className={cn("min-w-0 truncate", compact ? "text-xs" : "text-sm")}>
+      <span
+        className={cn(
+          "min-w-0",
+          now ? "whitespace-normal" : "truncate",
+          compact ? "text-xs/4" : "text-sm/4",
+        )}
+      >
         {displayValue}
       </span>
     ) : (
