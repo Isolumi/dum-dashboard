@@ -184,3 +184,47 @@ Compared the complete diff and new files with the brief and approved design. Che
 Outstanding verification concerns: the existing Docker-backed monitoring test cannot run with Docker stopped; two unrelated baseline files fail the full formatting check; the initial default-worker full run crashed. Fresh CI and the parent's independent whole-branch review remain required. Production migration and live release checks remain with the parent. No release action was taken.
 
 Commit subject: `feat(buy-list): add complete Buy list slice`.
+
+## Review fix round 1 — preserve timestamp microseconds
+
+The Important review item is confirmed. `Date.parse` discards fractional digits after milliseconds. Thus `2026-09-17T12:00:00.000900Z` and `2026-09-17T12:00:00.000100Z` were treated as equal, and the UUID tie-breaker placed the older item first. This also changed an already database-sorted response.
+
+Used the code-review, systematic-debugging, TDD, React best-practices, and verification skills. Added the failing tests before changing production code. The regression uses the later timestamp with UUID `11111111-1111-4111-8111-111111111111` and the earlier timestamp with UUID `22222222-2222-4222-8222-222222222222`. It checks the initial database-sorted response and a reversed refresh response. A second case checks equivalent timezone offsets and shortened fractional output. Kept the existing timezone regression unchanged.
+
+RED command:
+
+```sh
+bun run test src/routes/_layout/buy-list/-useBuyListController.test.tsx --maxWorkers=2 --minWorkers=1
+```
+
+Exit 1: 2 new microsecond-order tests failed; 23 existing tests passed. The expected first item was `.000900Z` with the lower UUID; the received first item was `.000100Z` with the higher UUID. Both UTC and different-timezone cases exposed the same precision loss.
+
+The fix compares timezone-normalized milliseconds first, then the remaining microseconds, then UUID descending. Fractional digits are right-padded to six digits, so `.0009` and `.000900` retain the same database precision. Whole epoch microseconds are not stored in a JavaScript number, which avoids unsafe-integer precision loss. The fraction expression is hoisted to module scope per the React performance guidance. No mutation, polling, or rollback logic changed.
+
+GREEN used the same controller command. Exit 0: 25 tests passed. Then added an equal-microsecond-instant test with different timezone and fractional-width formats to verify that UUID descending is used only for a true timestamp tie.
+
+Repeated the standalone controller command after final formatting and the extra tie test. Exit 0: 1 file and all 26 tests passed.
+
+Final covering command:
+
+```sh
+bun run test src/routes/_layout/buy-list src/routes/_layout/-OverviewPage.test.tsx --maxWorkers=2 --minWorkers=1
+```
+
+Exit 0: 4 files and 53 tests passed: controller 26, shared UI 14, page/card views 2, Overview 11. This includes the retained timezone regression and all new precision cases.
+
+Lint and scoped formatting commands:
+
+```sh
+bun run lint
+bunx oxfmt src/routes/_layout/buy-list/-useBuyListController.ts src/routes/_layout/buy-list/-useBuyListController.test.tsx
+bunx oxfmt --check src/routes/_layout/buy-list/-useBuyListController.ts src/routes/_layout/buy-list/-useBuyListController.test.tsx
+bunx oxfmt --check --ignore-path /dev/null .superpowers/sdd/2026-09-17-buy-list/task-1-report.md
+git diff --check
+```
+
+Lint exited 0 with 0 warnings and 0 errors across 214 files. The two-file formatter and format check exited 0. The Node tools printed the existing `DEP0205` runtime deprecation notice. The report format and diff checks also exited 0.
+
+Self-review: the comparator preserves all six database fractional digits, normalizes timezone offsets, handles omitted or shortened fractional digits, and keeps the ID tie-breaker for equal instants. The new tests exercise the real controller output, not a comparator mock. Only the controller, its test file, and this report changed. No migration, dependency, generated route, other feature, or existing user data changed. No subagents, Docker start, database command, external write, or release action was used. The parent owns push and scoped re-review. The earlier whole-suite concerns remain recorded above; this fix did not rerun or claim to clear them.
+
+Fix commit subject: `fix(buy-list): preserve timestamp microsecond ordering`.

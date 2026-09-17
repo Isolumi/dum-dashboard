@@ -14,10 +14,19 @@ import {
 
 const LOAD_ERROR = "Could not refresh Buy list. Check your connection and try again.";
 const WRITE_ERROR = "Could not save your change. Check your connection and try again.";
+const TIMESTAMP_FRACTION = /\.(\d+)/;
+function microsecondsWithinMillisecond(timestamp: string): number {
+  const fraction = timestamp.match(TIMESTAMP_FRACTION)?.[1] ?? "";
+  return Number(fraction.padEnd(6, "0").slice(3));
+}
 function sorted(items: BuyListItem[]): BuyListItem[] {
   return [...items].sort(
     (left, right) =>
-      Date.parse(right.created_at) - Date.parse(left.created_at) || right.id.localeCompare(left.id),
+      Date.parse(right.created_at) - Date.parse(left.created_at) ||
+      // Postgres retains six fractional digits; Date.parse retains only three.
+      microsecondsWithinMillisecond(right.created_at) -
+        microsecondsWithinMillisecond(left.created_at) ||
+      right.id.localeCompare(left.id),
   );
 }
 export interface BuyListController {

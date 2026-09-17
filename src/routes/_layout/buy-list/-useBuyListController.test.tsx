@@ -51,6 +51,27 @@ async function ready() {
   return hook;
 }
 describe("Buy list controller", () => {
+  it.each([
+    { format: "UTC", later: "2026-09-17T12:00:00.000900Z", earlier: "2026-09-17T12:00:00.000100Z" },
+    {
+      format: "different timezones",
+      later: "2026-09-17T14:00:00.0009+02:00",
+      earlier: "2026-09-17T12:00:00.000100+00:00",
+    },
+  ])(
+    "preserves microsecond order for $format database-sorted reads and refreshes",
+    async ({ later, earlier }) => {
+      const laterItem = { ...older, created_at: later };
+      const earlierItem = { ...newer, created_at: earlier };
+      mocks.get
+        .mockResolvedValueOnce([laterItem, earlierItem])
+        .mockResolvedValueOnce([earlierItem, laterItem]);
+      const { result } = await ready();
+      expect(result.current.items).toEqual([laterItem, earlierItem]);
+      await act(async () => result.current.refresh());
+      expect(result.current.items).toEqual([laterItem, earlierItem]);
+    },
+  );
   it("compares timestamps as instants, including canonical database timezone formats", async () => {
     const tied = {
       ...newer,
@@ -61,6 +82,13 @@ describe("Buy list controller", () => {
     mocks.get.mockResolvedValue([newer, earlier, tied]);
     const { result } = await ready();
     expect(result.current.items).toEqual([tied, newer, earlier]);
+  });
+  it("uses ID descending for equal microsecond instants with different fractional widths and timezones", async () => {
+    const lowId = { ...older, created_at: "2026-09-17T12:00:00.000900Z" };
+    const highId = { ...newer, created_at: "2026-09-17T14:00:00.0009+02:00" };
+    mocks.get.mockResolvedValue([lowId, highId]);
+    const { result } = await ready();
+    expect(result.current.items).toEqual([highId, lowId]);
   });
   it("sorts by creation time then ID descending", async () => {
     const tie = { ...newer, id: "33333333-3333-4333-8333-333333333333" };
