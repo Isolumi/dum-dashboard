@@ -11,7 +11,9 @@ import {
   updateTodo,
 } from "#/routes/todos/todos.functions";
 import {
+  dueDateSortValue,
   getTorontoDateKey,
+  getTodosInSavedOrder,
   groupAndSortTodos,
   TODO_SECTION_ORDER,
   type TodoGroups,
@@ -356,7 +358,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
       return runOrderingMutation(async () => {
         if (orderedIds.some((id) => blockedIdsRef.current.has(id))) return;
 
-        const expectedIds = groupAndSortTodos(todosRef.current)[section].map((todo) => todo.id);
+        const expectedIds = getTodosInSavedOrder(todosRef.current, section).map((todo) => todo.id);
         const orderedSortOrders = new Map(
           orderedIds.map((id, sortOrder) => [id, sortOrder] as const),
         );
@@ -432,10 +434,28 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
         );
         if (!sourceSection || sourceSection === targetSection) return;
 
-        const sourceTodos = groupedTodos[sourceSection].filter((todo) => todo.id !== id);
-        const targetTodos = [...groupedTodos[targetSection]];
-        const normalizedTargetIndex = Math.max(0, Math.min(targetIndex, targetTodos.length));
-        targetTodos.splice(normalizedTargetIndex, 0, movedTodo);
+        const sourceTodos = getTodosInSavedOrder(previousTodos, sourceSection).filter(
+          (todo) => todo.id !== id,
+        );
+        const targetTodos = getTodosInSavedOrder(previousTodos, targetSection);
+        const displayedTarget = groupedTodos[targetSection];
+        const normalizedTargetIndex = Math.max(0, Math.min(targetIndex, displayedTarget.length));
+        const anchor = displayedTarget[normalizedTargetIndex];
+        const previousEqual = displayedTarget
+          .slice(0, normalizedTargetIndex)
+          .reverse()
+          .find((todo) => dueDateSortValue(todo) === dueDateSortValue(movedTodo));
+        const nextEqual = displayedTarget
+          .slice(normalizedTargetIndex)
+          .find((todo) => dueDateSortValue(todo) === dueDateSortValue(movedTodo));
+        const savedTargetIndex = previousEqual
+          ? targetTodos.findIndex((todo) => todo.id === previousEqual.id) + 1
+          : nextEqual
+            ? targetTodos.findIndex((todo) => todo.id === nextEqual.id)
+            : anchor
+              ? targetTodos.findIndex((todo) => todo.id === anchor.id)
+              : targetTodos.length;
+        targetTodos.splice(savedTargetIndex, 0, movedTodo);
 
         const normalizeTodo = (todo: Todo, section: TodoSection, order: number): Todo =>
           section === "today"
