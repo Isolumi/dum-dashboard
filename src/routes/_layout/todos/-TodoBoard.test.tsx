@@ -153,6 +153,32 @@ function makeTodo(id: string, priority: "high" | "low", sort_order: number) {
 }
 
 describe("TodoBoard", () => {
+  it.each(["compact", "full"] as const)(
+    "keeps automatic Today items fixed without disabling manual Today dragging in %s",
+    (variant) => {
+      const automatic = {
+        ...makeTodo("automatic", "low", 0),
+        due_date: "2026-09-18",
+        today_date: null,
+      };
+      const manual = { ...makeTodo("manual", "high", 0), today_date: "2026-09-17" };
+      const controller = makeController({
+        todos: [automatic, manual],
+        grouped: { today: [automatic, manual], high: [], low: [] },
+      });
+      render(<TodoBoard controller={controller} variant={variant} />);
+      expect(
+        (screen.getByRole("button", { name: 'Drag to move "automatic"' }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+      expect(
+        (screen.getByRole("button", { name: 'Drag to move "manual"' }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false);
+      act(() => dndTestState.onDragStartHandlers.at(-1)?.({ active: { id: "automatic" } }));
+      expect(controller.setDragging).not.toHaveBeenCalled();
+    },
+  );
   it("uses deliberate mouse and touch activation thresholds", () => {
     render(<TodoBoard controller={makeController()} variant="full" />);
 

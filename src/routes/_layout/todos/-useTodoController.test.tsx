@@ -53,6 +53,8 @@ function deferred<T>() {
 const highTodo = makeTodo();
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-07-01T12:00:00Z"));
   vi.mocked(getTodos).mockResolvedValue([]);
   vi.mocked(deleteTodo).mockResolvedValue(undefined);
   vi.mocked(moveTodo).mockResolvedValue(undefined);
@@ -66,6 +68,189 @@ afterEach(() => {
 });
 
 describe("useTodoController", () => {
+  it.each([false, true])(
+    "preserves a manual Today drop across the time boundary (queued: %s)",
+    async (queued) => {
+      vi.setSystemTime(new Date("2026-09-17T16:00:00Z"));
+      const moving = makeTodo({
+        id: "moving",
+        due_date: "2026-09-19T16:00:01Z",
+        due_date_has_time: true,
+      });
+      const other = makeTodo({ id: "other", priority: "low" });
+      const ordering = deferred<void>();
+      vi.mocked(reorderTodos).mockReturnValue(ordering.promise);
+      const { result } = renderHook(() => useTodoController([moving, other]));
+      act(() => result.current.setDragging(true));
+      let reorder: Promise<void> | undefined;
+      if (queued)
+        act(() => {
+          reorder = result.current.reorder("low", ["other"]);
+        });
+      vi.setSystemTime(new Date("2026-09-17T16:00:02Z"));
+      let move!: Promise<void>;
+      act(() => {
+        move = result.current.move("moving", "today", 0);
+      });
+      act(() => result.current.setDragging(false));
+      await act(async () => {
+        ordering.resolve();
+        await reorder;
+        await move;
+      });
+      expect(moveTodo).toHaveBeenCalledWith({
+        data: { id: "moving", target_section: "today", source_ids: [], target_ids: ["moving"] },
+      });
+      expect(result.current.todos.find((todo) => todo.id === "moving")?.today_date).toBe(
+        "2026-09-17",
+      );
+      const saved = result.current.todos.find((todo) => todo.id === "moving")!;
+      vi.mocked(updateTodo).mockResolvedValue({ ...saved, due_date: "2026-09-30T16:00:00Z" });
+      await act(async () =>
+        result.current.update({ id: "moving", due_date: "2026-09-30T16:00:00Z" }),
+      );
+      expect(result.current.grouped.today.map((todo) => todo.id)).toEqual(["moving"]);
+    },
+  );
+  it("refreshes the time window on focus without a successful fetch", () => {
+    vi.setSystemTime(new Date("2026-09-17T16:00:00Z"));
+    const due = makeTodo({ due_date: "2026-09-19T17:00:00Z", due_date_has_time: true });
+    const { result } = renderHook(() => useTodoController([due]));
+    expect(result.current.grouped.high).toEqual([due]);
+    vi.setSystemTime(new Date("2026-09-17T17:00:00Z"));
+    act(() => window.dispatchEvent(new Event("focus")));
+    expect(result.current.grouped.today).toEqual([due]);
+    expect(getTodos).not.toHaveBeenCalled();
+  });
+
+  it("changes automatic membership optimistically, retaining priority and manual Today selection", async () => {
+    vi.setSystemTime(new Date("2026-09-17T16:00:00Z"));
+    const due = makeTodo({ due_date: "2026-09-18T16:00:00Z", due_date_has_time: true });
+    const saving = deferred<Todo>();
+    vi.mocked(updateTodo).mockReturnValue(saving.promise);
+    const { result } = renderHook(() => useTodoController([due]));
+    let save!: Promise<void>;
+    act(() => {
+      save = result.current.update({ id: due.id, due_date: "2026-09-30T16:00:00Z" });
+    });
+    expect(result.current.grouped.today).toEqual([]);
+    expect(result.current.grouped.high[0]?.today_date).toBeNull();
+    await act(async () => {
+      saving.reject(new Error("offline"));
+      await save;
+    });
+    expect(result.current.grouped.today).toEqual([due]);
+  });
+
+  it("moves an undated item into saved Today without persisting automatic Today neighbors", async () => {
+    vi.setSystemTime(new Date("2026-09-17T16:00:00Z"));
+    const automatic = makeTodo({
+      id: "automatic",
+      due_date: "2026-09-18T16:00:00Z",
+      due_date_has_time: true,
+    });
+    const manual = makeTodo({ id: "manual", today_date: "2026-09-17", today_sort_order: 0 });
+    const moving = makeTodo({ id: "moving", priority: "low" });
+    const { result } = renderHook(() => useTodoController([automatic, manual, moving]));
+    await act(async () => result.current.move("moving", "today", 0));
+    expect(moveTodo).toHaveBeenCalledWith({
+      data: {
+        id: "moving",
+        target_section: "today",
+        source_ids: [],
+        target_ids: ["moving", "manual"],
+      },
+    });
+    expect(result.current.grouped.today.map((todo) => todo.id)).toEqual([
+      "automatic",
+      "moving",
+      "manual",
+    ]);
+    expect(result.current.todos.find((todo) => todo.id === "automatic")).toEqual(automatic);
+  });
+  it("updates Today when time passes even if background requests fail, and freezes grouping while dragging", async () => {
+    vi.useRealTimers();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-17T16:00:00Z"));
+    vi.mocked(getTodos).mockRejectedValue(new Error("offline"));
+    const due = makeTodo({ due_date: "2026-09-19T16:00:03Z", due_date_has_time: true });
+    const { result } = renderHook(() => useTodoController([due]));
+    expect(result.current.grouped.high).toEqual([due]);
+    act(() => result.current.setDragging(true));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(result.current.grouped.high).toEqual([due]);
+    act(() => result.current.setDragging(false));
+    expect(result.current.grouped.today).toEqual([due]);
+    expect(getTodos).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(result.current.grouped.today).toEqual([due]);
+    expect(result.current.mutationError).toBeNull();
+  });
+
+  it("does not persist a drag out of automatic Today", async () => {
+    vi.setSystemTime(new Date("2026-09-17T16:00:00Z"));
+    const automatic = makeTodo({
+      id: "automatic",
+      due_date: "2026-09-18T16:00:00Z",
+      due_date_has_time: true,
+    });
+    const { result } = renderHook(() => useTodoController([automatic]));
+    await act(async () => result.current.move("automatic", "low", 0));
+    expect(moveTodo).not.toHaveBeenCalled();
+    expect(result.current.grouped.today).toEqual([automatic]);
+  });
+
+  it("reorders saved Today members only when automatic items share the display", async () => {
+    vi.setSystemTime(new Date("2026-09-17T16:00:00Z"));
+    const automatic = makeTodo({
+      id: "automatic",
+      due_date: "2026-09-18T16:00:00Z",
+      due_date_has_time: true,
+    });
+    const first = makeTodo({ id: "first", today_date: "2026-09-17", today_sort_order: 0 });
+    const second = makeTodo({ id: "second", today_date: "2026-09-17", today_sort_order: 1 });
+    const { result } = renderHook(() => useTodoController([automatic, first, second]));
+    await act(async () => result.current.reorder("today", ["automatic", "second", "first"]));
+    expect(reorderTodos).toHaveBeenCalledWith({
+      data: {
+        section: "today",
+        expected_ids: ["first", "second"],
+        ordered_ids: ["second", "first"],
+      },
+    });
+    expect(result.current.grouped.today.map((todo) => todo.id)).toEqual([
+      "automatic",
+      "second",
+      "first",
+    ]);
+    expect(result.current.todos.find((todo) => todo.id === "automatic")).toEqual(automatic);
+  });
+
+  it("includes hidden automatic items in their saved priority reorder transaction", async () => {
+    vi.setSystemTime(new Date("2026-09-17T16:00:00Z"));
+    const automatic = makeTodo({
+      id: "automatic",
+      sort_order: 0,
+      due_date: "2026-09-18T16:00:00Z",
+      due_date_has_time: true,
+    });
+    const first = makeTodo({ id: "first", sort_order: 1 });
+    const second = makeTodo({ id: "second", sort_order: 2 });
+    const { result } = renderHook(() => useTodoController([automatic, first, second]));
+    await act(async () => result.current.reorder("high", ["second", "first"]));
+    expect(reorderTodos).toHaveBeenCalledWith({
+      data: {
+        section: "high",
+        expected_ids: ["automatic", "first", "second"],
+        ordered_ids: ["second", "first", "automatic"],
+      },
+    });
+    expect(result.current.grouped.today[0]?.today_date).toBeNull();
+  });
   it.each([true, false])(
     "keeps pending ownership when completion and reorder overlap (reorder first: %s)",
     async (reorderFirst) => {
@@ -1045,6 +1230,7 @@ describe("useTodoController", () => {
   });
 
   it("does not let a stale polling response overwrite an optimistic mutation", async () => {
+    vi.useRealTimers();
     vi.useFakeTimers();
     const pendingUpdate = deferred<Todo>();
     vi.mocked(updateTodo).mockReturnValueOnce(pendingUpdate.promise);
@@ -1068,6 +1254,7 @@ describe("useTodoController", () => {
   });
 
   it("pauses polling while a todo is being dragged", async () => {
+    vi.useRealTimers();
     vi.useFakeTimers();
     const { result } = renderHook(() => useTodoController([highTodo]));
 
@@ -1083,6 +1270,7 @@ describe("useTodoController", () => {
   });
 
   it("discards a poll that started during a mutation even when it resolves afterward", async () => {
+    vi.useRealTimers();
     vi.useFakeTimers();
     const pendingUpdate = deferred<Todo>();
     const pendingPoll = deferred<Todo[]>();
@@ -1109,6 +1297,7 @@ describe("useTodoController", () => {
   });
 
   it("ignores an older polling response that resolves after a newer response", async () => {
+    vi.useRealTimers();
     vi.useFakeTimers();
     const olderPoll = deferred<Todo[]>();
     const newerPoll = deferred<Todo[]>();
@@ -1129,6 +1318,7 @@ describe("useTodoController", () => {
   });
 
   it("keeps polling responses stale until every concurrent mutation finishes", async () => {
+    vi.useRealTimers();
     vi.useFakeTimers();
     const first = makeTodo({ id: "first", name: "First" });
     const second = makeTodo({ id: "second", name: "Second", sort_order: 1 });
@@ -1161,6 +1351,7 @@ describe("useTodoController", () => {
   });
 
   it("clears a mutation error after four seconds", async () => {
+    vi.useRealTimers();
     vi.useFakeTimers();
     vi.mocked(updateTodo).mockRejectedValueOnce(new Error("offline"));
     const { result } = renderHook(() => useTodoController([highTodo]));
