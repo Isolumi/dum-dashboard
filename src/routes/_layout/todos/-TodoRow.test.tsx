@@ -3,7 +3,7 @@
  */
 import { format } from "date-fns";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 
 import type { Todo } from "#/lib/database.types";
@@ -96,6 +96,57 @@ function renderTodoRow(props: Partial<React.ComponentProps<typeof TodoRow>> = {}
 }
 
 describe("TodoRow", () => {
+  it.each([false, true])(
+    "uses warning colour only for approaching incomplete dates (compact=%s)",
+    (compact) => {
+      renderTodoRow({ compact, todo: { ...highTodo, due_date: "2026-08-10" } });
+      expect(screen.getByText("Due tomorrow")).toBeTruthy();
+      const control = screen.getByRole("button", { name: /edit due date/i });
+      expect(control.parentElement?.className).toContain("text-health-warning");
+    },
+  );
+
+  it.each(["2026-08-08", "2026-08-10"])("does not warn for completed items due %s", (due_date) => {
+    renderTodoRow({ todo: { ...highTodo, due_date, status: "complete" } });
+    const wrapper = screen.getByRole("button", { name: /edit due date/i }).parentElement;
+    expect(wrapper?.className).toContain("text-muted-foreground");
+    expect(wrapper?.className).not.toMatch(/text-destructive|text-health-warning/);
+  });
+
+  it("updates the relative label at midnight without a refresh", () => {
+    vi.setSystemTime(new Date(2026, 7, 9, 23, 59, 30));
+    renderTodoRow({ todo: { ...highTodo, due_date: "2026-08-10" } });
+    expect(screen.getByText("Due tomorrow")).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByText("Due today")).toBeTruthy();
+  });
+
+  it("updates urgency after a timed deadline without a refresh", () => {
+    vi.setSystemTime(new Date(2026, 7, 9, 12));
+    renderTodoRow({
+      todo: {
+        ...highTodo,
+        due_date: new Date(2026, 7, 9, 12, 0, 30).toISOString(),
+        due_date_has_time: true,
+      },
+    });
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(
+      screen.getByRole("button", { name: /edit due date/i }).parentElement?.className,
+    ).toContain("text-destructive");
+  });
+
+  it("refreshes date labels when the window regains focus", () => {
+    vi.setSystemTime(new Date(2026, 7, 9, 12));
+    renderTodoRow({ todo: { ...highTodo, due_date: "2026-08-10" } });
+    vi.setSystemTime(new Date(2026, 7, 10, 12));
+    fireEvent(window, new Event("focus"));
+    expect(screen.getByText("Due today")).toBeTruthy();
+  });
   it("sends the next status when its status control is clicked", () => {
     const { onUpdate } = renderTodoRow();
 
@@ -161,7 +212,7 @@ describe("TodoRow", () => {
 
     expect(
       screen.getByRole("button", { name: /edit due date for "deploy app"/i }).textContent,
-    ).toContain(format(new Date(dueDate), "MMM d, h:mm a"));
+    ).toContain(`Due today, ${format(new Date(dueDate), "h:mm a")}`);
   });
 
   it("keeps a migrated UTC-midnight due date on its original calendar day without a time", () => {
@@ -175,7 +226,7 @@ describe("TodoRow", () => {
 
     expect(
       screen.getByRole("button", { name: /edit due date for "deploy app"/i }).textContent,
-    ).toBe(format(new Date(2026, 7, 9), "MMM d"));
+    ).toBe("Due today");
   });
 
   it("clears both the due date and its time metadata", () => {
@@ -211,7 +262,8 @@ describe("TodoRow", () => {
     expect(trigger.parentElement?.className).toContain("w-32");
     expect(trigger.className).toContain("overflow-hidden");
     expect(value?.className).toContain("min-w-0");
-    expect(value?.className).toContain("truncate");
+    expect(value?.className).toContain("whitespace-normal");
+    expect(value?.className).not.toContain("truncate");
   });
 
   it("keeps overdue due dates visually destructive", () => {

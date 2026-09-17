@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   formatTodoDueDate,
+  formatTodoDueDateLabel,
+  getTodoDueDateUrgency,
   getTodoDueDateCalendarKey,
   getTodoDueDateInputValues,
   isTodoDueDateOverdue,
@@ -14,6 +16,52 @@ afterEach(() => {
 });
 
 describe("todo due date helpers", () => {
+  it.each([
+    ["2026-08-09", "Due today"],
+    ["2026-08-10", "Due tomorrow"],
+    ["2026-08-11", "Due Tuesday"],
+    ["2026-08-15", "Due Saturday"],
+    ["2026-08-16", "Due Aug 16"],
+    ["2027-08-09", "Due Aug 9, 2027"],
+    [null, ""],
+  ])("labels %s relative to local calendar days", (value, expected) => {
+    expect(formatTodoDueDateLabel(value, false, new Date(2026, 7, 9, 12))).toBe(expected);
+  });
+
+  it("keeps the local time in a relative label", () => {
+    const value = new Date(2026, 7, 10, 15, 30).toISOString();
+    expect(formatTodoDueDateLabel(value, true, new Date(2026, 7, 9, 12))).toBe(
+      "Due tomorrow, 3:30 PM",
+    );
+  });
+
+  it("counts calendar days across the daylight saving change", () => {
+    expect(formatTodoDueDateLabel("2026-03-09", false, new Date(2026, 2, 7, 23, 59))).toBe(
+      "Due Monday",
+    );
+  });
+
+  it("preserves the UTC calendar key for migrated date-only labels", () => {
+    expect(
+      formatTodoDueDateLabel("2026-08-09T23:30:00-04:00", false, new Date(2026, 7, 9, 12)),
+    ).toBe("Due tomorrow");
+  });
+
+  it.each([
+    ["2026-08-08", "overdue"],
+    ["2026-08-09", "soon"],
+    ["2026-08-10", "soon"],
+    ["2026-08-11", "later"],
+    [null, "later"],
+  ])("classifies urgency for %s", (value, expected) => {
+    expect(getTodoDueDateUrgency(value, false, new Date(2026, 7, 9, 12))).toBe(expected);
+  });
+
+  it("makes a timed item overdue once its deadline passes", () => {
+    const value = new Date(2026, 7, 9, 11, 59).toISOString();
+    expect(getTodoDueDateUrgency(value, true, new Date(2026, 7, 9, 12))).toBe("overdue");
+  });
+
   it("returns an empty string for a missing due date", () => {
     expect(formatTodoDueDate(null)).toBe("");
   });

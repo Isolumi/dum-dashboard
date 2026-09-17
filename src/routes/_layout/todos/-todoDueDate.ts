@@ -1,4 +1,4 @@
-import { format, parseISO, startOfDay } from "date-fns";
+import { differenceInCalendarDays, format, parseISO, startOfDay } from "date-fns";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -22,6 +22,40 @@ export function formatTodoDueDate(value: string | null, hasTime?: boolean): stri
   }
 
   return format(parseISO(value), "MMM d, h:mm a");
+}
+
+function getTodoDueDateDisplayDate(value: string, hasTime?: boolean): Date {
+  return parseISO(hasTimeValue(value, hasTime) ? value : getTodoDueDateCalendarKey(value));
+}
+
+export function formatTodoDueDateLabel(
+  value: string | null,
+  hasTime?: boolean,
+  now = new Date(),
+): string {
+  if (!value) return "";
+  const date = getTodoDueDateDisplayDate(value, hasTime);
+  const daysAway = differenceInCalendarDays(date, now);
+  const label =
+    daysAway === 0
+      ? "today"
+      : daysAway === 1
+        ? "tomorrow"
+        : daysAway >= 2 && daysAway < 7
+          ? format(date, "EEEE")
+          : format(date, date.getFullYear() === now.getFullYear() ? "MMM d" : "MMM d, yyyy");
+  return `Due ${label}${hasTimeValue(value, hasTime) ? `, ${format(date, "h:mm a")}` : ""}`;
+}
+
+export function getTodoDueDateUrgency(
+  value: string | null,
+  hasTime?: boolean,
+  now = new Date(),
+): "overdue" | "soon" | "later" {
+  if (!value) return "later";
+  if (isTodoDueDateOverdue(value, hasTimeValue(value, hasTime), now)) return "overdue";
+  const daysAway = differenceInCalendarDays(getTodoDueDateDisplayDate(value, hasTime), now);
+  return daysAway >= 0 && daysAway <= 1 ? "soon" : "later";
 }
 
 export function toTodoDueDate(dateValue: string, timeValue: string): string {
