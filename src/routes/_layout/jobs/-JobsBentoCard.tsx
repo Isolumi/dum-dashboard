@@ -6,12 +6,22 @@ import { Skeleton } from "#/components/ui/skeleton";
 import type { ToolEntry } from "#/tools/registry";
 import { useJobsController } from "./-useJobsController";
 import { OpenAllJobsButton } from "./-OpenAllJobsButton";
+import { DeleteAllJobsButton } from "./-DeleteAllJobsButton";
 import { getSafeJobUrl } from "./-job-links";
 
 const MAX_JOBS = 3;
 
 export function JobsBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry; data: unknown }) {
-  const { jobs: savedJobs, status, loadError, mutationError, remove } = useJobsController();
+  const {
+    jobs: savedJobs,
+    status,
+    loadError,
+    mutationError,
+    remove,
+    clear,
+    clearing,
+    pendingIds,
+  } = useJobsController();
   const jobs = savedJobs.slice(0, MAX_JOBS);
 
   return (
@@ -23,7 +33,17 @@ export function JobsBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry; d
         >
           Jobs
         </Link>
-        <OpenAllJobsButton jobs={savedJobs} disabled={status !== "ready" || loadError !== null} />
+        <div className="flex items-center gap-0.5">
+          <OpenAllJobsButton
+            jobs={savedJobs}
+            disabled={status !== "ready" || loadError !== null || clearing}
+          />
+          <DeleteAllJobsButton
+            count={savedJobs.length}
+            onDelete={clear}
+            disabled={status !== "ready" || loadError !== null || clearing || pendingIds.size > 0}
+          />
+        </div>
       </div>
 
       {status === "loading" ? (

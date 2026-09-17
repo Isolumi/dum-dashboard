@@ -38,6 +38,7 @@ vi.mock("#/routes/_layout/calendar/-calendar.functions", () => ({
 }));
 
 vi.mock("#/routes/jobs/jobs.functions", () => ({
+  deleteAllJobs: vi.fn(),
   getJobs: getJobsMock,
 }));
 

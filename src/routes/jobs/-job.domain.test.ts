@@ -11,6 +11,7 @@ const mocks = {
   listResultMock: vi.fn(),
   maybeSingleMock: vi.fn(),
   orderMock: vi.fn(),
+  notMock: vi.fn(),
   orMock: vi.fn(),
   rangeMock: vi.fn(),
   selectMock: vi.fn(),
@@ -53,6 +54,10 @@ const query = {
     mocks.orMock(filter);
     return query;
   },
+  not(column: string, operator: string, value: unknown) {
+    mocks.notMock(column, operator, value);
+    return query;
+  },
   upsert(value: unknown, options: { ignoreDuplicates: boolean; onConflict: string }) {
     mocks.upsertMock(value, options);
     return query;
@@ -77,7 +82,7 @@ vi.mock("#/lib/supabase-admin", () => ({
   getSupabaseAdmin: vi.fn(() => ({ from: mocks.fromMock })),
 }));
 
-const { JobDomainError, deleteJobRecord, listJobRecords, saveJobRecord } =
+const { JobDomainError, deleteAllJobRecords, deleteJobRecord, listJobRecords, saveJobRecord } =
   await import("./job.domain");
 
 const JOB_ID = "550e8400-e29b-41d4-a716-446655440000";
@@ -224,6 +229,26 @@ describe("saveJobRecord", () => {
 
     await expect(saveJobRecord(input)).rejects.toMatchObject({
       code: "database_unavailable",
+      message: "Job service unavailable",
+    });
+  });
+});
+
+describe("deleteAllJobRecords", () => {
+  it("deletes the job table in one filtered request without returning private rows", async () => {
+    await expect(deleteAllJobRecords()).resolves.toBeUndefined();
+    expect(mocks.fromMock).toHaveBeenCalledExactlyOnceWith("jobs");
+    expect(mocks.deleteMock).toHaveBeenCalledOnce();
+    expect(mocks.notMock).toHaveBeenCalledExactlyOnceWith("id", "is", null);
+    expect(mocks.selectMock).not.toHaveBeenCalled();
+  });
+
+  it("reports a safe failure", async () => {
+    mocks.listResultMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: "private detail" },
+    });
+    await expect(deleteAllJobRecords()).rejects.toMatchObject({
       message: "Job service unavailable",
     });
   });

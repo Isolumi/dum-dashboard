@@ -82,3 +82,9 @@ export async function deleteJobRecord(id: string): Promise<Job> {
   if (!data) throw new JobDomainError("not_found");
   return data;
 }
+
+export async function deleteAllJobRecords(): Promise<void> {
+  // Jobs is a single-owner table. Its primary key is non-null, so this matches every row.
+  const { error } = await getSupabaseAdmin().from("jobs").delete().not("id", "is", null);
+  if (error) throwDatabaseError(error);
+}

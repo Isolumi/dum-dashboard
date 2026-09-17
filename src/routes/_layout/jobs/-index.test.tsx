@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = {
+  deleteAllJobs: vi.fn(),
   deleteJob: vi.fn(),
   getJobs: vi.fn(),
 };
@@ -39,10 +40,12 @@ if (typeof document === "undefined") {
   }
 }
 
-const { act, cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
+const { act, cleanup, fireEvent, render, screen, waitFor, within } =
+  await import("@testing-library/react");
 const { JobsPage } = await import("./index");
 
 beforeEach(() => {
+  apiMocks.deleteAllJobs.mockResolvedValue(undefined);
   apiMocks.getJobs.mockResolvedValue([]);
 });
 
@@ -54,6 +57,26 @@ afterEach(() => {
 });
 
 describe("JobsPage", () => {
+  it("connects Delete all to the bulk mutation after confirmation", async () => {
+    apiMocks.getJobs.mockResolvedValueOnce([
+      {
+        id: "one",
+        company: "Company",
+        title: "Job one",
+        saved_at: "2026-09-17T00:00:00Z",
+        url: "https://jobs.example/one",
+      },
+    ]);
+    render(<JobsPage />);
+    await screen.findByRole("list", { name: "Saved jobs" });
+    fireEvent.click(screen.getByRole("button", { name: "Delete all" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(apiMocks.deleteAllJobs).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete all" }));
+    await screen.findByText("No saved jobs");
+    expect(apiMocks.deleteAllJobs).toHaveBeenCalledOnce();
+  });
+
   it("disables bulk opening after a failed background read", async () => {
     vi.useFakeTimers();
     apiMocks.getJobs

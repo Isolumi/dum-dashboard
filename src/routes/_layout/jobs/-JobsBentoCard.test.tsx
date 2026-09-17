@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { BriefcaseBusiness } from "lucide-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,11 +22,12 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("#/routes/jobs/jobs.functions", () => ({
+  deleteAllJobs: vi.fn(),
   getJobs: vi.fn(),
   deleteJob: vi.fn(),
 }));
 
-const { getJobs, deleteJob } = await import("#/routes/jobs/jobs.functions");
+const { getJobs, deleteJob, deleteAllJobs } = await import("#/routes/jobs/jobs.functions");
 const { JobsBentoCard } = await import("./-JobsBentoCard");
 const { tools } = await import("#/tools/registry");
 
@@ -71,6 +72,7 @@ const tiedHigherId = makeJob("44444444-4444-4444-8444-444444444444", "2026-09-15
 });
 
 beforeEach(() => {
+  vi.mocked(deleteAllJobs).mockResolvedValue(undefined);
   vi.mocked(getJobs).mockResolvedValue([]);
   vi.mocked(deleteJob).mockResolvedValue(undefined);
 });
@@ -82,6 +84,20 @@ afterEach(() => {
 });
 
 describe("JobsBentoCard", () => {
+  it("deletes every saved job after confirmation, not only the visible three", async () => {
+    vi.mocked(getJobs).mockResolvedValue([oldest, third, tiedLowerId, tiedHigherId]);
+    render(<JobsBentoCard tool={mockTool} data={null} />);
+    await screen.findByText("Newest");
+    fireEvent.click(screen.getByRole("button", { name: "Delete all" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("4 saved jobs");
+    expect(deleteAllJobs).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete all" }));
+    await screen.findByText("No saved jobs");
+    expect(deleteAllJobs).toHaveBeenCalledOnce();
+    expect(deleteJob).not.toHaveBeenCalled();
+  });
+
   it("opens all saved jobs, including jobs outside the three visible rows", async () => {
     vi.mocked(getJobs).mockResolvedValue([oldest, third, tiedLowerId, tiedHigherId]);
     const open = vi.spyOn(window, "open").mockReturnValue(null);
