@@ -9,7 +9,7 @@ import { DeleteJobSchema } from "./job.schemas";
 export const getJobs = createServerFn({ method: "POST" }).handler(async (): Promise<Job[]> => {
   noStore();
   getOwnerUser();
-  return await listJobRecords(100);
+  return await listJobRecords();
 });
 
 export const deleteJob = createServerFn({ method: "POST" })

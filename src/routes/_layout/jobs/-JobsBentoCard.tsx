@@ -5,30 +5,26 @@ import { Button } from "#/components/ui/button";
 import { Skeleton } from "#/components/ui/skeleton";
 import type { ToolEntry } from "#/tools/registry";
 import { useJobsController } from "./-useJobsController";
+import { OpenAllJobsButton } from "./-OpenAllJobsButton";
+import { getSafeJobUrl } from "./-job-links";
 
 const MAX_JOBS = 3;
 
-function getSafeJobUrl(value: string): string | null {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:" ? value : null;
-  } catch {
-    return null;
-  }
-}
-
 export function JobsBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry; data: unknown }) {
-  const { jobs: savedJobs, status, mutationError, remove } = useJobsController();
+  const { jobs: savedJobs, status, loadError, mutationError, remove } = useJobsController();
   const jobs = savedJobs.slice(0, MAX_JOBS);
 
   return (
     <section aria-label="Jobs" className="rounded-lg border border-border bg-card p-4">
-      <Link
-        to="/jobs"
-        className="inline-flex rounded-sm text-sm font-semibold text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        Jobs
-      </Link>
+      <div className="flex items-center justify-between gap-2">
+        <Link
+          to="/jobs"
+          className="inline-flex rounded-sm text-sm font-semibold text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Jobs
+        </Link>
+        <OpenAllJobsButton jobs={savedJobs} disabled={status !== "ready" || loadError !== null} />
+      </div>
 
       {status === "loading" ? (
         <div role="status" aria-label="Loading saved jobs" className="mt-3 flex flex-col gap-2">

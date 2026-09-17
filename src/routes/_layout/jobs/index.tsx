@@ -4,6 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
 import { Skeleton } from "#/components/ui/skeleton";
 import { JobRow } from "./-JobRow";
+import { OpenAllJobsButton } from "./-OpenAllJobsButton";
 import { useJobsController } from "./-useJobsController";
 
 export const Route = createFileRoute("/_layout/jobs/")({
@@ -26,9 +27,15 @@ export function JobsPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 sm:p-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Jobs</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Saved job links.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Jobs</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Saved job links.</p>
+        </div>
+        <OpenAllJobsButton
+          jobs={controller.jobs}
+          disabled={controller.status !== "ready" || controller.loadError !== null}
+        />
       </div>
 
       {controller.mutationError ? (

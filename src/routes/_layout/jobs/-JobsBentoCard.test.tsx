@@ -82,6 +82,49 @@ afterEach(() => {
 });
 
 describe("JobsBentoCard", () => {
+  it("opens all saved jobs, including jobs outside the three visible rows", async () => {
+    vi.mocked(getJobs).mockResolvedValue([oldest, third, tiedLowerId, tiedHigherId]);
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    render(<JobsBentoCard tool={mockTool} data={null} />);
+    await screen.findByText("Newest");
+    expect(screen.queryByText("Fourth newest")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open all" }));
+
+    expect(open.mock.calls).toEqual(
+      [tiedHigherId, tiedLowerId, third, oldest].map((job) => [
+        job.url,
+        "_blank",
+        "noopener,noreferrer",
+      ]),
+    );
+  });
+
+  it("disables Open all while loading and when no jobs are saved", async () => {
+    render(<JobsBentoCard tool={mockTool} data={null} />);
+    expect((screen.getByRole("button", { name: "Open all" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    await screen.findByText("No saved jobs");
+    expect((screen.getByRole("button", { name: "Open all" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  it("opens each safe link once and skips unsafe links", async () => {
+    vi.mocked(getJobs).mockResolvedValue([
+      tiedHigherId,
+      { ...tiedLowerId, url: tiedHigherId.url },
+      { ...third, url: "javascript:alert(1)" },
+      { ...oldest, url: "invalid" },
+    ]);
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    render(<JobsBentoCard tool={mockTool} data={null} />);
+    await screen.findByText("Newest");
+    fireEvent.click(screen.getByRole("button", { name: "Open all" }));
+    expect(open).toHaveBeenCalledExactlyOnceWith(tiedHigherId.url, "_blank", "noopener,noreferrer");
+  });
+
   it("removes a job immediately without a dialog and shows the next saved job", async () => {
     vi.mocked(getJobs).mockResolvedValue([oldest, third, tiedLowerId, tiedHigherId]);
     const request = deferred<void>();
@@ -243,6 +286,9 @@ describe("JobsBentoCard", () => {
 
     expect(screen.getByText("Newest")).toBeTruthy();
     expect(screen.queryByText(/private database failure/i)).toBeNull();
+    expect((screen.getByRole("button", { name: "Open all" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
   });
 });
 

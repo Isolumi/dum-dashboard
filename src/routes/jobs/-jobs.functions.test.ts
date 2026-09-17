@@ -70,7 +70,7 @@ describe("getJobs", () => {
 
     expect(noStore).toHaveBeenCalledOnce();
     expect(getOwnerUser).toHaveBeenCalledOnce();
-    expect(mocks.listJobRecords).toHaveBeenCalledWith(100);
+    expect(mocks.listJobRecords).toHaveBeenCalledWith();
     expect(firstCallOrder(noStore)).toBeLessThan(firstCallOrder(mocks.listJobRecords));
     expect(firstCallOrder(getOwnerUser)).toBeLessThan(firstCallOrder(mocks.listJobRecords));
   });

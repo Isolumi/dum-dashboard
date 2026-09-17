@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "#/lib/supabase-admin";
 import { SaveJobSchema, type SaveJobInput } from "./job.schemas";
 
 const JOB_COLUMNS = "id,company,title,url,saved_at";
+const PAGE_SIZE = 1000;
 
 export type SaveJobResult = { status: "created"; job: Job } | { status: "already_saved"; job: Job };
 
@@ -23,15 +24,30 @@ function throwDatabaseError(_error: DatabaseError): never {
   throw new JobDomainError("database_unavailable");
 }
 
-export async function listJobRecords(limit = 100): Promise<Job[]> {
-  const { data, error } = await getSupabaseAdmin()
-    .from("jobs")
-    .select(JOB_COLUMNS)
-    .order("saved_at", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(limit);
-  if (error) throwDatabaseError(error);
-  return data ?? [];
+export async function listJobRecords(limit?: number): Promise<Job[]> {
+  const admin = getSupabaseAdmin();
+  const jobs: Job[] = [];
+  let cursor: Job | undefined;
+  for (;;) {
+    let query = admin
+      .from("jobs")
+      .select(JOB_COLUMNS)
+      .order("saved_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(limit ?? PAGE_SIZE);
+    if (cursor) {
+      // Continue after the last key, so inserts/deletes cannot shift page offsets.
+      const savedAt = JSON.stringify(cursor.saved_at);
+      const id = JSON.stringify(cursor.id);
+      query = query.or(`saved_at.lt.${savedAt},and(saved_at.eq.${savedAt},id.lt.${id})`);
+    }
+    const { data, error } = await query;
+    if (error) throwDatabaseError(error);
+    const page = data ?? [];
+    jobs.push(...page);
+    if (limit !== undefined || page.length < PAGE_SIZE) return jobs;
+    cursor = page.at(-1);
+  }
 }
 
 export async function saveJobRecord(input: SaveJobInput): Promise<SaveJobResult> {

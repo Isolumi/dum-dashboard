@@ -11,6 +11,8 @@ const mocks = {
   listResultMock: vi.fn(),
   maybeSingleMock: vi.fn(),
   orderMock: vi.fn(),
+  orMock: vi.fn(),
+  rangeMock: vi.fn(),
   selectMock: vi.fn(),
   upsertMock: vi.fn(),
 };
@@ -41,6 +43,14 @@ const query = {
   },
   select(columns: string) {
     mocks.selectMock(columns);
+    return query;
+  },
+  range(from: number, to: number) {
+    mocks.rangeMock(from, to);
+    return query;
+  },
+  or(filter: string) {
+    mocks.orMock(filter);
     return query;
   },
   upsert(value: unknown, options: { ignoreDuplicates: boolean; onConflict: string }) {
@@ -92,11 +102,34 @@ const oldest = makeJob(THIRD_JOB_ID, "2026-09-15T13:00:00.000Z");
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.fromMock.mockImplementation(() => query);
-  mocks.listResultMock.mockResolvedValue({ data: [], error: null });
+  mocks.listResultMock.mockReset().mockResolvedValue({ data: [], error: null });
   mocks.maybeSingleMock.mockResolvedValue({ data: null, error: null });
 });
 
 describe("listJobRecords", () => {
+  it("reads all pages without the previous 100-job cap", async () => {
+    const firstPage = Array.from({ length: 1000 }, (_, index) =>
+      makeJob(`550e8400-e29b-41d4-a716-${String(999 - index).padStart(12, "0")}`, newest.saved_at),
+    );
+    mocks.listResultMock
+      .mockResolvedValueOnce({ data: firstPage, error: null })
+      .mockResolvedValueOnce({ data: [oldest], error: null });
+    await expect(listJobRecords()).resolves.toEqual([...firstPage, oldest]);
+    expect(mocks.rangeMock).not.toHaveBeenCalled();
+    expect(mocks.limitMock.mock.calls).toEqual([[1000], [1000]]);
+    const cursor = firstPage.at(-1)!;
+    expect(mocks.orMock).toHaveBeenCalledExactlyOnceWith(
+      `saved_at.lt."${cursor.saved_at}",and(saved_at.eq."${cursor.saved_at}",id.lt."${cursor.id}")`,
+    );
+  });
+
+  it("fails safely instead of returning a partial list when a later page fails", async () => {
+    mocks.listResultMock
+      .mockResolvedValueOnce({ data: Array.from({ length: 1000 }, () => newest), error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: "private detail" } });
+    await expect(listJobRecords()).rejects.toMatchObject({ message: "Job service unavailable" });
+  });
+
   it("returns the requested newest jobs ordered by saved time and stable ID", async () => {
     mocks.listResultMock.mockResolvedValueOnce({ data: [newest, middle, oldest], error: null });
 
