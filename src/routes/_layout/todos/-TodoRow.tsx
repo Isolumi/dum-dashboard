@@ -1,5 +1,5 @@
 import { Circle, CircleCheck, GripVertical, Trash2 } from "lucide-react";
-import { memo, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 
 import { Button } from "#/components/ui/button";
@@ -8,7 +8,7 @@ import type { Todo, TodoStatus } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
 
 import { TodoDueDatePicker } from "./-TodoDueDatePicker";
-import { isTodoDueDateOverdue } from "./-todoDueDate";
+import { getTodoDueDateUrgency } from "./-todoDueDate";
 import { isTodoTodayOverdue } from "./-todoUtils";
 
 export interface TodoRowProps {
@@ -79,11 +79,35 @@ function TodoRowComponent({
   const [nameValue, setNameValue] = useState(todo.name);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  const isOverdue =
-    todo.due_date &&
-    todo.status !== "complete" &&
-    isTodoDueDateOverdue(todo.due_date, todo.due_date_has_time);
-  const isTodayOverdue = isTodoTodayOverdue(todo);
+  const [now, setNow] = useState(() => new Date());
+  const hasDate = Boolean(todo.due_date || todo.today_date);
+  useEffect(() => {
+    if (!hasDate) return;
+    const refresh = () => setNow(new Date());
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    refresh();
+    const timer = window.setInterval(refreshWhenVisible, 60_000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [hasDate]);
+  const urgency =
+    todo.status === "complete"
+      ? "later"
+      : getTodoDueDateUrgency(todo.due_date, todo.due_date_has_time, now);
+  const dueDateColour =
+    urgency === "overdue"
+      ? "text-destructive"
+      : urgency === "soon"
+        ? "text-health-warning"
+        : "text-muted-foreground";
+  const isTodayOverdue = isTodoTodayOverdue(todo, now);
 
   function saveName() {
     const trimmed = nameValue.trim();
@@ -190,7 +214,7 @@ function TodoRowComponent({
             className={cn(
               "flex shrink-0 items-center justify-end gap-1 text-right",
               todo.due_date || isTodayOverdue ? "w-32" : "w-9 [@media(pointer:coarse)]:w-11",
-              todo.due_date && (isOverdue ? "text-destructive" : "text-muted-foreground"),
+              todo.due_date && dueDateColour,
             )}
           >
             {isTodayOverdue && <span className="text-xs text-destructive">Overdue</span>}
@@ -202,6 +226,7 @@ function TodoRowComponent({
               label={`Edit due date for "${todo.name}"`}
               compact
               hasTime={todo.due_date_has_time}
+              now={now}
               disabled={isPending}
             />
           </div>
@@ -222,7 +247,7 @@ function TodoRowComponent({
           <div
             className={cn(
               "flex w-40 shrink-0 items-center justify-end gap-1 text-right",
-              todo.due_date && (isOverdue ? "text-destructive" : "text-muted-foreground"),
+              todo.due_date && dueDateColour,
             )}
           >
             {isTodayOverdue && <span className="text-xs text-destructive">Overdue</span>}
@@ -233,6 +258,7 @@ function TodoRowComponent({
               }
               label={`Edit due date for "${todo.name}"`}
               hasTime={todo.due_date_has_time}
+              now={now}
               disabled={isPending}
             />
           </div>
