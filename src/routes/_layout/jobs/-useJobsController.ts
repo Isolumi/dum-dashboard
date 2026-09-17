@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { usePollingRefresh } from "#/hooks/usePollingRefresh";
 import type { Job } from "#/lib/database.types";
-import { deleteJob, getJobs } from "#/routes/jobs/jobs.functions";
+import { deleteAllJobs, deleteJob, getJobs } from "#/routes/jobs/jobs.functions";
 
 const POLL_INTERVAL_MS = 10_000;
 const LOAD_ERROR = "Could not refresh saved jobs. Check your connection and try again.";
@@ -20,6 +20,8 @@ export interface JobsController {
   loadError: string | null;
   mutationError: string | null;
   pendingIds: ReadonlySet<string>;
+  clearing: boolean;
+  clear(): Promise<boolean>;
   refresh(): Promise<void>;
   remove(id: string): Promise<boolean>;
 }
@@ -30,6 +32,8 @@ export function useJobsController(): JobsController {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [clearing, setClearing] = useState(false);
+  const clearingRef = useRef(false);
   const jobsRef = useRef<Job[]>([]);
   const hasLoadedRef = useRef(false);
   const pendingIdsRef = useRef(new Set<string>());
@@ -42,6 +46,7 @@ export function useJobsController(): JobsController {
   }, []);
 
   const refresh = useCallback((): Promise<void> => {
+    if (clearingRef.current) return Promise.resolve();
     if (refreshPendingRef.current) return refreshPendingRef.current;
 
     const requestSequence = ++requestSequenceRef.current;
@@ -74,9 +79,32 @@ export function useJobsController(): JobsController {
 
   usePollingRefresh(refresh, POLL_INTERVAL_MS, { skipWhilePending: true });
 
+  const clear = useCallback(async (): Promise<boolean> => {
+    if (clearingRef.current || pendingIdsRef.current.size > 0) return false;
+    const previous = jobsRef.current;
+    if (previous.length === 0) return true;
+    clearingRef.current = true;
+    setClearing(true);
+    requestSequenceRef.current += 1;
+    setMutationError(null);
+    replaceJobs([]);
+    try {
+      await deleteAllJobs();
+      return true;
+    } catch {
+      replaceJobs(previous);
+      setMutationError(DELETE_ERROR);
+      return false;
+    } finally {
+      requestSequenceRef.current += 1;
+      clearingRef.current = false;
+      setClearing(false);
+    }
+  }, [replaceJobs]);
+
   const remove = useCallback(
     async (id: string): Promise<boolean> => {
-      if (pendingIdsRef.current.has(id)) return false;
+      if (clearingRef.current || pendingIdsRef.current.has(id)) return false;
       const previous = jobsRef.current;
       const removedJob = previous.find((job) => job.id === id);
       if (!removedJob) return false;
@@ -110,6 +138,8 @@ export function useJobsController(): JobsController {
   );
 
   return {
+    clear,
+    clearing,
     jobs,
     loadError,
     mutationError,

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "#/lib/database.types";
 
 const mocks = {
+  deleteAllJobRecords: vi.fn(),
   deleteJobRecord: vi.fn(),
   listJobRecords: vi.fn(),
 };
@@ -31,11 +32,12 @@ vi.mock("#/lib/server-auth", () => ({
 }));
 
 vi.mock("./job.domain", () => ({
+  deleteAllJobRecords: mocks.deleteAllJobRecords,
   deleteJobRecord: mocks.deleteJobRecord,
   listJobRecords: mocks.listJobRecords,
 }));
 
-const { deleteJob, getJobs } = await import("./jobs.functions");
+const { deleteAllJobs, deleteJob, getJobs } = await import("./jobs.functions");
 const { assertSameOrigin, getOwnerUser, noStore } = await import("#/lib/server-auth");
 
 function firstCallOrder(mock: unknown): number {
@@ -70,7 +72,7 @@ describe("getJobs", () => {
 
     expect(noStore).toHaveBeenCalledOnce();
     expect(getOwnerUser).toHaveBeenCalledOnce();
-    expect(mocks.listJobRecords).toHaveBeenCalledWith(100);
+    expect(mocks.listJobRecords).toHaveBeenCalledWith();
     expect(firstCallOrder(noStore)).toBeLessThan(firstCallOrder(mocks.listJobRecords));
     expect(firstCallOrder(getOwnerUser)).toBeLessThan(firstCallOrder(mocks.listJobRecords));
   });
@@ -95,5 +97,27 @@ describe("deleteJob", () => {
 
     expect(assertSameOrigin).not.toHaveBeenCalled();
     expect(mocks.deleteJobRecord).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteAllJobs", () => {
+  it("checks owner, same origin and no-store before a bulk deletion", async () => {
+    await expect(deleteAllJobs()).resolves.toBeUndefined();
+    expect(noStore).toHaveBeenCalledOnce();
+    expect(getOwnerUser).toHaveBeenCalledOnce();
+    expect(assertSameOrigin).toHaveBeenCalledOnce();
+    expect(mocks.deleteAllJobRecords).toHaveBeenCalledOnce();
+    expect(firstCallOrder(getOwnerUser)).toBeLessThan(firstCallOrder(mocks.deleteAllJobRecords));
+    expect(firstCallOrder(assertSameOrigin)).toBeLessThan(
+      firstCallOrder(mocks.deleteAllJobRecords),
+    );
+  });
+
+  it("does not delete if the origin check fails", async () => {
+    vi.mocked(assertSameOrigin).mockImplementationOnce(() => {
+      throw new Error("Cross-origin request rejected");
+    });
+    await expect(deleteAllJobs()).rejects.toThrow("Cross-origin request rejected");
+    expect(mocks.deleteAllJobRecords).not.toHaveBeenCalled();
   });
 });

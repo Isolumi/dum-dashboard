@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = {
+  deleteAllJobs: vi.fn(),
   deleteJob: vi.fn(),
   getJobs: vi.fn(),
 };
@@ -39,24 +40,93 @@ if (typeof document === "undefined") {
   }
 }
 
-const { cleanup, render, screen, waitFor } = await import("@testing-library/react");
+const { act, cleanup, fireEvent, render, screen, waitFor, within } =
+  await import("@testing-library/react");
 const { JobsPage } = await import("./index");
 
 beforeEach(() => {
+  apiMocks.deleteAllJobs.mockResolvedValue(undefined);
   apiMocks.getJobs.mockResolvedValue([]);
 });
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("JobsPage", () => {
+  it("connects Delete all to the bulk mutation after confirmation", async () => {
+    apiMocks.getJobs.mockResolvedValueOnce([
+      {
+        id: "one",
+        company: "Company",
+        title: "Job one",
+        saved_at: "2026-09-17T00:00:00Z",
+        url: "https://jobs.example/one",
+      },
+    ]);
+    render(<JobsPage />);
+    await screen.findByRole("list", { name: "Saved jobs" });
+    fireEvent.click(screen.getByRole("button", { name: "Delete all" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(apiMocks.deleteAllJobs).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete all" }));
+    await screen.findByText("No saved jobs");
+    expect(apiMocks.deleteAllJobs).toHaveBeenCalledOnce();
+  });
+
+  it("disables bulk opening after a failed background read", async () => {
+    vi.useFakeTimers();
+    apiMocks.getJobs
+      .mockResolvedValueOnce([
+        {
+          id: "one",
+          company: "Company",
+          title: "Job one",
+          saved_at: "2026-09-17T00:00:00Z",
+          url: "https://jobs.example/one",
+        },
+      ])
+      .mockRejectedValueOnce(new Error("offline"));
+    render(<JobsPage />);
+    await act(async () => Promise.resolve());
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    expect(screen.getByRole("list", { name: "Saved jobs" })).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Open all" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  it("opens all saved job links from the page header", async () => {
+    const urls = ["https://jobs.example/one", "https://jobs.example/two"];
+    apiMocks.getJobs.mockResolvedValue(
+      urls.map((url, index) => ({
+        id: String(index),
+        company: "Company",
+        title: `Job ${index}`,
+        saved_at: `2026-09-17T0${index}:00:00Z`,
+        url,
+      })),
+    );
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    render(<JobsPage />);
+    await screen.findByRole("list", { name: "Saved jobs" });
+    fireEvent.click(screen.getByRole("button", { name: "Open all" }));
+    expect(open.mock.calls).toEqual(
+      urls.toReversed().map((url) => [url, "_blank", "noopener,noreferrer"]),
+    );
+  });
+
   it("shows a useful empty state in the narrow DumQ page layout", async () => {
     render(<JobsPage />);
 
     expect(screen.getByRole("heading", { name: "Jobs" })).toBeTruthy();
     await waitFor(() => expect(screen.getByText("No saved jobs")).toBeTruthy());
+    expect((screen.getByRole("button", { name: "Open all" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
     expect(screen.getByRole("main").className).toContain("max-w-3xl");
   });
 });
