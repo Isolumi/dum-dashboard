@@ -246,8 +246,14 @@ export function TodoBoard({ controller, variant }: TodoBoardProps): ReactElement
   return (
     <section
       aria-label="Todo board"
+      tabIndex={-1}
       className={cn("flex flex-col gap-2", compact && "max-h-[32rem] overflow-y-auto")}
     >
+      <span role="status" className="sr-only">
+        {controller.todos.some((todo) => todo.status === "complete")
+          ? `${controller.todos.filter((todo) => todo.status === "complete").length} completed items in Archive`
+          : ""}
+      </span>
       {controller.status === "loading" ? (
         <TodoBoardSkeleton compact={compact} />
       ) : (
@@ -284,6 +290,7 @@ export function TodoBoard({ controller, variant }: TodoBoardProps): ReactElement
                   onUpdate={controller.update}
                   onDelete={controller.remove}
                   isPending={(id) => controller.pendingIds.has(id)}
+                  animateRemoval={!activeId}
                 />
               ))}
               <AddTodoRow compact={compact} onCreate={controller.create} />

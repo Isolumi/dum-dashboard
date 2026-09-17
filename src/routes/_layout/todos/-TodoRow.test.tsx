@@ -96,6 +96,26 @@ function renderTodoRow(props: Partial<React.ComponentProps<typeof TodoRow>> = {}
 }
 
 describe("TodoRow", () => {
+  it("moves keyboard focus before completing and removing the current row", () => {
+    const onUpdate = vi.fn();
+    render(
+      <section aria-label="Todo board" tabIndex={-1}>
+        <TodoRow todo={{ ...highTodo, status: "started" }} onUpdate={onUpdate} onDelete={vi.fn()} />
+        <TodoRow
+          todo={{ ...highTodo, id: "next", name: "Next task" }}
+          onUpdate={onUpdate}
+          onDelete={vi.fn()}
+        />
+      </section>,
+    );
+    const complete = screen.getByRole("button", { name: /mark "deploy app" as complete/i });
+    complete.focus();
+    fireEvent.click(complete);
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: /mark "next task" as started/i }),
+    );
+    expect(onUpdate).toHaveBeenCalledWith({ id: "todo-high", status: "complete" });
+  });
   it.each([false, true])(
     "uses the date control for an undated Today overdue label (compact=%s)",
     (compact) => {

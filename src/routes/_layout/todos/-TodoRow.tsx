@@ -167,7 +167,23 @@ function TodoRowComponent({
       <Button
         variant="ghost"
         size="icon"
-        onClick={() => onUpdate({ id: todo.id, status: STATUS_CYCLE[todo.status] })}
+        data-todo-status="true"
+        onClick={(event) => {
+          const nextStatus = STATUS_CYCLE[todo.status];
+          if (nextStatus === "complete" && document.activeElement === event.currentTarget) {
+            const board = event.currentTarget.closest<HTMLElement>(
+              'section[aria-label="Todo board"]',
+            );
+            const controls = Array.from(
+              board?.querySelectorAll<HTMLButtonElement>(
+                '[data-todo-status="true"]:not(:disabled)',
+              ) ?? [],
+            );
+            const index = controls.indexOf(event.currentTarget);
+            (controls[index + 1] ?? controls[index - 1] ?? board)?.focus({ preventScroll: true });
+          }
+          onUpdate({ id: todo.id, status: nextStatus });
+        }}
         disabled={isPending}
         aria-label={`Mark "${todo.name}" as ${STATUS_NEXT_LABEL[todo.status]}`}
         className="size-11 shrink-0"

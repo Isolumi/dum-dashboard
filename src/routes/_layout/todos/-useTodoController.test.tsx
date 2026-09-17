@@ -66,6 +66,99 @@ afterEach(() => {
 });
 
 describe("useTodoController", () => {
+  it("prevents delete while completion is saving and clears pending after failure", async () => {
+    const todo = makeTodo({ status: "started" });
+    const save = deferred<Todo>();
+    vi.mocked(updateTodo).mockReturnValue(save.promise);
+    const { result } = renderHook(() => useTodoController([todo]));
+    let request!: Promise<void>;
+    act(() => {
+      request = result.current.update({ id: todo.id, status: "complete" });
+    });
+    expect(result.current.pendingIds.has(todo.id)).toBe(true);
+    await act(async () => result.current.remove(todo.id));
+    expect(deleteTodo).not.toHaveBeenCalled();
+    await act(async () => {
+      save.reject(new Error("offline"));
+      await request;
+    });
+    expect(result.current.grouped.high).toEqual([todo]);
+    expect(result.current.pendingIds.has(todo.id)).toBe(false);
+  });
+  it("restores archived sort orders when a reorder fails", async () => {
+    const archive = makeTodo({ id: "archive", status: "complete", sort_order: 0 });
+    const active = makeTodo({ id: "active", sort_order: 1 });
+    vi.mocked(reorderTodos).mockRejectedValue(new Error("offline"));
+    const { result } = renderHook(() => useTodoController([archive, active]));
+    await act(async () => result.current.reorder("high", ["active"]));
+    expect(result.current.todos).toEqual([archive, active]);
+  });
+
+  it("keeps archived source and target members in an atomic move", async () => {
+    const sourceArchive = makeTodo({ id: "source-archive", status: "complete", sort_order: 0 });
+    const active = makeTodo({ id: "active", sort_order: 1 });
+    const targetArchive = makeTodo({
+      id: "target-archive",
+      status: "complete",
+      priority: "low",
+      sort_order: 0,
+    });
+    const { result } = renderHook(() => useTodoController([sourceArchive, active, targetArchive]));
+    await act(async () => result.current.move("active", "low", 0));
+    expect(moveTodo).toHaveBeenCalledWith({
+      data: {
+        id: "active",
+        target_section: "low",
+        source_ids: ["source-archive"],
+        target_ids: ["target-archive", "active"],
+      },
+    });
+    expect(result.current.grouped.high).toEqual([]);
+    expect(result.current.grouped.low.map((todo) => todo.id)).toEqual(["active"]);
+    expect(result.current.todos.filter((todo) => todo.status === "complete")).toHaveLength(2);
+  });
+  it("archives optimistically and restores the active item when saving fails", async () => {
+    const todo = makeTodo({ status: "started", today_date: "2026-09-17" });
+    const save = deferred<Todo>();
+    vi.mocked(updateTodo).mockReturnValue(save.promise);
+    const { result } = renderHook(() => useTodoController([todo]));
+    let request!: Promise<void>;
+    act(() => {
+      request = result.current.update({ id: todo.id, status: "complete" });
+    });
+    expect(result.current.grouped.today).toEqual([]);
+    expect(result.current.todos[0]?.status).toBe("complete");
+    await act(async () => {
+      save.reject(new Error("offline"));
+      await request;
+    });
+    expect(result.current.grouped.today).toEqual([todo]);
+  });
+
+  it("restores an archived item with its original section and due date", async () => {
+    const todo = makeTodo({ status: "complete", today_date: "2026-09-17", due_date: "2026-09-18" });
+    vi.mocked(updateTodo).mockResolvedValue({ ...todo, status: "not_started" });
+    const { result } = renderHook(() => useTodoController([todo]));
+    expect(result.current.grouped.today).toEqual([]);
+    await act(async () => result.current.update({ id: todo.id, status: "not_started" }));
+    expect(result.current.grouped.today).toEqual([{ ...todo, status: "not_started" }]);
+  });
+
+  it("keeps archived records in the database reorder payload", async () => {
+    const archive = makeTodo({ id: "archive", status: "complete", sort_order: 0 });
+    const a = makeTodo({ id: "a", sort_order: 1 });
+    const b = makeTodo({ id: "b", sort_order: 2 });
+    const { result } = renderHook(() => useTodoController([archive, a, b]));
+    await act(async () => result.current.reorder("high", ["b", "a"]));
+    expect(reorderTodos).toHaveBeenCalledWith({
+      data: {
+        section: "high",
+        expected_ids: ["archive", "a", "b"],
+        ordered_ids: ["b", "a", "archive"],
+      },
+    });
+    expect(result.current.grouped.high.map((todo) => todo.id)).toEqual(["b", "a"]);
+  });
   it.each(["today", "high", "low"] as const)(
     "keeps equal-deadline drop placement in %s",
     async (section) => {
@@ -884,7 +977,7 @@ describe("useTodoController", () => {
     });
 
     expect(result.current.todos.find((todo) => todo.id === second.id)?.status).toBe("complete");
-    expect(result.current.grouped.high.map((todo) => todo.id)).toEqual([first.id, second.id]);
+    expect(result.current.grouped.high.map((todo) => todo.id)).toEqual([first.id]);
   });
 
   it("keeps a newer successful reorder when an older reorder fails last", async () => {
