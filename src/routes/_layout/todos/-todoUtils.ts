@@ -1,4 +1,5 @@
-import { parseISO } from "date-fns";
+import { endOfDay, parseISO } from "date-fns";
+import { TZDateMini } from "@date-fns/tz";
 import type { Todo, TodoPriority } from "#/lib/database.types";
 import { getTodoDueDateCalendarKey } from "./-todoDueDate";
 
@@ -13,6 +14,20 @@ export const TODO_SECTION_LABELS: Record<TodoSection, string> = {
 };
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const TODAY_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+export function isTodoDueSoon(todo: Todo, now = new Date()): boolean {
+  if (!todo.due_date || todo.status === "complete") return false;
+  const timestamp = Date.parse(todo.due_date);
+  if (Number.isNaN(timestamp)) return false;
+  const hasTime = todo.due_date_has_time ?? !DATE_ONLY_PATTERN.test(todo.due_date);
+  const [year, month, day] = getTodoDueDateCalendarKey(todo.due_date).split("-").map(Number);
+  const deadline = hasTime
+    ? timestamp
+    : endOfDay(new TZDateMini(year, month - 1, day, "America/Toronto")).getTime();
+  // No lower bound: unfinished overdue items must stay in Today.
+  return deadline <= now.getTime() + TODAY_WINDOW_MS;
+}
 
 export function dueDateSortValue(todo: Todo): number | null {
   if (!todo.due_date) return null;
@@ -62,11 +77,11 @@ export function getTodosInSavedOrder(todos: Todo[], section: TodoSection): Todo[
     });
 }
 
-export function groupAndSortTodos(todos: Todo[]): TodoGroups {
+export function groupAndSortTodos(todos: Todo[], now = new Date()): TodoGroups {
   const groups: TodoGroups = { today: [], high: [], low: [] };
   for (const todo of todos) {
     if (todo.status === "complete") continue;
-    groups[todo.today_date ? "today" : todo.priority].push(todo);
+    groups[todo.today_date || isTodoDueSoon(todo, now) ? "today" : todo.priority].push(todo);
   }
   for (const key of TODO_SECTION_ORDER) {
     groups[key].sort((a, b) => {
@@ -77,8 +92,8 @@ export function groupAndSortTodos(todos: Todo[]): TodoGroups {
         if (bDueDate === null) return -1;
         return aDueDate - bDueDate;
       }
-      const aOrder = key === "today" ? (a.today_sort_order ?? 0) : (a.sort_order ?? 0);
-      const bOrder = key === "today" ? (b.today_sort_order ?? 0) : (b.sort_order ?? 0);
+      const aOrder = key === "today" ? (a.today_sort_order ?? a.sort_order) : a.sort_order;
+      const bOrder = key === "today" ? (b.today_sort_order ?? b.sort_order) : b.sort_order;
       const sortOrderDifference = aOrder - bOrder;
       if (sortOrderDifference !== 0) return sortOrderDifference;
 

@@ -15,7 +15,7 @@ import {
   getTorontoDateKey,
   getTodosInSavedOrder,
   groupAndSortTodos,
-  TODO_SECTION_ORDER,
+  isTodoDueSoon,
   type TodoGroups,
   type TodoSection,
 } from "./-todoUtils";
@@ -82,6 +82,8 @@ export interface TodoController {
 export function useTodoController(initialTodos?: Todo[]): TodoController {
   const hasInitialTodos = initialTodos !== undefined;
   const [todos, setTodos] = useState<Todo[]>(() => initialTodos ?? []);
+  const [now, setNow] = useState(() => new Date());
+  const nowRef = useRef(now);
   const [status, setStatus] = useState<TodoController["status"]>(() =>
     hasInitialTodos ? "ready" : "loading",
   );
@@ -204,14 +206,37 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
     void loadTodos();
   }, [loadTodos]);
 
+  const refreshClock = useCallback(() => {
+    if (draggingRef.current) return;
+    nowRef.current = new Date();
+    setNow(nowRef.current);
+  }, []);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshClock();
+    };
+    window.addEventListener("focus", refreshClock);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshClock);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [refreshClock]);
+
   usePollingRefresh(() => {
     if (draggingRef.current) return;
+    refreshClock();
     return loadTodos({ showLoading: false });
   }, POLL_INTERVAL_MS);
 
-  const setDragging = useCallback((active: boolean) => {
-    draggingRef.current = active;
-  }, []);
+  const setDragging = useCallback(
+    (active: boolean) => {
+      draggingRef.current = active;
+      if (!active) refreshClock();
+    },
+    [refreshClock],
+  );
 
   const beginMutation = useCallback(() => {
     mutationCountRef.current += 1;
@@ -380,12 +405,13 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
 
         const savedTodos = getTodosInSavedOrder(todosRef.current, section);
         const expectedIds = savedTodos.map((todo) => todo.id);
-        // The RPC checks every record, including items hidden in Archive.
+        const expectedIdSet = new Set(expectedIds);
+        const visibleSavedIds = orderedIds.filter((id) => expectedIdSet.has(id));
+        if (visibleSavedIds.length === 0) return;
+        // Include saved members hidden in Archive or automatically displayed in Today.
         const allOrderedIds = [
-          ...orderedIds,
-          ...savedTodos
-            .filter((todo) => todo.status === "complete" && !orderedIds.includes(todo.id))
-            .map((todo) => todo.id),
+          ...visibleSavedIds,
+          ...savedTodos.filter((todo) => !visibleSavedIds.includes(todo.id)).map((todo) => todo.id),
         ];
         const orderedSortOrders = new Map(
           allOrderedIds.map((id, sortOrder) => [id, sortOrder] as const),
@@ -454,28 +480,36 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
 
         const previousTodos = todosRef.current;
         const movedTodo = previousTodos.find((todo) => todo.id === id);
-        if (!movedTodo) return;
+        if (!movedTodo || movedTodo.status === "complete") return;
+        if (!movedTodo.today_date && isTodoDueSoon(movedTodo)) return;
 
-        const groupedTodos = groupAndSortTodos(previousTodos);
-        const sourceSection = TODO_SECTION_ORDER.find((section) =>
-          groupedTodos[section].some((todo) => todo.id === id),
-        );
-        if (!sourceSection || sourceSection === targetSection) return;
+        const groupedTodos = groupAndSortTodos(previousTodos, nowRef.current);
+        const sourceSection = movedTodo.today_date ? "today" : movedTodo.priority;
+        if (sourceSection === targetSection) return;
 
         const sourceTodos = getTodosInSavedOrder(previousTodos, sourceSection).filter(
           (todo) => todo.id !== id,
         );
         const targetTodos = getTodosInSavedOrder(previousTodos, targetSection);
+        const targetIds = new Set(targetTodos.map((todo) => todo.id));
         const displayedTarget = groupedTodos[targetSection];
         const normalizedTargetIndex = Math.max(0, Math.min(targetIndex, displayedTarget.length));
-        const anchor = displayedTarget[normalizedTargetIndex];
+        const anchor = displayedTarget
+          .slice(normalizedTargetIndex)
+          .find((todo) => targetIds.has(todo.id));
         const previousEqual = displayedTarget
           .slice(0, normalizedTargetIndex)
           .reverse()
-          .find((todo) => dueDateSortValue(todo) === dueDateSortValue(movedTodo));
+          .find(
+            (todo) =>
+              targetIds.has(todo.id) && dueDateSortValue(todo) === dueDateSortValue(movedTodo),
+          );
         const nextEqual = displayedTarget
           .slice(normalizedTargetIndex)
-          .find((todo) => dueDateSortValue(todo) === dueDateSortValue(movedTodo));
+          .find(
+            (todo) =>
+              targetIds.has(todo.id) && dueDateSortValue(todo) === dueDateSortValue(movedTodo),
+          );
         const savedTargetIndex = previousEqual
           ? targetTodos.findIndex((todo) => todo.id === previousEqual.id) + 1
           : nextEqual
@@ -562,7 +596,7 @@ export function useTodoController(initialTodos?: Todo[]): TodoController {
   );
 
   const retry = useCallback(async (): Promise<void> => loadTodos(), [loadTodos]);
-  const grouped = useMemo(() => groupAndSortTodos(todos), [todos]);
+  const grouped = useMemo(() => groupAndSortTodos(todos, now), [todos, now]);
 
   return {
     todos,

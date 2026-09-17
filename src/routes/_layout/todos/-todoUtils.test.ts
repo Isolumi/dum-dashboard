@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Todo } from "#/lib/database.types";
 import {
@@ -6,8 +6,87 @@ import {
   getTodosInSavedOrder,
   groupAndSortTodos,
   isTodoTodayOverdue,
+  isTodoDueSoon,
   TODO_SECTION_ORDER,
 } from "./-todoUtils";
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-07-01T12:00:00Z"));
+});
+afterEach(() => vi.useRealTimers());
+
+describe("automatic Today membership", () => {
+  const now = new Date("2026-09-17T16:00:00Z");
+
+  it("includes the exact 48-hour boundary and all overdue items, without duplicates or writes", () => {
+    const overdue = makeTodo({
+      id: "overdue",
+      priority: "high",
+      due_date: "2026-09-16T16:00:00Z",
+      due_date_has_time: true,
+    });
+    const boundary = makeTodo({
+      id: "boundary",
+      due_date: "2026-09-19T16:00:00Z",
+      due_date_has_time: true,
+    });
+    const later = makeTodo({
+      id: "later",
+      due_date: "2026-09-19T16:00:00.001Z",
+      due_date_has_time: true,
+    });
+    const original = structuredClone([overdue, boundary, later]);
+    const groups = groupAndSortTodos([overdue, boundary, later], now);
+    expect(groups.today.map((todo) => todo.id)).toEqual(["overdue", "boundary"]);
+    expect(groups.high).toEqual([]);
+    expect(groups.low).toEqual([later]);
+    expect([overdue, boundary, later]).toEqual(original);
+    expect(getTodosInSavedOrder([overdue, boundary, later], "today")).toEqual([]);
+    expect(getTodosInSavedOrder([overdue, boundary, later], "high")).toEqual([overdue]);
+  });
+
+  it("returns to saved priority after moving the deadline, but preserves manual Today", () => {
+    const automatic = makeTodo({
+      priority: "high",
+      due_date: "2026-09-18T16:00:00Z",
+      due_date_has_time: true,
+    });
+    expect(groupAndSortTodos([automatic], now).today).toEqual([automatic]);
+    const postponed = { ...automatic, due_date: "2026-09-30T16:00:00Z" };
+    expect(groupAndSortTodos([postponed], now).high).toEqual([postponed]);
+    const manual = { ...postponed, today_date: "2026-09-17" };
+    expect(groupAndSortTodos([manual], now).today).toEqual([manual]);
+  });
+
+  it("keeps completed items archived and ignores absent or invalid deadlines", () => {
+    expect(isTodoDueSoon(makeTodo(), now)).toBe(false);
+    expect(isTodoDueSoon(makeTodo({ due_date: "invalid" }), now)).toBe(false);
+    expect(
+      groupAndSortTodos([makeTodo({ due_date: "2026-09-17", status: "complete" })], now).today,
+    ).toEqual([]);
+  });
+
+  it("uses the end of the calendar day for date-only deadlines, including precision metadata", () => {
+    const deadline = new Date("2026-09-20T03:59:59.999Z");
+    const boundary = new Date(deadline.getTime() - 48 * 60 * 60 * 1000);
+    for (const due_date of ["2026-09-19", "2026-09-19T00:00:00Z"]) {
+      const todo = makeTodo({ due_date, due_date_has_time: false });
+      expect(isTodoDueSoon(todo, new Date(boundary.getTime() - 1))).toBe(false);
+      expect(isTodoDueSoon(todo, boundary)).toBe(true);
+    }
+  });
+
+  it.each([
+    ["2026-03-08", "2026-03-09T03:59:59.999Z"],
+    ["2026-11-01", "2026-11-02T04:59:59.999Z"],
+  ])("uses Toronto end-of-day across daylight saving changes for %s", (due_date, deadline) => {
+    const boundary = new Date(Date.parse(deadline) - 48 * 60 * 60 * 1000);
+    const todo = makeTodo({ due_date, due_date_has_time: false });
+    expect(isTodoDueSoon(todo, new Date(boundary.getTime() - 1))).toBe(false);
+    expect(isTodoDueSoon(todo, boundary)).toBe(true);
+  });
+});
 
 function makeTodo(overrides: Partial<Todo> = {}): Todo {
   return {

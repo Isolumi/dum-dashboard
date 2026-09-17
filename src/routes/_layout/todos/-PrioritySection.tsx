@@ -27,6 +27,7 @@ export interface PrioritySectionProps {
   onDelete: TodoRowProps["onDelete"];
   compact?: boolean;
   isPending?: (id: string) => boolean;
+  isDragDisabled?: (id: string) => boolean;
   animateRemoval?: boolean;
 }
 
@@ -36,6 +37,8 @@ const SECTION_LABEL_STYLES: Record<TodoSection, string> = {
   low: "text-muted-foreground",
 };
 
+type SectionTodoRowProps = TodoRowProps & { section: TodoSection };
+
 function RegisteredTodoRow({
   todo,
   onUpdate,
@@ -43,7 +46,8 @@ function RegisteredTodoRow({
   compact,
   isPending,
   dragDisabled,
-}: TodoRowProps) {
+  section,
+}: SectionTodoRowProps) {
   const {
     attributes,
     listeners,
@@ -54,8 +58,8 @@ function RegisteredTodoRow({
     isDragging,
   } = useSortable({
     id: todo.id,
-    disabled: isPending || dragDisabled,
-    data: { section: todo.today_date ? "today" : todo.priority },
+    disabled: isPending ? true : { draggable: Boolean(dragDisabled), droppable: false },
+    data: { section },
   });
 
   const style = {
@@ -80,7 +84,7 @@ function RegisteredTodoRow({
   );
 }
 
-function AnimatedTodoRow(props: TodoRowProps) {
+function AnimatedTodoRow(props: SectionTodoRowProps) {
   const [isPresent, safeToRemove] = usePresence();
   const animateRemoval = usePresenceData() !== false;
   const reducedMotion = useReducedMotion();
@@ -117,6 +121,7 @@ function PrioritySectionComponent({
   onDelete,
   compact = false,
   isPending,
+  isDragDisabled,
   animateRemoval = true,
 }: PrioritySectionProps) {
   const reducedMotion = useReducedMotion();
@@ -174,11 +179,12 @@ function PrioritySectionComponent({
                 <AnimatedTodoRow
                   key={todo.id}
                   todo={todo}
+                  section={priority}
                   onUpdate={onUpdate}
                   onDelete={onDelete}
                   compact={compact}
                   isPending={isPending?.(todo.id)}
-                  dragDisabled={hasPendingTodo}
+                  dragDisabled={hasPendingTodo || isDragDisabled?.(todo.id)}
                 />
               ))}
             </AnimatePresence>
