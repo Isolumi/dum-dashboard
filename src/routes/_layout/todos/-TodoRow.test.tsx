@@ -212,7 +212,7 @@ describe("TodoRow", () => {
 
     expect(
       screen.getByRole("button", { name: /edit due date for "deploy app"/i }).textContent,
-    ).toContain(`Due today, ${format(new Date(dueDate), "h:mm a")}`);
+    ).toContain(`Due today, ${format(new Date(dueDate), "HH:mm")}`);
   });
 
   it("keeps a migrated UTC-midnight due date on its original calendar day without a time", () => {

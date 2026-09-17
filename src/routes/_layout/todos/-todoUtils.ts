@@ -1,3 +1,4 @@
+import { parseISO } from "date-fns";
 import type { Todo, TodoPriority } from "#/lib/database.types";
 import { getTodoDueDateCalendarKey } from "./-todoDueDate";
 
@@ -13,7 +14,7 @@ export const TODO_SECTION_LABELS: Record<TodoSection, string> = {
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-function dueDateSortValue(todo: Todo): number | null {
+export function dueDateSortValue(todo: Todo): number | null {
   if (!todo.due_date) return null;
 
   const timestamp = Date.parse(todo.due_date);
@@ -23,7 +24,7 @@ function dueDateSortValue(todo: Todo): number | null {
   if (hasTime) return timestamp;
 
   const utcDate = getTodoDueDateCalendarKey(todo.due_date);
-  return Date.parse(`${utcDate}T00:00:00.000Z`);
+  return parseISO(utcDate).getTime();
 }
 
 export function getTorontoDateKey(date = new Date()): string {
@@ -43,6 +44,24 @@ export function isTodoTodayOverdue(todo: Todo, now = new Date()): boolean {
   );
 }
 
+// Match the database's concurrency checks, not the date-sorted display order.
+export function getTodosInSavedOrder(todos: Todo[], section: TodoSection): Todo[] {
+  return todos
+    .filter((todo) =>
+      section === "today"
+        ? Boolean(todo.today_date)
+        : !todo.today_date && todo.priority === section,
+    )
+    .sort((a, b) => {
+      const aOrder =
+        section === "today" ? (a.today_sort_order ?? Number.POSITIVE_INFINITY) : a.sort_order;
+      const bOrder =
+        section === "today" ? (b.today_sort_order ?? Number.POSITIVE_INFINITY) : b.sort_order;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.id.localeCompare(b.id);
+    });
+}
+
 export function groupAndSortTodos(todos: Todo[]): TodoGroups {
   const groups: TodoGroups = { today: [], high: [], low: [] };
   for (const todo of todos) {
@@ -50,6 +69,13 @@ export function groupAndSortTodos(todos: Todo[]): TodoGroups {
   }
   for (const key of TODO_SECTION_ORDER) {
     groups[key].sort((a, b) => {
+      const aDueDate = dueDateSortValue(a);
+      const bDueDate = dueDateSortValue(b);
+      if (aDueDate !== bDueDate) {
+        if (aDueDate === null) return 1;
+        if (bDueDate === null) return -1;
+        return aDueDate - bDueDate;
+      }
       const aOrder = key === "today" ? (a.today_sort_order ?? 0) : (a.sort_order ?? 0);
       const bOrder = key === "today" ? (b.today_sort_order ?? 0) : (b.sort_order ?? 0);
       const sortOrderDifference = aOrder - bOrder;
@@ -58,13 +84,6 @@ export function groupAndSortTodos(todos: Todo[]): TodoGroups {
       const aComplete = a.status === "complete" ? 1 : 0;
       const bComplete = b.status === "complete" ? 1 : 0;
       if (aComplete !== bComplete) return aComplete - bComplete;
-      const aDueDate = dueDateSortValue(a);
-      const bDueDate = dueDateSortValue(b);
-      if (aDueDate !== bDueDate) {
-        if (aDueDate === null) return 1;
-        if (bDueDate === null) return -1;
-        return aDueDate - bDueDate;
-      }
       return 0;
     });
   }

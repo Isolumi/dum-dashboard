@@ -55,7 +55,7 @@ describe("groupAndSortTodos", () => {
     expect(grouped.today.map((todo) => todo.id)).toEqual(["first", "second"]);
   });
 
-  it("follows persisted sort order before due date", () => {
+  it("sorts earlier due dates before persisted manual order", () => {
     const grouped = groupAndSortTodos([
       makeTodo({
         id: "persisted-first",
@@ -71,7 +71,96 @@ describe("groupAndSortTodos", () => {
       }),
     ]);
 
-    expect(grouped.low.map((todo) => todo.id)).toEqual(["persisted-first", "due-earlier"]);
+    expect(grouped.low.map((todo) => todo.id)).toEqual(["due-earlier", "persisted-first"]);
+  });
+
+  it.each(["today", "high", "low"] as const)(
+    "puts dated items before undated items in %s",
+    (section) => {
+      const sectionFields =
+        section === "today" ? { today_date: "2026-09-16" } : { priority: section };
+      const grouped = groupAndSortTodos([
+        makeTodo({ ...sectionFields, id: "undated", sort_order: 0, today_sort_order: 0 }),
+        makeTodo({
+          ...sectionFields,
+          id: "later",
+          due_date: "2026-09-20",
+          sort_order: 1,
+          today_sort_order: 1,
+        }),
+        makeTodo({
+          ...sectionFields,
+          id: "earlier",
+          due_date: "2026-09-17",
+          sort_order: 2,
+          today_sort_order: 2,
+        }),
+      ]);
+      expect(grouped[section].map((todo) => todo.id)).toEqual(["earlier", "later", "undated"]);
+    },
+  );
+
+  it.each(["today", "high", "low"] as const)(
+    "keeps manual order for matching due dates and undated items in %s",
+    (section) => {
+      const sectionFields =
+        section === "today" ? { today_date: "2026-09-16" } : { priority: section };
+      const grouped = groupAndSortTodos([
+        makeTodo({
+          ...sectionFields,
+          id: "dated-second",
+          due_date: "2026-09-17",
+          sort_order: 4,
+          today_sort_order: 4,
+        }),
+        makeTodo({ ...sectionFields, id: "undated-second", sort_order: 3, today_sort_order: 3 }),
+        makeTodo({
+          ...sectionFields,
+          id: "dated-first",
+          due_date: "2026-09-17",
+          sort_order: 2,
+          today_sort_order: 2,
+        }),
+        makeTodo({ ...sectionFields, id: "undated-first", sort_order: 1, today_sort_order: 1 }),
+      ]);
+      expect(grouped[section].map((todo) => todo.id)).toEqual([
+        "dated-first",
+        "dated-second",
+        "undated-first",
+        "undated-second",
+      ]);
+    },
+  );
+
+  it("sorts a date-only deadline after the previous local evening", () => {
+    const grouped = groupAndSortTodos([
+      makeTodo({ id: "next-day", due_date: "2026-09-18", sort_order: 1 }),
+      makeTodo({
+        id: "local-evening",
+        due_date: new Date(2026, 8, 17, 23, 30).toISOString(),
+        due_date_has_time: true,
+        sort_order: 1,
+      }),
+    ]);
+    expect(grouped.low.map((todo) => todo.id)).toEqual(["local-evening", "next-day"]);
+  });
+
+  it("orders timed deadlines earliest first on the same day", () => {
+    const grouped = groupAndSortTodos([
+      makeTodo({
+        id: "afternoon",
+        due_date: new Date(2026, 8, 17, 15).toISOString(),
+        due_date_has_time: true,
+        sort_order: 0,
+      }),
+      makeTodo({
+        id: "morning",
+        due_date: new Date(2026, 8, 17, 9).toISOString(),
+        due_date_has_time: true,
+        sort_order: 1,
+      }),
+    ]);
+    expect(grouped.low.map((todo) => todo.id)).toEqual(["morning", "afternoon"]);
   });
 
   it("sorts date-only metadata by its stored calendar date and timed todos by instant", () => {

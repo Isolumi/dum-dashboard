@@ -21,7 +21,7 @@ export function formatTodoDueDate(value: string | null, hasTime?: boolean): stri
     return format(parseISO(getTodoDueDateCalendarKey(value)), "MMM d");
   }
 
-  return format(parseISO(value), "MMM d, h:mm a");
+  return format(parseISO(value), "MMM d, HH:mm");
 }
 
 function getTodoDueDateDisplayDate(value: string, hasTime?: boolean): Date {
@@ -44,7 +44,7 @@ export function formatTodoDueDateLabel(
         : daysAway >= 2 && daysAway < 7
           ? format(date, "EEEE")
           : format(date, date.getFullYear() === now.getFullYear() ? "MMM d" : "MMM d, yyyy");
-  return `Due ${label}${hasTimeValue(value, hasTime) ? `, ${format(date, "h:mm a")}` : ""}`;
+  return `Due ${label}${hasTimeValue(value, hasTime) ? `, ${format(date, "HH:mm")}` : ""}`;
 }
 
 export function getTodoDueDateUrgency(
