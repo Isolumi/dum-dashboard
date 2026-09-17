@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Todo } from "#/lib/database.types";
 import {
   getTorontoDateKey,
+  getTodosInSavedOrder,
   groupAndSortTodos,
   isTodoTodayOverdue,
   TODO_SECTION_ORDER,
@@ -42,7 +43,7 @@ describe("groupAndSortTodos", () => {
     expect(Object.keys(grouped)).toEqual(["today", "high", "low"]);
     expect(grouped.today.map((todo) => todo.id)).toEqual(["today-low"]);
     expect(grouped.today[0]?.priority).toBe("low");
-    expect(grouped.high.map((todo) => todo.id)).toEqual(["high-complete", "high-active"]);
+    expect(grouped.high.map((todo) => todo.id)).toEqual(["high-active"]);
     expect(grouped.low.map((todo) => todo.id)).toEqual(["low-active"]);
   });
 
@@ -221,6 +222,15 @@ describe("groupAndSortTodos", () => {
 });
 
 describe("Today dates", () => {
+  it.each(["today", "high", "low"] as const)(
+    "archives completed items in %s without changing database membership",
+    (section) => {
+      const fields = section === "today" ? { today_date: "2026-09-17" } : { priority: section };
+      const complete = makeTodo({ ...fields, status: "complete" });
+      expect(groupAndSortTodos([complete])[section]).toEqual([]);
+      expect(getTodosInSavedOrder([complete], section)).toEqual([complete]);
+    },
+  );
   it("uses the Toronto calendar date across UTC midnight", () => {
     expect(getTorontoDateKey(new Date("2026-09-14T02:30:00.000Z"))).toBe("2026-09-13");
   });
