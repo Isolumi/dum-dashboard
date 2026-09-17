@@ -97,6 +97,17 @@ function renderTodoRow(props: Partial<React.ComponentProps<typeof TodoRow>> = {}
 
 describe("TodoRow", () => {
   it.each([false, true])(
+    "uses the date control for an undated Today overdue label (compact=%s)",
+    (compact) => {
+      renderTodoRow({ compact, todo: { ...highTodo, due_date: null, today_date: "2026-08-08" } });
+      const dateControl = screen.getByRole("button", { name: /edit due date/i });
+      expect(dateControl.textContent).toBe("Overdue");
+      expect(dateControl.querySelector("svg")).toBeNull();
+      fireEvent.click(dateControl);
+      expect(screen.getByRole("button", { name: "Done", exact: true })).toBeTruthy();
+    },
+  );
+  it.each([false, true])(
     "uses warning colour only for approaching incomplete dates (compact=%s)",
     (compact) => {
       renderTodoRow({ compact, todo: { ...highTodo, due_date: "2026-08-10" } });
