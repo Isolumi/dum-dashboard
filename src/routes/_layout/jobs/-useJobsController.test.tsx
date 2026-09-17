@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "#/lib/database.types";
 
 vi.mock("#/routes/jobs/jobs.functions", () => ({
+  deleteAllJobs: vi.fn(),
   deleteJob: vi.fn(),
   getJobs: vi.fn(),
 }));
@@ -36,7 +37,7 @@ if (typeof document === "undefined") {
 }
 
 const { act, cleanup, renderHook, waitFor } = await import("@testing-library/react");
-const { deleteJob, getJobs } = await import("#/routes/jobs/jobs.functions");
+const { deleteAllJobs, deleteJob, getJobs } = await import("#/routes/jobs/jobs.functions");
 const { useJobsController } = await import("./-useJobsController");
 
 type TestMock = ReturnType<typeof vi.fn>;
@@ -69,6 +70,7 @@ const newestLowerId = makeJob("22222222-2222-4222-8222-222222222222", "2026-09-1
 const newestHigherId = makeJob("550e8400-e29b-41d4-a716-446655440000", "2026-09-15T15:00:00.000Z");
 
 beforeEach(() => {
+  vi.mocked(deleteAllJobs).mockResolvedValue(undefined);
   getJobsMock.mockResolvedValue([]);
   deleteJobMock.mockResolvedValue(undefined);
 });
@@ -80,6 +82,53 @@ afterEach(() => {
 });
 
 describe("useJobsController", () => {
+  it("clears optimistically once and prevents stale reads from restoring deleted rows", async () => {
+    const deletion = deferred<void>();
+    const stale = deferred<Job[]>();
+    getJobsMock.mockResolvedValueOnce([newestHigherId, older]).mockReturnValueOnce(stale.promise);
+    vi.mocked(deleteAllJobs).mockReturnValueOnce(deletion.promise);
+    const { result } = renderHook(() => useJobsController());
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    let read!: Promise<void>;
+    act(() => {
+      read = result.current.refresh();
+    });
+    let clear!: Promise<boolean>;
+    act(() => {
+      clear = result.current.clear();
+    });
+    expect(result.current.jobs).toEqual([]);
+    expect(result.current.clearing).toBe(true);
+    await act(async () => {
+      expect(await result.current.clear()).toBe(false);
+    });
+    await act(async () => {
+      deletion.resolve();
+      expect(await clear).toBe(true);
+    });
+    await act(async () => {
+      stale.resolve([newestHigherId, older]);
+      await read;
+    });
+    expect(result.current.jobs).toEqual([]);
+    expect(result.current.clearing).toBe(false);
+    expect(deleteAllJobs).toHaveBeenCalledOnce();
+  });
+
+  it("restores the last good list when bulk deletion fails", async () => {
+    getJobsMock.mockResolvedValueOnce([newestHigherId, older]);
+    vi.mocked(deleteAllJobs).mockRejectedValueOnce(new Error("private SQL detail"));
+    const { result } = renderHook(() => useJobsController());
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    await act(async () => {
+      expect(await result.current.clear()).toBe(false);
+    });
+    expect(result.current.jobs).toEqual([newestHigherId, older]);
+    expect(result.current.mutationError).toMatch(/could not delete/i);
+    expect(result.current.mutationError).not.toContain("private SQL detail");
+    expect(result.current.clearing).toBe(false);
+  });
+
   it("ignores a stale poll that returns after a pending deletion succeeds", async () => {
     const pendingDelete = deferred<void>();
     const pendingRefresh = deferred<Job[]>();
