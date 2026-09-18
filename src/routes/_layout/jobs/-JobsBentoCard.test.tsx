@@ -84,6 +84,28 @@ afterEach(() => {
 });
 
 describe("JobsBentoCard", () => {
+  it("shows the total saved count, not just the three visible jobs", async () => {
+    vi.mocked(getJobs).mockResolvedValue([oldest, third, tiedLowerId, tiedHigherId]);
+    render(<JobsBentoCard tool={mockTool} data={null} />);
+    expect(screen.getByRole("link", { name: "Jobs" })).toBeTruthy();
+    expect(screen.queryByText("(0)")).toBeNull();
+    expect(await screen.findByRole("link", { name: "Jobs (4)" })).toBeTruthy();
+    expect(screen.queryByText("Fourth newest")).toBeNull();
+  });
+
+  it("shows zero only after an empty list loads", async () => {
+    render(<JobsBentoCard tool={mockTool} data={null} />);
+    expect(screen.queryByText("(0)")).toBeNull();
+    expect(await screen.findByRole("link", { name: "Jobs (0)" })).toBeTruthy();
+  });
+
+  it("does not show a count when the initial request fails", async () => {
+    vi.mocked(getJobs).mockRejectedValueOnce(new Error("failed"));
+    render(<JobsBentoCard tool={mockTool} data={null} />);
+    await screen.findByText("Could not load saved jobs.");
+    expect(screen.getByRole("link", { name: "Jobs" })).toBeTruthy();
+    expect(screen.queryByText("(0)")).toBeNull();
+  });
   it("deletes every saved job after confirmation, not only the visible three", async () => {
     vi.mocked(getJobs).mockResolvedValue([oldest, third, tiedLowerId, tiedHigherId]);
     render(<JobsBentoCard tool={mockTool} data={null} />);
@@ -94,6 +116,7 @@ describe("JobsBentoCard", () => {
     expect(deleteAllJobs).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete all" }));
     await screen.findByText("No saved jobs");
+    expect(screen.getByRole("link", { name: "Jobs (0)" })).toBeTruthy();
     expect(deleteAllJobs).toHaveBeenCalledOnce();
     expect(deleteJob).not.toHaveBeenCalled();
   });
@@ -151,6 +174,7 @@ describe("JobsBentoCard", () => {
 
     expect(screen.queryByText("Newest")).toBeNull();
     expect(screen.getByText("Fourth newest")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Jobs (3)" })).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(deleteJob).toHaveBeenCalledExactlyOnceWith({ data: { id: tiedHigherId.id } });
     await act(async () => request.resolve());
@@ -165,6 +189,7 @@ describe("JobsBentoCard", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Delete Newest" }));
 
     expect(await screen.findByText("Newest")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Jobs (1)" })).toBeTruthy();
     expect((await screen.findByRole("alert")).textContent).toMatch(/could not delete/i);
     expect(screen.queryByText(/private database details/i)).toBeNull();
   });
@@ -192,7 +217,7 @@ describe("JobsBentoCard", () => {
     render(<JobsBentoCard tool={mockTool} data={null} />);
 
     await waitFor(() => expect(screen.getAllByRole("link")).toHaveLength(3));
-    expect(screen.getByRole("link", { name: "Jobs" }).getAttribute("href")).toBe("/jobs");
+    expect(screen.getByRole("link", { name: "Jobs (2)" }).getAttribute("href")).toBe("/jobs");
 
     const newestLink = screen.getByRole("link", { name: "Point72 — Newest" });
     expect(newestLink.getAttribute("href")).toBe(tiedHigherId.url);
@@ -222,7 +247,7 @@ describe("JobsBentoCard", () => {
     expect(screen.getByText("Data URL")).toBeTruthy();
     expect(screen.getByText("Malformed URL")).toBeTruthy();
     expect(screen.getAllByRole("link")).toHaveLength(1);
-    expect(screen.getByRole("link", { name: "Jobs" }).getAttribute("href")).toBe("/jobs");
+    expect(screen.getByRole("link", { name: "Jobs (3)" }).getAttribute("href")).toBe("/jobs");
   });
 
   it("truncates long company names and job titles inside compact rows", async () => {
@@ -263,11 +288,13 @@ describe("JobsBentoCard", () => {
     render(<JobsBentoCard tool={mockTool} data={null} />);
     await act(async () => Promise.resolve());
     expect(screen.getByText("Third newest")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Jobs (3)" })).toBeTruthy();
 
     await act(async () => vi.advanceTimersByTimeAsync(10_000));
 
     expect(getJobs).toHaveBeenCalledTimes(2);
     expect(screen.getByText("Fresh job")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Jobs (4)" })).toBeTruthy();
     expect(screen.queryByText("Third newest")).toBeNull();
   });
 
