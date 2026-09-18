@@ -86,13 +86,11 @@ function TodoRowComponent({
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [hasDate]);
-  const urgency =
-    todo.status === "complete"
-      ? "later"
-      : getTodoDueDateUrgency(todo.due_date, todo.due_date_has_time, now);
+  const dateUrgency = getTodoDueDateUrgency(todo.due_date, todo.due_date_has_time, now);
+  const urgency = todo.status === "complete" ? "later" : dateUrgency;
   const isTodayOverdue = !todo.due_date && isTodoTodayOverdue(todo, now);
   const dateLabel = todo.due_date
-    ? urgency === "overdue"
+    ? dateUrgency === "overdue"
       ? formatTodoPastDateLabel(todo.due_date, todo.due_date_has_time, now)
       : formatTodoDueDateLabel(todo.due_date, todo.due_date_has_time, now).replace(
           /, (\d{2}:\d{2})$/,

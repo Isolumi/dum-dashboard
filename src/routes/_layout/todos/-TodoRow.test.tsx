@@ -96,6 +96,16 @@ function renderTodoRow(props: Partial<React.ComponentProps<typeof TodoRow>> = {}
 }
 
 describe("TodoRow", () => {
+  it.each([false, true])(
+    "uses a relative past date for completed items without red text (compact=%s)",
+    (compact) => {
+      renderTodoRow({ compact, todo: { ...highTodo, due_date: "2026-08-08", status: "complete" } });
+      const control = screen.getByRole("button", { name: /edit due date/i });
+      expect(control.textContent).toBe("Yesterday");
+      expect(control.parentElement?.className).toContain("text-muted-foreground");
+      expect(control.parentElement?.className).not.toContain("text-todo-overdue");
+    },
+  );
   it("counts an undated Today item's age using the Toronto date", () => {
     vi.setSystemTime(new Date("2026-08-09T03:30:00.000Z"));
     renderTodoRow({ todo: { ...highTodo, due_date: null, today_date: "2026-08-07" } });
