@@ -27,6 +27,17 @@ function getTodoDueDateDisplayDate(value: string, hasTime?: boolean): Date {
   return parseISO(hasTimeValue(value, hasTime) ? value : getTodoDueDateCalendarKey(value));
 }
 
+export function formatTodoPastDateLabel(
+  value: string,
+  hasTime?: boolean,
+  now = new Date(),
+): string {
+  const date = getTodoDueDateDisplayDate(value, hasTime);
+  const daysAgo = differenceInCalendarDays(now, date);
+  const label = daysAgo <= 0 ? "Today" : daysAgo === 1 ? "Yesterday" : `${daysAgo} days ago`;
+  return `${label}${hasTimeValue(value, hasTime) ? ` · ${format(date, "HH:mm")}` : ""}`;
+}
+
 export function formatTodoDueDateLabel(
   value: string | null,
   hasTime?: boolean,

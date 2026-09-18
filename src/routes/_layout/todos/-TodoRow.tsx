@@ -1,4 +1,5 @@
 import { Circle, CircleCheck, GripVertical, Trash2 } from "lucide-react";
+import { parseISO } from "date-fns";
 import { memo, useEffect, useRef, useState } from "react";
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 
@@ -8,8 +9,12 @@ import type { Todo, TodoStatus } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
 
 import { TodoDueDatePicker } from "./-TodoDueDatePicker";
-import { formatTodoDueDate, formatTodoDueDateLabel, getTodoDueDateUrgency } from "./-todoDueDate";
-import { isTodoTodayOverdue } from "./-todoUtils";
+import {
+  formatTodoPastDateLabel,
+  formatTodoDueDateLabel,
+  getTodoDueDateUrgency,
+} from "./-todoDueDate";
+import { getTorontoDateKey, isTodoTodayOverdue } from "./-todoUtils";
 
 export interface TodoRowProps {
   todo: Todo;
@@ -81,20 +86,18 @@ function TodoRowComponent({
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [hasDate]);
-  const urgency =
-    todo.status === "complete"
-      ? "later"
-      : getTodoDueDateUrgency(todo.due_date, todo.due_date_has_time, now);
+  const dateUrgency = getTodoDueDateUrgency(todo.due_date, todo.due_date_has_time, now);
+  const urgency = todo.status === "complete" ? "later" : dateUrgency;
   const isTodayOverdue = !todo.due_date && isTodoTodayOverdue(todo, now);
   const dateLabel = todo.due_date
-    ? urgency === "overdue"
-      ? `Overdue · ${formatTodoDueDate(todo.due_date, todo.due_date_has_time, now).replace(/, (\d{2}:\d{2})$/, " · $1")}`
+    ? dateUrgency === "overdue"
+      ? formatTodoPastDateLabel(todo.due_date, todo.due_date_has_time, now)
       : formatTodoDueDateLabel(todo.due_date, todo.due_date_has_time, now).replace(
           /, (\d{2}:\d{2})$/,
           " · $1",
         )
-    : isTodayOverdue
-      ? "Overdue"
+    : todo.today_date && isTodayOverdue
+      ? formatTodoPastDateLabel(todo.today_date, false, parseISO(getTorontoDateKey(now)))
       : undefined;
   const dueDateColour =
     urgency === "overdue" || isTodayOverdue
