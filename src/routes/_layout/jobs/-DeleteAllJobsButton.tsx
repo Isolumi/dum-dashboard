@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
 import { Dialog, DialogContent, DialogTitle } from "#/components/ui/dialog";
 
 export function DeleteAllJobsButton({
@@ -37,21 +38,28 @@ export function DeleteAllJobsButton({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="shrink-0 text-muted-foreground hover:text-destructive"
-        disabled={disabled || count === 0 || deleting}
-        onClick={() => {
-          setFailed(false);
-          setConfirmedCount(count);
-          setOpen(true);
-        }}
-      >
-        <Trash2 className="size-3.5" aria-hidden="true" />
-        Delete all
-      </Button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Delete all"
+              className="shrink-0 text-muted-foreground hover:text-destructive [@media(pointer:coarse)]:size-11"
+              disabled={disabled || count === 0 || deleting}
+              onClick={() => {
+                setFailed(false);
+                setConfirmedCount(count);
+                setOpen(true);
+              }}
+            />
+          }
+        >
+          <Trash2 className="size-4" aria-hidden="true" />
+        </TooltipTrigger>
+        <TooltipContent>Delete all saved jobs</TooltipContent>
+      </Tooltip>
       <Dialog
         open={open}
         onOpenChange={(next) => {
