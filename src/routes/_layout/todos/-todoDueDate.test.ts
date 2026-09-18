@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   formatTodoDueDate,
   formatTodoDueDateLabel,
+  formatTodoPastDateLabel,
   getTodoDueDateUrgency,
   getTodoDueDateCalendarKey,
   getTodoDueDateInputValues,
@@ -16,6 +17,37 @@ afterEach(() => {
 });
 
 describe("todo due date helpers", () => {
+  it.each([
+    ["2026-08-09", "Today"],
+    ["2026-08-08", "Yesterday"],
+    ["2026-08-07", "2 days ago"],
+    ["2026-08-06", "3 days ago"],
+    ["2025-08-09", "365 days ago"],
+  ])("shows elapsed calendar days for %s", (value, expected) => {
+    expect(formatTodoPastDateLabel(value, false, new Date(2026, 7, 9, 12))).toBe(expected);
+  });
+
+  it("keeps a past deadline's local 24-hour time", () => {
+    expect(
+      formatTodoPastDateLabel(
+        new Date(2026, 7, 8, 23, 5).toISOString(),
+        true,
+        new Date(2026, 7, 9, 12),
+      ),
+    ).toBe("Yesterday · 23:05");
+  });
+
+  it("counts elapsed calendar days across daylight saving", () => {
+    expect(formatTodoPastDateLabel("2026-03-07", false, new Date(2026, 2, 9, 12))).toBe(
+      "2 days ago",
+    );
+  });
+
+  it("preserves the calendar key of a migrated date-only deadline", () => {
+    expect(
+      formatTodoPastDateLabel("2026-08-08T00:00:00.000Z", false, new Date(2026, 7, 9, 12)),
+    ).toBe("Yesterday");
+  });
   it.each([
     ["2026-08-09", "Due today"],
     ["2026-08-10", "Due tomorrow"],

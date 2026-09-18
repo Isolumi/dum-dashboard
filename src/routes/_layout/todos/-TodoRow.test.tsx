@@ -96,18 +96,32 @@ function renderTodoRow(props: Partial<React.ComponentProps<typeof TodoRow>> = {}
 }
 
 describe("TodoRow", () => {
+  it("counts an undated Today item's age using the Toronto date", () => {
+    vi.setSystemTime(new Date("2026-08-09T03:30:00.000Z"));
+    renderTodoRow({ todo: { ...highTodo, due_date: null, today_date: "2026-08-07" } });
+    expect(screen.getByRole("button", { name: /edit due date/i }).textContent).toBe("Yesterday");
+  });
+
+  it("updates a past deadline's age when the window regains focus", () => {
+    vi.setSystemTime(new Date(2026, 7, 9, 12));
+    renderTodoRow({ todo: { ...highTodo, due_date: "2026-08-08" } });
+    expect(screen.getByRole("button", { name: /edit due date/i }).textContent).toBe("Yesterday");
+    vi.setSystemTime(new Date(2026, 7, 10, 12));
+    fireEvent(window, new Event("focus"));
+    expect(screen.getByRole("button", { name: /edit due date/i }).textContent).toBe("2 days ago");
+  });
   it.each([false, true])(
-    "retains the year for an overdue date-only deadline (compact=%s)",
+    "counts elapsed days across years for a date-only deadline (compact=%s)",
     (compact) => {
       renderTodoRow({ compact, todo: { ...highTodo, due_date: "2025-09-17" } });
       expect(screen.getByRole("button", { name: /edit due date/i }).textContent).toBe(
-        "Overdue · Sep 17, 2025",
+        "326 days ago",
       );
     },
   );
 
   it.each([false, true])(
-    "retains the year and time for an overdue timed deadline (compact=%s)",
+    "keeps local time when showing elapsed days across years (compact=%s)",
     (compact) => {
       renderTodoRow({
         compact,
@@ -118,7 +132,7 @@ describe("TodoRow", () => {
         },
       });
       expect(screen.getByRole("button", { name: /edit due date/i }).textContent).toBe(
-        "Overdue · Sep 17, 2025 · 14:05",
+        "326 days ago · 14:05",
       );
     },
   );
@@ -130,8 +144,8 @@ describe("TodoRow", () => {
         todo: { ...highTodo, due_date: "2026-08-08", today_date: "2026-08-08" },
       });
       const control = screen.getByRole("button", { name: /edit due date/i });
-      expect(control.textContent).toBe("Overdue · Aug 8");
-      expect(screen.getAllByText(/Overdue/)).toHaveLength(1);
+      expect(control.textContent).toBe("Yesterday");
+      expect(screen.queryByText(/Overdue/)).toBeNull();
       fireEvent.click(control);
       expect(screen.getByRole("button", { name: "Done", exact: true })).toBeTruthy();
     },
@@ -161,7 +175,7 @@ describe("TodoRow", () => {
       },
     });
     expect(screen.getByRole("button", { name: /edit due date/i }).textContent).toBe(
-      "Overdue · Aug 9 · 09:00",
+      "Today · 09:00",
     );
   });
 
@@ -196,7 +210,7 @@ describe("TodoRow", () => {
     (compact) => {
       renderTodoRow({ compact, todo: { ...highTodo, due_date: null, today_date: "2026-08-08" } });
       const dateControl = screen.getByRole("button", { name: /edit due date/i });
-      expect(dateControl.textContent).toBe("Overdue");
+      expect(dateControl.textContent).toBe("Yesterday");
       expect(dateControl.querySelector("svg")).toBeNull();
       fireEvent.click(dateControl);
       expect(screen.getByRole("button", { name: "Done", exact: true })).toBeTruthy();
@@ -299,7 +313,7 @@ describe("TodoRow", () => {
       },
     });
 
-    const overdue = screen.getByText("Overdue");
+    const overdue = screen.getByText("Yesterday");
     expect(overdue.closest("button")?.parentElement?.className).toContain("text-todo-overdue");
     expect(overdue.className).not.toContain("text-muted-foreground");
   });
