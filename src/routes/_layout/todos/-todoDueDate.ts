@@ -14,14 +14,13 @@ export function getTodoDueDateCalendarKey(value: string): string {
   return parseISO(value).toISOString().slice(0, 10);
 }
 
-export function formatTodoDueDate(value: string | null, hasTime?: boolean): string {
+export function formatTodoDueDate(value: string | null, hasTime?: boolean, now?: Date): string {
   if (!value) return "";
 
-  if (!hasTimeValue(value, hasTime)) {
-    return format(parseISO(getTodoDueDateCalendarKey(value)), "MMM d");
-  }
-
-  return format(parseISO(value), "MMM d, HH:mm");
+  const timed = hasTimeValue(value, hasTime);
+  const date = parseISO(timed ? value : getTodoDueDateCalendarKey(value));
+  const pattern = now && date.getFullYear() !== now.getFullYear() ? "MMM d, yyyy" : "MMM d";
+  return format(date, `${pattern}${timed ? ", HH:mm" : ""}`);
 }
 
 function getTodoDueDateDisplayDate(value: string, hasTime?: boolean): Date {
