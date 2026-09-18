@@ -29,9 +29,14 @@ export function JobsBentoCard({ tool: _tool, data: _data }: { tool: ToolEntry; d
       <div className="flex items-center justify-between gap-2">
         <Link
           to="/jobs"
-          className="inline-flex rounded-sm text-sm font-semibold text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex items-baseline gap-1.5 rounded-sm text-sm font-semibold text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
         >
-          Jobs
+          Jobs{" "}
+          {status === "ready" ? (
+            <span className="text-xs font-normal text-muted-foreground tabular-nums">
+              ({savedJobs.length})
+            </span>
+          ) : null}
         </Link>
         <div className="flex items-center gap-0.5">
           <OpenAllJobsButton
