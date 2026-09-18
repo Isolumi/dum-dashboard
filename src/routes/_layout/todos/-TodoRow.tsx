@@ -8,7 +8,7 @@ import type { Todo, TodoStatus } from "#/lib/database.types";
 import { cn } from "#/lib/utils";
 
 import { TodoDueDatePicker } from "./-TodoDueDatePicker";
-import { getTodoDueDateUrgency } from "./-todoDueDate";
+import { formatTodoDueDate, formatTodoDueDateLabel, getTodoDueDateUrgency } from "./-todoDueDate";
 import { isTodoTodayOverdue } from "./-todoUtils";
 
 export interface TodoRowProps {
@@ -85,13 +85,23 @@ function TodoRowComponent({
     todo.status === "complete"
       ? "later"
       : getTodoDueDateUrgency(todo.due_date, todo.due_date_has_time, now);
+  const isTodayOverdue = !todo.due_date && isTodoTodayOverdue(todo, now);
+  const dateLabel = todo.due_date
+    ? urgency === "overdue"
+      ? `Overdue · ${formatTodoDueDate(todo.due_date, todo.due_date_has_time, now).replace(/, (\d{2}:\d{2})$/, " · $1")}`
+      : formatTodoDueDateLabel(todo.due_date, todo.due_date_has_time, now).replace(
+          /, (\d{2}:\d{2})$/,
+          " · $1",
+        )
+    : isTodayOverdue
+      ? "Overdue"
+      : undefined;
   const dueDateColour =
-    urgency === "overdue"
-      ? "text-destructive"
+    urgency === "overdue" || isTodayOverdue
+      ? "text-todo-overdue"
       : urgency === "soon"
         ? "text-health-warning"
         : "text-muted-foreground";
-  const isTodayOverdue = isTodoTodayOverdue(todo, now);
 
   function saveName() {
     const trimmed = nameValue.trim();
@@ -214,18 +224,11 @@ function TodoRowComponent({
             className={cn(
               "flex shrink-0 items-center justify-end gap-1 text-right",
               todo.due_date || isTodayOverdue ? "w-32" : "w-9 [@media(pointer:coarse)]:w-11",
-              todo.due_date && dueDateColour,
+              dueDateColour,
             )}
           >
-            {isTodayOverdue && todo.due_date && (
-              <span className="text-xs text-destructive">Overdue</span>
-            )}
             <TodoDueDatePicker
-              emptyLabel={
-                isTodayOverdue ? (
-                  <span className="text-xs text-destructive">Overdue</span>
-                ) : undefined
-              }
+              displayLabel={dateLabel}
               value={todo.due_date}
               onChange={(due_date, due_date_has_time) =>
                 onUpdate({ id: todo.id, due_date, due_date_has_time })
@@ -254,18 +257,11 @@ function TodoRowComponent({
           <div
             className={cn(
               "flex w-40 shrink-0 items-center justify-end gap-1 text-right",
-              todo.due_date && dueDateColour,
+              dueDateColour,
             )}
           >
-            {isTodayOverdue && todo.due_date && (
-              <span className="text-xs text-destructive">Overdue</span>
-            )}
             <TodoDueDatePicker
-              emptyLabel={
-                isTodayOverdue ? (
-                  <span className="text-xs text-destructive">Overdue</span>
-                ) : undefined
-              }
+              displayLabel={dateLabel}
               value={todo.due_date}
               onChange={(due_date, due_date_has_time) =>
                 onUpdate({ id: todo.id, due_date, due_date_has_time })

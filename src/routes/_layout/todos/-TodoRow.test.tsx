@@ -96,6 +96,81 @@ function renderTodoRow(props: Partial<React.ComponentProps<typeof TodoRow>> = {}
 }
 
 describe("TodoRow", () => {
+  it.each([false, true])(
+    "retains the year for an overdue date-only deadline (compact=%s)",
+    (compact) => {
+      renderTodoRow({ compact, todo: { ...highTodo, due_date: "2025-09-17" } });
+      expect(screen.getByRole("button", { name: /edit due date/i }).textContent).toBe(
+        "Overdue · Sep 17, 2025",
+      );
+    },
+  );
+
+  it.each([false, true])(
+    "retains the year and time for an overdue timed deadline (compact=%s)",
+    (compact) => {
+      renderTodoRow({
+        compact,
+        todo: {
+          ...highTodo,
+          due_date: new Date(2025, 8, 17, 14, 5).toISOString(),
+          due_date_has_time: true,
+        },
+      });
+      expect(screen.getByRole("button", { name: /edit due date/i }).textContent).toBe(
+        "Overdue · Sep 17, 2025 · 14:05",
+      );
+    },
+  );
+  it.each([false, true])(
+    "combines an overdue date into one editable label (compact=%s)",
+    (compact) => {
+      renderTodoRow({
+        compact,
+        todo: { ...highTodo, due_date: "2026-08-08", today_date: "2026-08-08" },
+      });
+      const control = screen.getByRole("button", { name: /edit due date/i });
+      expect(control.textContent).toBe("Overdue · Aug 8");
+      expect(screen.getAllByText(/Overdue/)).toHaveLength(1);
+      fireEvent.click(control);
+      expect(screen.getByRole("button", { name: "Done", exact: true })).toBeTruthy();
+    },
+  );
+
+  it.each([false, true])(
+    "uses a new future deadline instead of the previous Today date (compact=%s)",
+    (compact) => {
+      renderTodoRow({
+        compact,
+        todo: { ...highTodo, due_date: "2026-08-10", today_date: "2026-08-08" },
+      });
+      expect(screen.getByRole("button", { name: /edit due date/i }).textContent).toBe(
+        "Due tomorrow",
+      );
+      expect(screen.queryByText(/Overdue/)).toBeNull();
+    },
+  );
+
+  it("keeps the date and 24-hour time when a timed deadline is overdue", () => {
+    vi.setSystemTime(new Date(2026, 7, 9, 12));
+    renderTodoRow({
+      todo: {
+        ...highTodo,
+        due_date: new Date(2026, 7, 9, 9).toISOString(),
+        due_date_has_time: true,
+      },
+    });
+    expect(screen.getByRole("button", { name: /edit due date/i }).textContent).toBe(
+      "Overdue · Aug 9 · 09:00",
+    );
+  });
+
+  it("preserves the year in a deadline outside the current year", () => {
+    renderTodoRow({ todo: { ...highTodo, due_date: "2027-08-09" } });
+    expect(screen.getByRole("button", { name: /edit due date/i }).textContent).toBe(
+      "Due Aug 9, 2027",
+    );
+  });
   it("moves keyboard focus before completing and removing the current row", () => {
     const onUpdate = vi.fn();
     render(
@@ -141,7 +216,7 @@ describe("TodoRow", () => {
     renderTodoRow({ todo: { ...highTodo, due_date, status: "complete" } });
     const wrapper = screen.getByRole("button", { name: /edit due date/i }).parentElement;
     expect(wrapper?.className).toContain("text-muted-foreground");
-    expect(wrapper?.className).not.toMatch(/text-destructive|text-health-warning/);
+    expect(wrapper?.className).not.toMatch(/text-todo-overdue|text-health-warning/);
   });
 
   it("updates the relative label at midnight without a refresh", () => {
@@ -168,7 +243,7 @@ describe("TodoRow", () => {
     });
     expect(
       screen.getByRole("button", { name: /edit due date/i }).parentElement?.className,
-    ).toContain("text-destructive");
+    ).toContain("text-todo-overdue");
   });
 
   it("refreshes date labels when the window regains focus", () => {
@@ -213,7 +288,7 @@ describe("TodoRow", () => {
   it.each([
     ["full-page", false],
     ["compact", true],
-  ])("shows a destructive overdue label in the %s row", (_layout, compact) => {
+  ])("shows a soft red overdue label in the %s row", (_layout, compact) => {
     renderTodoRow({
       compact,
       todo: {
@@ -225,7 +300,7 @@ describe("TodoRow", () => {
     });
 
     const overdue = screen.getByText("Overdue");
-    expect(overdue.className).toContain("text-destructive");
+    expect(overdue.closest("button")?.parentElement?.className).toContain("text-todo-overdue");
     expect(overdue.className).not.toContain("text-muted-foreground");
   });
 
@@ -250,7 +325,7 @@ describe("TodoRow", () => {
 
     expect(
       screen.getByRole("button", { name: /edit due date for "deploy app"/i }).textContent,
-    ).toContain(`Due today, ${format(new Date(dueDate), "HH:mm")}`);
+    ).toContain(`Due today · ${format(new Date(dueDate), "HH:mm")}`);
   });
 
   it("keeps a migrated UTC-midnight due date on its original calendar day without a time", () => {
@@ -304,13 +379,13 @@ describe("TodoRow", () => {
     expect(value?.className).not.toContain("truncate");
   });
 
-  it("keeps overdue due dates visually destructive", () => {
+  it("keeps overdue due dates visually distinct", () => {
     renderTodoRow({ todo: { ...highTodo, due_date: "2026-08-08" } });
 
     expect(
       screen.getByRole("button", { name: /edit due date for "deploy app"/i }).parentElement
         ?.className,
-    ).toContain("text-destructive");
+    ).toContain("text-todo-overdue");
   });
 
   it("sends the todo id when its delete control is clicked", () => {
