@@ -6,6 +6,19 @@ import { DeleteAllJobsButton } from "./-DeleteAllJobsButton";
 afterEach(cleanup);
 
 describe("DeleteAllJobsButton", () => {
+  it("uses an accessible icon-only trigger but keeps a clear confirmation", async () => {
+    const onDelete = vi.fn();
+    render(<DeleteAllJobsButton count={7} onDelete={onDelete} />);
+    const button = screen.getByRole("button", { name: "Delete all" });
+    expect(button.textContent).toBe("");
+    expect(button.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    fireEvent.click(button);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Delete all" }).textContent).toBe(
+      "Delete all",
+    );
+    expect(onDelete).not.toHaveBeenCalled();
+  });
   it("requires one confirmation and cancels without deleting", async () => {
     const onDelete = vi.fn().mockResolvedValue(true);
     render(<DeleteAllJobsButton count={7} onDelete={onDelete} />);
