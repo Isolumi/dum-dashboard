@@ -53,6 +53,35 @@ describe("fetchCalendarEvents", () => {
     expect(events[0].summary).toBe("Team standup");
   });
 
+  it("loads every page of events in the requested time range", async () => {
+    const first: CalendarEvent = {
+      id: "first",
+      summary: "First event",
+      start: { dateTime: "2026-10-07T09:00:00Z" },
+      end: { dateTime: "2026-10-07T10:00:00Z" },
+    };
+    const later: CalendarEvent = {
+      id: "later",
+      summary: "Later event",
+      start: { dateTime: "2026-12-02T09:00:00Z" },
+      end: { dateTime: "2026-12-02T10:00:00Z" },
+    };
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(mockResponse(200, { items: [first], nextPageToken: "page-2" }))
+      .mockResolvedValueOnce(mockResponse(200, { items: [later] }));
+
+    const events = await fetchCalendarEvents(
+      "token",
+      new Date("2026-10-06T12:00:00Z"),
+      new Date("2027-01-04T12:00:00Z"),
+    );
+
+    expect(events.map((event) => event.id)).toEqual(["first", "later"]);
+    const secondRequest = new URL(String(vi.mocked(fetch).mock.calls[1][0]));
+    expect(secondRequest.searchParams.get("pageToken")).toBe("page-2");
+    expect(secondRequest.searchParams.get("timeMax")).toBe("2027-01-04T12:00:00.000Z");
+  });
+
   it("returns empty array when response has no items field", async () => {
     vi.mocked(fetch).mockResolvedValue(mockResponse(200, {}));
     const events = await fetchCalendarEvents("token", new Date(), new Date());

@@ -38,6 +38,18 @@ describe("getUpcomingEvents", () => {
     const result = getUpcomingEvents([allDay], new Date("2026-04-14T00:00:00"), 5);
     expect(result).toHaveLength(1);
   });
+
+  it("keeps current all-day events visible until their end date", () => {
+    const events = [
+      { ...makeEvent("past", "Past", { date: "2026-10-05" }), end: { date: "2026-10-06" } },
+      { ...makeEvent("multi", "Multi-day", { date: "2026-10-05" }), end: { date: "2026-10-08" } },
+      { ...makeEvent("today", "Today", { date: "2026-10-06" }), end: { date: "2026-10-07" } },
+    ];
+
+    expect(getUpcomingEvents(events, new Date(2026, 9, 6, 15), 5).map((event) => event.id)).toEqual(
+      ["multi", "today"],
+    );
+  });
 });
 
 describe("groupEventsByDay", () => {

@@ -19,20 +19,29 @@ export async function fetchCalendarEvents(
     timeMax: timeMax.toISOString(),
     singleEvents: "true",
     orderBy: "startTime",
+    maxResults: "250",
   });
+  const events: CalendarEvent[] = [];
+  let pageToken: string | undefined;
 
-  const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
-    { headers: { Authorization: `Bearer ${providerToken}` } },
-  );
+  do {
+    if (pageToken) params.set("pageToken", pageToken);
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${providerToken}` } },
+    );
 
-  if (!res.ok) {
-    const error: CalendarApiError = {
-      type: res.status === 401 ? "auth_expired" : "network_error",
-    };
-    throw error;
-  }
+    if (!res.ok) {
+      const error: CalendarApiError = {
+        type: res.status === 401 ? "auth_expired" : "network_error",
+      };
+      throw error;
+    }
 
-  const json = await res.json();
-  return (json.items ?? []) as CalendarEvent[];
+    const json = await res.json();
+    events.push(...((json.items ?? []) as CalendarEvent[]));
+    pageToken = json.nextPageToken;
+  } while (pageToken);
+
+  return events;
 }
