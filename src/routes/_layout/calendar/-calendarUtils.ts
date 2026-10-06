@@ -39,7 +39,7 @@ function eventStartIsoDate(event: CalendarEvent): string {
 }
 
 /**
- * Returns up to `limit` events whose start is on or after `from`.
+ * Returns up to `limit` future events and all-day events that have not ended.
  * Assumes events are already sorted ascending by start time.
  */
 export function getUpcomingEvents(
@@ -47,7 +47,15 @@ export function getUpcomingEvents(
   from: Date,
   limit: number,
 ): CalendarEvent[] {
-  return events.filter((e) => eventStartDate(e) >= from).slice(0, limit);
+  return events
+    .filter((event) => {
+      if (event.start.date && event.end.date) {
+        const [year, month, day] = event.end.date.split("-").map(Number);
+        return new Date(year, month - 1, day) > from;
+      }
+      return eventStartDate(event) >= from;
+    })
+    .slice(0, limit);
 }
 
 export interface DayGroup {

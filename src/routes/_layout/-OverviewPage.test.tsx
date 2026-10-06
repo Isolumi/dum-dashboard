@@ -101,10 +101,11 @@ describe("main dashboard composition", () => {
     vi.spyOn(Route, "useLoaderData").mockReturnValue({});
     const OverviewPage = Route.options.component as ComponentType;
     await renderInsideLayout(<OverviewPage />);
-    const calendar = screen.getByRole("link", { name: "Open Calendar tool" });
+    const calendar = screen.getByRole("region", { name: "Calendar" });
     const buyList = screen.getByRole("region", { name: "Buy list" });
     expect(buyList.parentElement).toBe(calendar.parentElement);
     expect(calendar.nextElementSibling).toBe(buyList);
+    expect(screen.getByRole("link", { name: "Calendar" }).getAttribute("href")).toBe("/calendar");
     expect(screen.getByRole("link", { name: "Buy list" }).getAttribute("href")).toBe("/buy-list");
   });
   it("keeps the clock out of the bento registry and retains the Cameras tool", () => {
@@ -173,7 +174,7 @@ describe("main dashboard composition", () => {
     await renderInsideLayout(<OverviewPage />);
 
     const todoCard = screen.getByRole("region", { name: "Todos" });
-    const calendarCard = screen.getByRole("link", { name: "Open Calendar tool" });
+    const calendarCard = screen.getByRole("region", { name: "Calendar" });
     const cameraCard = screen.getByRole("region", { name: "Camera" }).closest("a");
     const moniesCard = screen.getByRole("link", { name: "Open Monies tool" });
     const jobsCard = screen.getByRole("region", { name: "Jobs" });
