@@ -73,6 +73,48 @@ describe("CalendarBentoCard", () => {
     expect(eventRow?.className).toContain("grid-cols-[minmax(0,1fr)_auto]");
   });
 
+  it("shows more than five events, including events beyond 30 days", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-06T12:00:00.000Z"));
+    vi.mocked(getCalendarEvents).mockResolvedValue({
+      status: "ready",
+      events: [
+        ...Array.from({ length: 6 }, (_, index) =>
+          makeEvent(
+            `${index}`,
+            `October event ${index}`,
+            `2026-10-${String(index + 7).padStart(2, "0")}T13:00:00Z`,
+          ),
+        ),
+        makeEvent("winter", "Winter event", "2026-12-02T13:00:00Z"),
+      ],
+    });
+
+    render(React.createElement(CalendarBentoCard, { tool: mockTool, data: null }));
+
+    await waitFor(() => expect(screen.getByText("Winter event")).toBeTruthy());
+    expect(screen.getByText("October event 5")).toBeTruthy();
+    expect(vi.mocked(getCalendarEvents).mock.calls[0][0].data.time_max).toBe(
+      "2027-01-04T12:00:00.000Z",
+    );
+  });
+
+  it("puts the event list in a keyboard-focusable scroll region", async () => {
+    vi.mocked(getCalendarEvents).mockResolvedValue({
+      status: "ready",
+      events: [makeEvent("1", "First event", "2030-04-14T09:00:00")],
+    });
+
+    render(React.createElement(CalendarBentoCard, { tool: mockTool, data: null }));
+
+    const list = await screen.findByRole("region", { name: "Upcoming calendar events" });
+    expect(list.getAttribute("tabindex")).toBe("0");
+    expect(list.className).toContain("overflow-y-auto");
+    expect(list.className).toContain("max-h-56");
+    expect(list.className).not.toContain("overscroll-contain");
+    expect(list.querySelector("a")).toBeNull();
+  });
+
   it("shows 'No upcoming events' when event list is empty", async () => {
     vi.mocked(getCalendarEvents).mockResolvedValue({ status: "ready", events: [] });
 
@@ -89,7 +131,7 @@ describe("CalendarBentoCard", () => {
     await waitFor(() => expect(screen.getByText(/calendar disconnected/i)).toBeTruthy());
   });
 
-  it("renders the card as a link to /calendar", async () => {
+  it("links to the full Calendar page from the card heading", async () => {
     vi.mocked(getCalendarEvents).mockResolvedValue({ status: "ready", events: [] });
 
     render(React.createElement(CalendarBentoCard, { tool: mockTool, data: null }));

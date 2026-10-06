@@ -32,13 +32,13 @@ export function CalendarBentoCard({
   const load = useCallback(async () => {
     const requestId = ++loadRequestRef.current;
     const now = new Date();
-    const thirtyDaysOut = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const ninetyDaysOut = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
 
     try {
       const result = await getCalendarEvents({
         data: {
           time_min: now.toISOString(),
-          time_max: thirtyDaysOut.toISOString(),
+          time_max: ninetyDaysOut.toISOString(),
         },
       });
       if (!mountedRef.current || requestId !== loadRequestRef.current) return;
@@ -46,7 +46,7 @@ export function CalendarBentoCard({
         setStatus("auth_expired");
         return;
       }
-      setEvents(getUpcomingEvents(result.events, now, 5));
+      setEvents(getUpcomingEvents(result.events, now, result.events.length));
       setStatus("ready");
     } catch {
       if (mountedRef.current && requestId === loadRequestRef.current) {
@@ -68,12 +68,14 @@ export function CalendarBentoCard({
   usePollingRefresh(load, REFRESH_INTERVAL_MS, { skipWhilePending: true });
 
   return (
-    <Link
-      to="/calendar"
-      aria-label="Open Calendar tool"
-      className="block rounded-lg border border-border bg-card transition-colors duration-150 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <div className="p-4">
+    <section aria-label="Calendar" className="rounded-lg border border-border bg-card p-4">
+      <Link
+        to="/calendar"
+        className="mb-3 inline-flex rounded-sm text-sm font-semibold text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        Calendar
+      </Link>
+      <div>
         {status === "loading" && (
           <div className="flex flex-col gap-2">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -101,7 +103,12 @@ export function CalendarBentoCard({
         )}
 
         {status === "ready" && events.length > 0 && (
-          <div className="flex flex-col gap-1">
+          <div
+            role="region"
+            aria-label="Upcoming calendar events"
+            tabIndex={0}
+            className="flex max-h-56 flex-col gap-1 overflow-y-auto pr-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             {groupEventsByDay(events).flatMap((group) =>
               group.events.map((event) => (
                 <div
@@ -123,6 +130,6 @@ export function CalendarBentoCard({
           </div>
         )}
       </div>
-    </Link>
+    </section>
   );
 }
