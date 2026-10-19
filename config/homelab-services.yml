@@ -53,10 +53,6 @@ applications:
         imageRepository: ghcr.io/isolumi/uwumi-google-workspace-mcp
         tracksSource: true
       - kind: Deployment
-        name: linear-mcp
-        imageRepository: ghcr.io/isolumi/uwumi-linear-mcp
-        tracksSource: true
-      - kind: Deployment
         name: reminder-mcp
         imageRepository: ghcr.io/isolumi/uwumi-reminder-mcp
         tracksSource: true
